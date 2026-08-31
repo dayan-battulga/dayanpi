@@ -15,6 +15,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/api/status")
+@app.get("/api/stats")
 def stats():
     return collector.snapshot(sampler)
