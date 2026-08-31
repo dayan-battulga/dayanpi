@@ -1,5 +1,132 @@
 <!DOCTYPE html>
-<html>
-  <head><title>Pi Stats</title></head>
-  <body><h1>Pi Stats</h1></body>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dayanpi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <div class="frame">
+      <header class="reveal" style="--d: 0">
+        <div class="brand">
+          <h1>dayanpi</h1>
+          <p class="tagline">live host metrics</p>
+        </div>
+        <p id="status" class="disconnected" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-label">disconnected</span>
+        </p>
+      </header>
+
+      <aside
+        id="power-rail"
+        class="power-rail throttle-ok reveal"
+        style="--d: 1"
+        aria-live="assertive"
+      >
+        <div class="power-copy">
+          <p class="power-label">Power</p>
+          <p id="throttle">all clear</p>
+        </div>
+        <span class="power-chip" aria-hidden="true">PSU</span>
+      </aside>
+
+      <main>
+        <section class="cell reveal" style="--d: 2">
+          <h2>Temp</h2>
+          <p class="reading">
+            <span id="temp" data-level="nominal">--</span
+            ><span class="unit">°C</span>
+          </p>
+        </section>
+
+        <section class="cell reveal" style="--d: 3">
+          <h2>CPU</h2>
+          <p class="reading">
+            <span id="cpu" data-level="nominal">--</span
+            ><span class="unit">%</span>
+          </p>
+        </section>
+
+        <section class="cell cell-wide reveal" style="--d: 4">
+          <div class="cell-head">
+            <h2>Memory</h2>
+            <p class="detail">
+              <span id="mem-percent">--</span><span class="unit">%</span>
+            </p>
+          </div>
+          <div
+            class="meter"
+            role="progressbar"
+            aria-label="Memory used"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="mem-meter"
+          >
+            <div class="meter-fill" id="mem-fill"></div>
+          </div>
+          <p class="detail sub">
+            <span id="mem-available">--</span>
+            <span class="sep">/</span>
+            <span id="mem-total">--</span>
+            <span class="unit">MB avail</span>
+          </p>
+        </section>
+
+        <section class="cell cell-wide reveal" style="--d: 5">
+          <div class="cell-head">
+            <h2>Disk</h2>
+            <p class="detail">
+              <span id="disk-percent">--</span><span class="unit">%</span>
+            </p>
+          </div>
+          <div
+            class="meter"
+            role="progressbar"
+            aria-label="Disk used"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="disk-meter"
+          >
+            <div class="meter-fill" id="disk-fill"></div>
+          </div>
+          <p class="detail sub">
+            <span id="disk-free">--</span>
+            <span class="sep">/</span>
+            <span id="disk-total">--</span>
+            <span class="unit">GB free</span>
+          </p>
+        </section>
+
+        <section class="cell cell-wide reveal" style="--d: 6">
+          <h2>Network</h2>
+          <p class="detail net">
+            <span class="net-leg">RX</span>
+            <span id="rx" class="net-val">--</span>
+            <span class="sep">·</span>
+            <span class="net-leg">TX</span>
+            <span id="tx" class="net-val">--</span>
+          </p>
+        </section>
+
+        <section class="cell reveal" style="--d: 7">
+          <h2>Uptime</h2>
+          <p class="reading reading-sm"><span id="uptime">--</span></p>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
 </html>
