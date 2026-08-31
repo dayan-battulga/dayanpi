@@ -2,7 +2,6 @@ from asyncio.constants import FLOW_CONTROL_HIGH_WATER_SSL_READ
 import os
 from pstats import Stats
 import subprocess
-from this import s
 import time
 from typing import NamedTuple
 from pathlib import Path
@@ -33,7 +32,7 @@ class ThrottleStatus(NamedTuple):
 
 
 def temperature_celcius() -> float:
-    temperature_path = Path("sys/class/thermal/thermal_zone0/temp")
+    temperature_path = Path("/sys/class/thermal/thermal_zone0/temp")
     temp_float = float(temperature_path.read_text().strip())
     normalized_temp = round(temp_float / 1000, 2)
     return normalized_temp
@@ -46,7 +45,7 @@ def uptime_seconds() -> float:
 
 
 def memory_usage() -> MemoryUsage:
-    memory_path = Path("proc/meminfo")
+    memory_path = Path("/proc/meminfo")
     meminfo: dict[str, int] = {}
 
     for line in memory_path.read_text().splitlines():
@@ -79,7 +78,7 @@ def disk_usage(path: str = "/") -> DiskUsage:
 
 def throttle_status() -> ThrottleStatus:
     result = subprocess.run(
-        ["vengencmd", "get_throttled"],
+        ["vcgencmd", "get_throttled"],
         capture_output=True,
         text=True,
         check=True,
@@ -99,8 +98,8 @@ def throttle_status() -> ThrottleStatus:
 
 # ========== Main Run ============
 if __name__ == "__main__":
-    print(temperature_celcius())
-    print(uptime_seconds())
-    print(memory_usage())
-    print(disk_usage())
-    print(throttle_status())
+    print("Temp: ", temperature_celcius())
+    print("Uptime: ", uptime_seconds())
+    print("Memory: \n", memory_usage())
+    print("Disk: \n", disk_usage())
+    print("Throttle: \n", throttle_status())
