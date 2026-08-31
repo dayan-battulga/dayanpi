@@ -1,0 +1,10 @@
+.env
+*.env
+!dayanpi.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+checkpoint_*.jpg
+test.jpg
+.DS_Store

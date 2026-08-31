@@ -1,13 +1,20 @@
 import asyncio
+import base64
 import json
 import logging
+import os
+import secrets
+import threading
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 import collector
 from camera import CameraStream
@@ -19,12 +26,46 @@ FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
 MAX_CONSECUTIVE_TIMEOUTS = 3
 SNAPSHOT_INTERVAL_S = 1.0
+VIDEO_MAX_CONCURRENT = 2
+STREAM_MAX_CONCURRENT = 5
 
 logger = logging.getLogger(__name__)
+
+AUTH_USER = os.environ.get("DAYANPI_USER", "")
+AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
 
 sampler = collector.RateSampler("wlan0")
 stream = CameraStream("/dev/video0")
 latest_snapshot: dict | None = None
+
+_video_active = 0
+_stream_active = 0
+_video_lock = threading.Lock()
+_stream_lock = threading.Lock()
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _authorized(request: Request) -> bool:
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(header[6:]).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    username, sep, password = decoded.partition(":")
+    if not sep:
+        return False
+    user_ok = secrets.compare_digest(
+        username.encode("utf-8"),
+        AUTH_USER.encode("utf-8"),
+    )
+    pass_ok = secrets.compare_digest(
+        password.encode("utf-8"),
+        AUTH_PASSWORD.encode("utf-8"),
+    )
+    return user_ok and pass_ok
 
 
 async def snapshot_producer() -> None:
@@ -40,6 +81,11 @@ async def snapshot_producer() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not AUTH_USER or not AUTH_PASSWORD:
+        raise RuntimeError(
+            "DAYANPI_USER and DAYANPI_PASSWORD must be set "
+            "(e.g. via EnvironmentFile=/etc/dayanpi.env)"
+        )
     sampler.sample()
     stream.start()
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
@@ -52,7 +98,27 @@ async def lifespan(app: FastAPI):
     stream.stop()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def basic_auth_middleware(request: Request, call_next):
+    # Covers API routes and StaticFiles — app dependencies don't apply to mounts.
+    if not _authorized(request):
+        return Response(
+            content="Unauthorized",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": 'Basic realm="dayanpi"'},
+            media_type="text/plain",
+        )
+    return await call_next(request)
 
 
 def frame_generator() -> Iterator[bytes]:
@@ -78,6 +144,7 @@ def frame_generator() -> Iterator[bytes]:
 
 
 async def event_stream(request: Request) -> AsyncIterator[bytes]:
+    global _stream_active
     try:
         yield b"retry: 5000\n\n"
         while True:
@@ -92,21 +159,35 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 
             await asyncio.sleep(SNAPSHOT_INTERVAL_S)
     finally:
+        with _stream_lock:
+            _stream_active = max(0, _stream_active - 1)
         logger.info("SSE client disconnected")
 
 
 @app.get("/api/stats")
-def stats():
+@limiter.limit("60/minute")
+def stats(request: Request):
     return latest_snapshot if latest_snapshot is not None else {}
 
 
 @app.get("/api/health")
-def health():
+@limiter.limit("60/minute")
+def health(request: Request):
     return {"status": "ok"}
 
 
 @app.get("/api/stream")
+@limiter.limit("5/minute")
 async def api_stream(request: Request):
+    global _stream_active
+    with _stream_lock:
+        if _stream_active >= STREAM_MAX_CONCURRENT:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Too many stream connections",
+            )
+        _stream_active += 1
+
     return StreamingResponse(
         event_stream(request),
         media_type="text/event-stream",
@@ -119,9 +200,28 @@ async def api_stream(request: Request):
 
 
 @app.get("/video")
-def video():
+@limiter.limit("3/minute")
+def video(request: Request):
+    global _video_active
+
+    with _video_lock:
+        if _video_active >= VIDEO_MAX_CONCURRENT:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Too many video connections",
+            )
+        _video_active += 1
+
+    def guarded() -> Iterator[bytes]:
+        global _video_active
+        try:
+            yield from frame_generator()
+        finally:
+            with _video_lock:
+                _video_active = max(0, _video_active - 1)
+
     return StreamingResponse(
-        frame_generator(),
+        guarded(),
         media_type=f"multipart/x-mixed-replace; boundary={FRAME_BOUNDARY}",
     )
 
