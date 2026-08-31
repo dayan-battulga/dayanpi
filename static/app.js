@@ -1,5 +1,3 @@
-const INTERVAL_MS = 2000;
-
 const TEMP_ELEVATED_C = 70;
 const TEMP_CRITICAL_C = 80;
 const CPU_ELEVATED_PCT = 70;
@@ -32,7 +30,7 @@ const els = {
   feed: document.getElementById("feed"),
 };
 
-let timerId = null;
+let events = null;
 
 function setStatus(state) {
   els.status.className = state;
@@ -182,49 +180,35 @@ function render(stats) {
   renderThrottle(stats.throttle);
 }
 
-async function fetchStats() {
-  try {
-    const response = await fetch("/api/stats");
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const stats = await response.json();
-    render(stats);
-    setStatus("connected");
-  } catch (error) {
-    console.error(error);
-    setStatus("reconnecting");
-  }
-}
-
-async function loop() {
-  if (document.hidden) {
+function startEvents() {
+  if (events != null) {
     return;
   }
 
-  await fetchStats();
+  events = new EventSource("/api/stream");
+  events.onmessage = (event) => {
+    render(JSON.parse(event.data));
+    setStatus("connected");
+  };
+  // Browser already reconnects — only update the indicator.
+  events.onerror = () => {
+    setStatus("reconnecting");
+  };
+}
 
-  if (!document.hidden) {
-    timerId = setTimeout(loop, INTERVAL_MS);
+function stopEvents() {
+  if (events == null) {
+    return;
   }
-}
-
-function startLoop() {
-  clearTimeout(timerId);
-  loop();
-}
-
-function stopLoop() {
-  clearTimeout(timerId);
-  timerId = null;
+  events.close();
+  events = null;
 }
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    stopLoop();
+    stopEvents();
   } else {
-    startLoop();
+    startEvents();
   }
 });
 
@@ -242,7 +226,7 @@ els.feed.onload = () => {
   card?.classList.add("is-live");
 };
 
-startLoop();
+startEvents();
 
 function formattedUptime(seconds) {
   const total = Math.floor(seconds);
