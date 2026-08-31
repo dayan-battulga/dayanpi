@@ -29,6 +29,7 @@ const els = {
   tx: document.getElementById("tx"),
   uptime: document.getElementById("uptime"),
   throttle: document.getElementById("throttle"),
+  feed: document.getElementById("feed"),
 };
 
 let timerId = null;
@@ -226,6 +227,20 @@ document.addEventListener("visibilitychange", () => {
     startLoop();
   }
 });
+
+els.feed.onerror = () => {
+  els.feed.closest(".cell-feed")?.classList.remove("is-live");
+  els.feed.closest(".cell-feed")?.classList.add("is-reconnecting");
+  setTimeout(() => {
+    els.feed.src = "/video?t=" + Date.now();
+  }, 2000);
+};
+
+els.feed.onload = () => {
+  const card = els.feed.closest(".cell-feed");
+  card?.classList.remove("is-reconnecting");
+  card?.classList.add("is-live");
+};
 
 startLoop();
 

@@ -27,132 +27,154 @@
         </p>
       </header>
 
-      <aside
-        id="power-rail"
-        class="power-rail throttle-ok reveal"
-        style="--d: 1"
-        aria-live="assertive"
-      >
-        <div class="power-copy">
-          <p class="power-label">Power</p>
-          <p id="throttle">all clear</p>
-        </div>
-        <span class="power-chip" aria-hidden="true">PSU</span>
-      </aside>
+      <div class="layout">
+        <section class="stage reveal" style="--d: 1">
+          <div class="cell cell-feed">
+            <div class="feed-head">
+              <h2>Camera</h2>
+              <span class="live-pill" aria-hidden="true">
+                <span class="live-dot"></span>
+                live
+              </span>
+            </div>
+            <div class="feed-frame">
+              <img
+                id="feed"
+                src="/video"
+                alt="Live camera feed"
+                width="640"
+                height="480"
+              />
+            </div>
+          </div>
 
-      <main>
-        <section class="cell cell-gauge reveal" style="--d: 2">
-          <h2>Temp</h2>
-          <div class="gauge">
+          <aside
+            id="power-rail"
+            class="power-rail throttle-ok"
+            aria-live="assertive"
+          >
+            <div class="power-copy">
+              <p class="power-label">Power</p>
+              <p id="throttle">all clear</p>
+            </div>
+            <span class="power-chip" aria-hidden="true">PSU</span>
+          </aside>
+        </section>
+
+        <main class="reveal" style="--d: 2">
+          <section class="cell cell-gauge">
+            <h2>Temp</h2>
+            <div class="gauge">
+              <div
+                class="meter meter-vertical"
+                role="progressbar"
+                aria-label="Temperature"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+                data-level="nominal"
+                id="temp-meter"
+              >
+                <div class="meter-fill" id="temp-fill"></div>
+              </div>
+              <p class="reading">
+                <span id="temp" data-level="nominal">--</span
+                ><span class="unit">°C</span>
+              </p>
+            </div>
+          </section>
+
+          <section class="cell cell-gauge">
+            <h2>CPU</h2>
+            <div class="gauge">
+              <div
+                class="meter meter-vertical"
+                role="progressbar"
+                aria-label="CPU usage"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+                data-level="nominal"
+                id="cpu-meter"
+              >
+                <div class="meter-fill" id="cpu-fill"></div>
+              </div>
+              <p class="reading">
+                <span id="cpu" data-level="nominal">--</span
+                ><span class="unit">%</span>
+              </p>
+            </div>
+          </section>
+
+          <section class="cell cell-wide">
+            <div class="cell-head">
+              <h2>Memory</h2>
+              <p class="detail">
+                <span id="mem-percent">--</span><span class="unit">%</span>
+              </p>
+            </div>
             <div
-              class="meter meter-vertical"
+              class="meter"
               role="progressbar"
-              aria-label="Temperature"
+              aria-label="Memory used"
               aria-valuemin="0"
               aria-valuemax="100"
               aria-valuenow="0"
-              data-level="nominal"
-              id="temp-meter"
+              id="mem-meter"
             >
-              <div class="meter-fill" id="temp-fill"></div>
+              <div class="meter-fill" id="mem-fill"></div>
             </div>
-            <p class="reading">
-              <span id="temp" data-level="nominal">--</span
-              ><span class="unit">°C</span>
+            <p class="detail sub">
+              <span id="mem-available">--</span>
+              <span class="sep">/</span>
+              <span id="mem-total">--</span>
+              <span class="unit">MB avail</span>
             </p>
-          </div>
-        </section>
+          </section>
 
-        <section class="cell cell-gauge reveal" style="--d: 3">
-          <h2>CPU</h2>
-          <div class="gauge">
+          <section class="cell cell-wide">
+            <div class="cell-head">
+              <h2>Disk</h2>
+              <p class="detail">
+                <span id="disk-percent">--</span><span class="unit">%</span>
+              </p>
+            </div>
             <div
-              class="meter meter-vertical"
+              class="meter"
               role="progressbar"
-              aria-label="CPU usage"
+              aria-label="Disk used"
               aria-valuemin="0"
               aria-valuemax="100"
               aria-valuenow="0"
-              data-level="nominal"
-              id="cpu-meter"
+              id="disk-meter"
             >
-              <div class="meter-fill" id="cpu-fill"></div>
+              <div class="meter-fill" id="disk-fill"></div>
             </div>
-            <p class="reading">
-              <span id="cpu" data-level="nominal">--</span
-              ><span class="unit">%</span>
+            <p class="detail sub">
+              <span id="disk-free">--</span>
+              <span class="sep">/</span>
+              <span id="disk-total">--</span>
+              <span class="unit">GB free</span>
             </p>
-          </div>
-        </section>
+          </section>
 
-        <section class="cell cell-wide reveal" style="--d: 4">
-          <div class="cell-head">
-            <h2>Memory</h2>
-            <p class="detail">
-              <span id="mem-percent">--</span><span class="unit">%</span>
+          <section class="cell cell-wide">
+            <h2>Network</h2>
+            <p class="detail net">
+              <span class="net-leg">RX</span>
+              <span id="rx" class="net-val">--</span>
+              <span class="sep">·</span>
+              <span class="net-leg">TX</span>
+              <span id="tx" class="net-val">--</span>
             </p>
-          </div>
-          <div
-            class="meter"
-            role="progressbar"
-            aria-label="Memory used"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="0"
-            id="mem-meter"
-          >
-            <div class="meter-fill" id="mem-fill"></div>
-          </div>
-          <p class="detail sub">
-            <span id="mem-available">--</span>
-            <span class="sep">/</span>
-            <span id="mem-total">--</span>
-            <span class="unit">MB avail</span>
-          </p>
-        </section>
+          </section>
 
-        <section class="cell cell-wide reveal" style="--d: 5">
-          <div class="cell-head">
-            <h2>Disk</h2>
-            <p class="detail">
-              <span id="disk-percent">--</span><span class="unit">%</span>
-            </p>
-          </div>
-          <div
-            class="meter"
-            role="progressbar"
-            aria-label="Disk used"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="0"
-            id="disk-meter"
-          >
-            <div class="meter-fill" id="disk-fill"></div>
-          </div>
-          <p class="detail sub">
-            <span id="disk-free">--</span>
-            <span class="sep">/</span>
-            <span id="disk-total">--</span>
-            <span class="unit">GB free</span>
-          </p>
-        </section>
-
-        <section class="cell cell-wide reveal" style="--d: 6">
-          <h2>Network</h2>
-          <p class="detail net">
-            <span class="net-leg">RX</span>
-            <span id="rx" class="net-val">--</span>
-            <span class="sep">·</span>
-            <span class="net-leg">TX</span>
-            <span id="tx" class="net-val">--</span>
-          </p>
-        </section>
-
-        <section class="cell reveal" style="--d: 7">
-          <h2>Uptime</h2>
-          <p class="reading reading-sm"><span id="uptime">--</span></p>
-        </section>
-      </main>
+          <section class="cell cell-wide">
+            <h2>Uptime</h2>
+            <p class="reading reading-sm"><span id="uptime">--</span></p>
+          </section>
+        </main>
+      </div>
     </div>
 
     <script src="/app.js"></script>
