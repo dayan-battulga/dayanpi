@@ -3,6 +3,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,9 @@ from fastapi.staticfiles import StaticFiles
 
 import collector
 from camera import CameraStream
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
@@ -122,4 +126,4 @@ def video():
     )
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
