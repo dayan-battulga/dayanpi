@@ -41,20 +41,48 @@
       </aside>
 
       <main>
-        <section class="cell reveal" style="--d: 2">
+        <section class="cell cell-gauge reveal" style="--d: 2">
           <h2>Temp</h2>
-          <p class="reading">
-            <span id="temp" data-level="nominal">--</span
-            ><span class="unit">°C</span>
-          </p>
+          <div class="gauge">
+            <div
+              class="meter meter-vertical"
+              role="progressbar"
+              aria-label="Temperature"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              data-level="nominal"
+              id="temp-meter"
+            >
+              <div class="meter-fill" id="temp-fill"></div>
+            </div>
+            <p class="reading">
+              <span id="temp" data-level="nominal">--</span
+              ><span class="unit">°C</span>
+            </p>
+          </div>
         </section>
 
-        <section class="cell reveal" style="--d: 3">
+        <section class="cell cell-gauge reveal" style="--d: 3">
           <h2>CPU</h2>
-          <p class="reading">
-            <span id="cpu" data-level="nominal">--</span
-            ><span class="unit">%</span>
-          </p>
+          <div class="gauge">
+            <div
+              class="meter meter-vertical"
+              role="progressbar"
+              aria-label="CPU usage"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              data-level="nominal"
+              id="cpu-meter"
+            >
+              <div class="meter-fill" id="cpu-fill"></div>
+            </div>
+            <p class="reading">
+              <span id="cpu" data-level="nominal">--</span
+              ><span class="unit">%</span>
+            </p>
+          </div>
         </section>
 
         <section class="cell cell-wide reveal" style="--d: 4">

@@ -10,7 +10,11 @@ const els = {
   statusLabel: document.querySelector("#status .status-label"),
   powerRail: document.getElementById("power-rail"),
   temp: document.getElementById("temp"),
+  tempMeter: document.getElementById("temp-meter"),
+  tempFill: document.getElementById("temp-fill"),
   cpu: document.getElementById("cpu"),
+  cpuMeter: document.getElementById("cpu-meter"),
+  cpuFill: document.getElementById("cpu-fill"),
   memMeter: document.getElementById("mem-meter"),
   memFill: document.getElementById("mem-fill"),
   memAvailable: document.getElementById("mem-available"),
@@ -56,9 +60,16 @@ function setText(el, value) {
   el.classList.add("tick");
 }
 
-function setMeter(meter, fill, percent) {
+function setMeter(meter, fill, percent, { vertical = false, level = "nominal" } = {}) {
   const clamped = Math.max(0, Math.min(100, percent));
-  fill.style.width = `${clamped}%`;
+  if (vertical) {
+    fill.style.width = "100%";
+    fill.style.height = `${clamped}%`;
+  } else {
+    fill.style.height = "100%";
+    fill.style.width = `${clamped}%`;
+  }
+  meter.dataset.level = level;
   meter.setAttribute("aria-valuenow", String(Math.round(clamped)));
 }
 
@@ -113,38 +124,56 @@ function renderThrottle(throttle) {
 
 function render(stats) {
   const temp = stats.temperature_celsius;
+  const tempLevel = thresholdLevel(temp, TEMP_ELEVATED_C, TEMP_CRITICAL_C);
   setText(els.temp, temp.toFixed(1));
-  els.temp.dataset.level = thresholdLevel(
-    temp,
-    TEMP_ELEVATED_C,
-    TEMP_CRITICAL_C,
-  );
+  els.temp.dataset.level = tempLevel;
+  // Temp bar is scaled to 100°C max.
+  setMeter(els.tempMeter, els.tempFill, temp, {
+    vertical: true,
+    level: tempLevel,
+  });
 
   setText(els.uptime, formattedUptime(stats.uptime_seconds));
 
+  const memLevel = thresholdLevel(
+    stats.memory.percent_used,
+    CPU_ELEVATED_PCT,
+    CPU_CRITICAL_PCT,
+  );
   setText(els.memAvailable, stats.memory.available_mb.toFixed(1));
   setText(els.memTotal, stats.memory.total_mb.toFixed(1));
   setText(els.memPercent, stats.memory.percent_used.toFixed(1));
-  setMeter(els.memMeter, els.memFill, stats.memory.percent_used);
+  setMeter(els.memMeter, els.memFill, stats.memory.percent_used, {
+    level: memLevel,
+  });
 
+  const diskLevel = thresholdLevel(
+    stats.disk.percent_used,
+    CPU_ELEVATED_PCT,
+    CPU_CRITICAL_PCT,
+  );
   setText(els.diskFree, stats.disk.free_gb.toFixed(1));
   setText(els.diskTotal, stats.disk.total_gb.toFixed(1));
   setText(els.diskPercent, stats.disk.percent_used.toFixed(1));
-  setMeter(els.diskMeter, els.diskFill, stats.disk.percent_used);
+  setMeter(els.diskMeter, els.diskFill, stats.disk.percent_used, {
+    level: diskLevel,
+  });
 
   if (stats.rates == null) {
     setText(els.cpu, "--");
     els.cpu.dataset.level = "nominal";
+    setMeter(els.cpuMeter, els.cpuFill, 0, { vertical: true, level: "nominal" });
     setText(els.rx, "--");
     setText(els.tx, "--");
   } else {
     const cpu = stats.rates.cpu_percent;
+    const cpuLevel = thresholdLevel(cpu, CPU_ELEVATED_PCT, CPU_CRITICAL_PCT);
     setText(els.cpu, cpu.toFixed(1));
-    els.cpu.dataset.level = thresholdLevel(
-      cpu,
-      CPU_ELEVATED_PCT,
-      CPU_CRITICAL_PCT,
-    );
+    els.cpu.dataset.level = cpuLevel;
+    setMeter(els.cpuMeter, els.cpuFill, cpu, {
+      vertical: true,
+      level: cpuLevel,
+    });
     setText(els.rx, formattedBytes(stats.rates.rx_kbps));
     setText(els.tx, formattedBytes(stats.rates.tx_kbps));
   }

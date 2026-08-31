@@ -353,11 +353,28 @@ h2 {
   letter-spacing: 0.08em;
 }
 
+.cell-gauge .gauge {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.85rem;
+  min-height: 8.5rem;
+}
+
 .meter {
   overflow: hidden;
   height: 0.42rem;
   border-radius: 999px;
   background: rgb(20 23 28 / 8%);
+}
+
+.meter-vertical {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  width: 2.35rem;
+  height: 8.5rem;
+  border-radius: 999px;
 }
 
 .meter-fill {
@@ -366,29 +383,57 @@ h2 {
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent), #134e4a);
   transform-origin: left center;
-  transition: width 0.7s var(--ease);
+  transition:
+    width 0.7s var(--ease),
+    height 0.7s var(--ease),
+    background 0.45s var(--ease);
 }
 
-[data-level="nominal"] {
+.meter-vertical .meter-fill {
+  width: 100%;
+  height: 0%;
+  transform-origin: bottom center;
+  background: linear-gradient(180deg, #134e4a, var(--accent));
+}
+
+.meter[data-level="elevated"] .meter-fill,
+.meter-vertical[data-level="elevated"] .meter-fill {
+  background: linear-gradient(180deg, #92400e, var(--warn));
+}
+
+.meter[data-level="critical"] .meter-fill,
+.meter-vertical[data-level="critical"] .meter-fill {
+  background: linear-gradient(180deg, #9f1239, var(--danger));
+}
+
+.meter:not(.meter-vertical)[data-level="elevated"] .meter-fill {
+  background: linear-gradient(90deg, var(--warn), #92400e);
+}
+
+.meter:not(.meter-vertical)[data-level="critical"] .meter-fill {
+  background: linear-gradient(90deg, var(--danger), #9f1239);
+}
+
+.reading [data-level="nominal"] {
   color: var(--ink);
   transition: color 0.35s var(--ease);
 }
 
-[data-level="elevated"] {
+.reading [data-level="elevated"] {
   color: var(--warn);
 }
 
-[data-level="elevated"]::before {
+.reading [data-level="elevated"]::before {
   content: "▲ ";
   font-size: 0.5em;
   vertical-align: middle;
 }
 
-[data-level="critical"] {
+.reading [data-level="critical"] {
   color: var(--danger);
 }
 
-[data-level="critical"]::before {
+.reading [data-level="critical"]::before {
   content: "● ";
   font-size: 0.45em;
   vertical-align: middle;
