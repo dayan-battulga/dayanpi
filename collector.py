@@ -171,6 +171,7 @@ def snapshot(sampler: RateSampler) -> dict:
 # ========== Main Run ============
 if __name__ == "__main__":
     sampler = RateSampler("wlan0")  # or eth0 — ls /sys/class/net/
-    print(json.dumps(snapshot(sampler), indent=2))
     time.sleep(1)
+    print(json.dumps(snapshot(sampler), indent=2))
+    time.sleep(2)
     print(json.dumps(snapshot(sampler), indent=2))
