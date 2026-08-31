@@ -2,6 +2,8 @@ const TEMP_ELEVATED_C = 70;
 const TEMP_CRITICAL_C = 80;
 const CPU_ELEVATED_PCT = 70;
 const CPU_CRITICAL_PCT = 90;
+const MAX_POINTS = 120; // ~2 minutes at 1 Hz
+const CHART_HEIGHT = 152;
 
 const els = {
   status: document.getElementById("status"),
@@ -28,9 +30,14 @@ const els = {
   uptime: document.getElementById("uptime"),
   throttle: document.getElementById("throttle"),
   feed: document.getElementById("feed"),
+  chartCpu: document.getElementById("chart-cpu"),
+  chartTemp: document.getElementById("chart-temp"),
+  chartMem: document.getElementById("chart-mem"),
 };
 
+const history = [];
 let events = null;
+let charts = null;
 
 function setStatus(state) {
   els.status.className = state;
@@ -180,6 +187,161 @@ function render(stats) {
   renderThrottle(stats.throttle);
 }
 
+function pushHistory(sample) {
+  history.push({
+    t: Date.now() / 1000,
+    sample,
+  });
+  if (history.length > MAX_POINTS) {
+    history.shift();
+  }
+}
+
+function chartData() {
+  const times = [];
+  const cpu = [];
+  const temp = [];
+  const tempLimit = [];
+  const mem = [];
+
+  for (const point of history) {
+    times.push(point.t);
+    const rates = point.sample.rates;
+    cpu.push(rates == null ? null : rates.cpu_percent);
+    temp.push(point.sample.temperature_celsius);
+    tempLimit.push(TEMP_CRITICAL_C);
+    mem.push(point.sample.memory.percent_used);
+  }
+
+  return { times, cpu, temp, tempLimit, mem };
+}
+
+function baseAxis() {
+  return {
+    stroke: "#6b7280",
+    grid: { stroke: "rgba(20, 23, 28, 0.08)" },
+    ticks: { stroke: "rgba(20, 23, 28, 0.12)" },
+    font: "11px JetBrains Mono, monospace",
+  };
+}
+
+function createChart(target, series, yRange) {
+  const width = Math.max(target.clientWidth || 280, 160);
+  return new uPlot(
+    {
+      width,
+      height: CHART_HEIGHT,
+      cursor: { show: true, x: true, y: false },
+      legend: { show: false },
+      scales: {
+        x: { time: true },
+        y: { auto: false, range: yRange },
+      },
+      axes: [
+        {
+          ...baseAxis(),
+          space: 56,
+          values: (_u, splits) =>
+            splits.map((t) => {
+              const date = new Date(t * 1000);
+              return `${String(date.getMinutes()).padStart(2, "0")}:${String(
+                date.getSeconds(),
+              ).padStart(2, "0")}`;
+            }),
+        },
+        {
+          ...baseAxis(),
+          size: 42,
+        },
+      ],
+      series,
+    },
+    [[], ...series.slice(1).map(() => [])],
+    target,
+  );
+}
+
+function ensureCharts() {
+  if (charts != null || typeof uPlot === "undefined") {
+    return;
+  }
+
+  charts = {
+    cpu: createChart(
+      els.chartCpu,
+      [
+        {},
+        {
+          label: "CPU",
+          stroke: "#0f766e",
+          width: 2,
+          spanGaps: false,
+        },
+      ],
+      [0, 100],
+    ),
+    temp: createChart(
+      els.chartTemp,
+      [
+        {},
+        {
+          label: "Temp",
+          stroke: "#b45309",
+          width: 2,
+          spanGaps: false,
+        },
+        {
+          label: "Throttle",
+          stroke: "#be123c",
+          width: 1,
+          dash: [4, 4],
+          spanGaps: true,
+        },
+      ],
+      [30, 90],
+    ),
+    mem: createChart(
+      els.chartMem,
+      [
+        {},
+        {
+          label: "Memory",
+          stroke: "#14171c",
+          width: 2,
+          spanGaps: false,
+        },
+      ],
+      [0, 100],
+    ),
+  };
+}
+
+function renderCharts() {
+  ensureCharts();
+  if (charts == null || history.length === 0) {
+    return;
+  }
+
+  const data = chartData();
+  charts.cpu.setData([data.times, data.cpu]);
+  charts.temp.setData([data.times, data.temp, data.tempLimit]);
+  charts.mem.setData([data.times, data.mem]);
+}
+
+function resizeCharts() {
+  if (charts == null) {
+    return;
+  }
+  for (const [key, el] of [
+    ["cpu", els.chartCpu],
+    ["temp", els.chartTemp],
+    ["mem", els.chartMem],
+  ]) {
+    const width = Math.max(el.clientWidth || 280, 160);
+    charts[key].setSize({ width, height: CHART_HEIGHT });
+  }
+}
+
 function startEvents() {
   if (events != null) {
     return;
@@ -187,7 +349,10 @@ function startEvents() {
 
   events = new EventSource("/api/stream");
   events.onmessage = (event) => {
-    render(JSON.parse(event.data));
+    const sample = JSON.parse(event.data);
+    pushHistory(sample);
+    render(sample);
+    renderCharts();
     setStatus("connected");
   };
   // Browser already reconnects — only update the indicator.
@@ -210,6 +375,10 @@ document.addEventListener("visibilitychange", () => {
   } else {
     startEvents();
   }
+});
+
+window.addEventListener("resize", () => {
+  resizeCharts();
 });
 
 els.feed.onerror = () => {

@@ -11,6 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/vendor/uPlot.min.css" />
   </head>
   <body>
     <div class="atmosphere" aria-hidden="true"></div>
@@ -175,8 +176,24 @@
           </section>
         </main>
       </div>
+
+      <section class="charts reveal" style="--d: 3" aria-label="Trends">
+        <article class="cell chart-card">
+          <h2>CPU · 2 min</h2>
+          <div id="chart-cpu" class="chart"></div>
+        </article>
+        <article class="cell chart-card">
+          <h2>Temp · 2 min</h2>
+          <div id="chart-temp" class="chart"></div>
+        </article>
+        <article class="cell chart-card">
+          <h2>Memory · 2 min</h2>
+          <div id="chart-mem" class="chart"></div>
+        </article>
+      </section>
     </div>
 
+    <script src="/vendor/uPlot.min.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
