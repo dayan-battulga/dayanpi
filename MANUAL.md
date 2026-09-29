@@ -366,6 +366,61 @@ tailscale serve status
 
 ---
 
+## Unplugging and powering back on
+
+Everything comes back on its own after a reboot or power cut, as long as two things are switched on: the `dayanpi` service is **enabled**, and Serve was set up with **`--bg`**.
+
+### One-time check
+
+```bash
+systemctl is-enabled dayanpi      # should say: enabled
+systemctl is-enabled tailscaled   # should say: enabled
+tailscale serve status            # should show https://dayoon... → proxy http://127.0.0.1:8000
+```
+
+If `dayanpi` isn't enabled: `sudo systemctl enable dayanpi`. A `--bg` Serve is saved and comes back after reboots by itself. A foreground `tailscale serve 8000` doesn't.
+
+When it's all set, a boot goes: Pi boots → Tailscale connects → `dayanpi` starts (systemd retries every 5 s if something's not ready yet) → the site is back within about a minute.
+
+### Turning it off
+
+Don't just yank the plug. A sudden power cut can corrupt the SD card.
+
+1. **Motor battery off first**, so nothing can move while the Pi shuts down.
+2. Shut the Pi down:
+   ```bash
+   sudo poweroff
+   ```
+3. Wait for the green light to stop blinking, then unplug the Pi.
+
+If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. The camera and stats streams keep the app busy until systemd gives up and force-stops it. That's harmless, just slow. Close the tabs first to avoid it.
+
+### Turning it back on
+
+1. Plug in the Pi (webcam already connected).
+2. Wait about a minute, then open https://dayoon.tail279594.ts.net/ and log in. Hard-refresh if it looks stale.
+3. Put the rover up on a box, then turn the motor battery on.
+4. Tap `W` quickly to make sure the motors respond.
+
+Turning the motor battery on at any point is safe. The motor pins sit low (off) during boot, and the app starts them at 0.
+
+### Only unplugging the motor battery
+
+- **If it only powers the motors:** the Pi and the site keep running. The wheels just won't move until the battery's back. Nothing needs a restart.
+- **If it powers the Pi too:** that's a full power cut. Use the shutdown steps above next time.
+
+### Missing something after boot?
+
+| What you see | Check |
+| --- | --- |
+| Site won't load at all | `sudo systemctl status dayanpi` and `tailscale serve status` |
+| Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
+| Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
+| Drive card says unavailable | `journalctl -u dayanpi -b \| grep -i motors`, then check the `gpio` group and whether a script is holding the pins |
+| Power card is red | The battery or supply is too weak, especially with the motors running. Undervoltage can reboot the Pi mid-drive |
+
+---
+
 ## Stage 7 security checklist (before Funnel)
 
 ```bash

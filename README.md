@@ -72,6 +72,18 @@ The full commands, with checks after each one, are in [MANUAL.md → First-time 
 
 ---
 
+## Turning it off and on
+
+Everything comes back by itself after a reboot or power cut, as long as the `dayanpi` service is enabled (`systemctl is-enabled dayanpi`) and Serve was set up with `--bg` (`tailscale serve status`).
+
+- **Off:** motor battery off first, then `sudo poweroff` on the Pi, then unplug once the green light stops blinking. Pulling the plug without shutting down can corrupt the SD card.
+- **On:** plug in the Pi, wait about a minute, and open the site. Then put the rover on a box and turn the motor battery on.
+- **Only the motor battery unplugged:** if it only powers the motors, the site keeps running and the wheels just won't move until it's back.
+
+Details and a "missing something after boot?" checklist: [MANUAL.md → Unplugging and powering back on](MANUAL.md#unplugging-and-powering-back-on).
+
+---
+
 ## Safety (please read before driving)
 
 - **The watchdog.** If the Pi hears nothing for 0.5 s (dead phone, crashed tab, dropped Wi-Fi), it stops the wheels.
