@@ -357,6 +357,150 @@ main {
   animation: blink 1s ease-in-out infinite;
 }
 
+.cell-drive .feed-head {
+  margin-bottom: 0.55rem;
+}
+
+.drive-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+
+.drive-keys {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.drive-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 55%);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition:
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    background 0.15s var(--ease);
+}
+
+.drive-keys kbd.is-held {
+  color: var(--accent);
+  border-color: rgb(15 118 110 / 35%);
+  background: rgb(15 118 110 / 10%);
+}
+
+.drive-pad {
+  display: grid;
+  grid-template-areas:
+    ". up ."
+    "left . right"
+    ". down .";
+  grid-template-columns: repeat(3, 4.25rem);
+  grid-template-rows: repeat(3, 4.25rem);
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 0.85rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.drive-pad button {
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: rgb(255 255 255 / 55%);
+  color: var(--muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    background 0.15s var(--ease),
+    transform 0.15s var(--ease);
+}
+
+.drive-pad button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.drive-pad button.is-held {
+  color: var(--accent);
+  border-color: rgb(15 118 110 / 35%);
+  background: rgb(15 118 110 / 12%);
+  transform: scale(0.96);
+}
+
+.drive-pad-up {
+  grid-area: up;
+}
+
+.drive-pad-left {
+  grid-area: left;
+}
+
+.drive-pad-right {
+  grid-area: right;
+}
+
+.drive-pad-down {
+  grid-area: down;
+}
+
+/* Touch screens: the pad replaces the W A S D hints. */
+@media (hover: none) {
+  .drive-keys {
+    display: none;
+  }
+}
+
+.drive-command {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 1.05rem;
+}
+
+.drive-error {
+  color: var(--danger);
+}
+
+.drive-error:empty {
+  display: none;
+}
+
+.cell-drive.is-driving .live-pill {
+  color: var(--accent);
+  border-color: rgb(15 118 110 / 25%);
+  background: rgb(15 118 110 / 8%);
+}
+
+.cell-drive.is-driving .live-dot {
+  background: var(--accent);
+  animation: blink 0.6s ease-in-out infinite;
+}
+
+.cell-drive.is-error .live-pill {
+  color: var(--danger);
+  border-color: rgb(190 18 60 / 30%);
+}
+
+.cell-drive.is-error .live-dot {
+  background: var(--danger);
+}
+
 .feed-frame {
   position: relative;
   overflow: hidden;
@@ -681,6 +825,8 @@ h2 {
   .power-rail,
   #status,
   .live-dot,
+  .drive-keys kbd,
+  .drive-pad button,
   .feed-frame::before,
   #feed {
     animation: none !important;

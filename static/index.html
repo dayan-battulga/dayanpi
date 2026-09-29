@@ -49,6 +49,38 @@
             </div>
           </div>
 
+          <div id="drive-card" class="cell cell-drive">
+            <div class="feed-head">
+              <h2>Drive</h2>
+              <span class="live-pill">
+                <span class="live-dot" aria-hidden="true"></span>
+                <span id="drive-state" aria-live="polite">idle</span>
+              </span>
+            </div>
+            <div class="drive-body">
+              <div class="drive-keys" aria-hidden="true">
+                <kbd data-key="KeyW">W</kbd>
+                <kbd data-key="KeyA">A</kbd>
+                <kbd data-key="KeyS">S</kbd>
+                <kbd data-key="KeyD">D</kbd>
+              </div>
+              <p class="detail drive-command">
+                <span class="net-leg">L</span>
+                <span id="drive-left" class="net-val">+0.00</span>
+                <span class="sep">·</span>
+                <span class="net-leg">R</span>
+                <span id="drive-right" class="net-val">+0.00</span>
+              </p>
+            </div>
+            <div class="drive-pad">
+              <button type="button" class="drive-pad-up" data-key="KeyW" aria-label="Forward">▲</button>
+              <button type="button" class="drive-pad-left" data-key="KeyA" aria-label="Turn left">◀&#xFE0E;</button>
+              <button type="button" class="drive-pad-right" data-key="KeyD" aria-label="Turn right">▶&#xFE0E;</button>
+              <button type="button" class="drive-pad-down" data-key="KeyS" aria-label="Backward">▼</button>
+            </div>
+            <p id="drive-error" class="detail sub drive-error" role="alert"></p>
+          </div>
+
           <aside
             id="power-rail"
             class="power-rail throttle-ok"
@@ -195,5 +227,6 @@
 
     <script src="/vendor/uPlot.min.js"></script>
     <script src="/app.js"></script>
+    <script type="module" src="/drive.js"></script>
   </body>
 </html>

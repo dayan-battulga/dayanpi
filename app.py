@@ -12,12 +12,14 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 import collector
 from camera import CameraStream
+from drivetrain import CommandTimer, DriveTrain
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -28,6 +30,8 @@ MAX_CONSECUTIVE_TIMEOUTS = 3
 SNAPSHOT_INTERVAL_S = 1.0
 VIDEO_MAX_CONCURRENT = 2
 STREAM_MAX_CONCURRENT = 5
+WATCHDOG_INTERVAL_S = 0.1
+DRIVE_TIMEOUT_S = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,8 @@ AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
 sampler = collector.RateSampler("wlan0")
 stream = CameraStream("/dev/video0")
 latest_snapshot: dict | None = None
+drive_train: DriveTrain | None = None
+command_timer = CommandTimer(DRIVE_TIMEOUT_S)
 
 _video_active = 0
 _stream_active = 0
@@ -79,8 +85,20 @@ async def snapshot_producer() -> None:
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
 
+async def drive_watchdog() -> None:
+    """Stops the motors once the browser stops sending commands."""
+    while True:
+        try:
+            if command_timer.is_stale():
+                drive_train.stop()
+        except Exception:
+            logger.exception("drive watchdog failed")
+        await asyncio.sleep(WATCHDOG_INTERVAL_S)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global drive_train
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -88,8 +106,18 @@ async def lifespan(app: FastAPI):
         )
     sampler.sample()
     stream.start()
+    drive_train = DriveTrain()
+    watchdog = asyncio.create_task(drive_watchdog(), name="drive-watchdog")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
-    yield
+    try:
+        yield
+    finally:
+        watchdog.cancel()
+        try:
+            await watchdog
+        except asyncio.CancelledError:
+            pass
+        drive_train.close()
     producer.cancel()
     try:
         await producer
@@ -173,6 +201,19 @@ def stats(request: Request):
 @app.get("/api/health")
 @limiter.limit("60/minute")
 def health(request: Request):
+    return {"status": "ok"}
+
+
+class DriveCommand(BaseModel):
+    left: float = Field(ge=-1, le=1, allow_inf_nan=False)
+    right: float = Field(ge=-1, le=1, allow_inf_nan=False)
+
+
+@app.post("/api/drive")
+@limiter.limit("600/minute")
+def drive(request: Request, command: DriveCommand):
+    command_timer.record_command()
+    drive_train.drive(command.left, command.right)
     return {"status": "ok"}
 
 

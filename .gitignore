@@ -8,3 +8,4 @@ venv/
 checkpoint_*.jpg
 test.jpg
 .DS_Store
+.lgd-nfy*
