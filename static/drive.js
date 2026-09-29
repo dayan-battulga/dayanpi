@@ -30,6 +30,7 @@ let sendTimer = null;
 let inFlight = false;
 let pending = null;
 let lastError = "";
+let motorsUnavailable = false;
 
 function computeCommand() {
   const forward = held.has("KeyW") - held.has("KeyS");
@@ -50,7 +51,13 @@ function renderCard(command) {
   els.error.textContent = lastError;
   els.card.classList.toggle("is-driving", driving && !lastError);
   els.card.classList.toggle("is-error", Boolean(lastError));
-  els.state.textContent = lastError ? "error" : driving ? "driving" : "idle";
+  els.state.textContent = motorsUnavailable
+    ? "unavailable"
+    : lastError
+      ? "error"
+      : driving
+        ? "driving"
+        : "idle";
   for (const keyEl of els.keys) {
     keyEl.classList.toggle("is-held", held.has(keyEl.dataset.key));
   }
@@ -70,9 +77,15 @@ function sendCommand(command) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
       .then((response) => {
-        lastError = response.ok ? "" : `drive failed: HTTP ${response.status}`;
+        motorsUnavailable = response.status === 503;
+        lastError = response.ok
+          ? ""
+          : motorsUnavailable
+            ? "motors unavailable (the Pi couldn't open the motor pins; check its logs)"
+            : `drive failed: HTTP ${response.status}`;
       })
       .catch((error) => {
+        motorsUnavailable = false;
         lastError = `drive failed: ${error.name === "TimeoutError" ? "timed out" : "network error"}`;
       })
       .finally(() => {
@@ -156,3 +169,7 @@ document.addEventListener("visibilitychange", () => {
     releaseAll();
   }
 });
+
+// One stop on page load: harmless, and it tells the card straight away
+// whether the motors are available.
+sendCommand({ left: 0, right: 0 });

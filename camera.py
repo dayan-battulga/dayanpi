@@ -112,7 +112,14 @@ class CameraStream:
         if self._running:
             return
 
-        self._capture = self._open_capture()
+        opened = True
+        try:
+            self._capture = self._open_capture()
+        except OSError as error:
+            # _capture stays None; the capture loop keeps reconnecting.
+            opened = False
+            logger.warning("camera unavailable at startup, will keep retrying: %s", error)
+
         self._running = True
         self._thread = threading.Thread(
             target=self._capture_loop,
@@ -121,16 +128,17 @@ class CameraStream:
         )
         self._thread.start()
 
-        with self._condition:
-            ready = self._condition.wait_for(
-                lambda: self._frame is not None,
-                timeout=START_TIMEOUT_S,
-            )
-        if not ready:
-            logger.warning(
-                "camera started but no frame within %.1fs",
-                START_TIMEOUT_S,
-            )
+        if opened:
+            with self._condition:
+                ready = self._condition.wait_for(
+                    lambda: self._frame is not None,
+                    timeout=START_TIMEOUT_S,
+                )
+            if not ready:
+                logger.warning(
+                    "camera started but no frame within %.1fs",
+                    START_TIMEOUT_S,
+                )
 
     def stop(self) -> None:
         self._running = False

@@ -85,7 +85,7 @@ async def snapshot_producer() -> None:
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
 
-async def drive_watchdog() -> None:
+async def watch_drive_commands() -> None:
     """Stops the motors once the browser stops sending commands."""
     while True:
         try:
@@ -106,18 +106,25 @@ async def lifespan(app: FastAPI):
         )
     sampler.sample()
     stream.start()
-    drive_train = DriveTrain()
-    watchdog = asyncio.create_task(drive_watchdog(), name="drive-watchdog")
+    drive_train = None
+    watchdog = None
+    try:
+        drive_train = DriveTrain()
+        watchdog = asyncio.create_task(watch_drive_commands(), name="drive-watchdog")
+    except Exception:
+        # Busy pins, no gpio permission, no lgpio/gpiozero: run the dashboard without motors.
+        logger.exception("motors unavailable; /api/drive will return 503")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
     try:
         yield
     finally:
-        watchdog.cancel()
-        try:
-            await watchdog
-        except asyncio.CancelledError:
-            pass
-        drive_train.close()
+        if watchdog is not None:
+            watchdog.cancel()
+            try:
+                await watchdog
+            except asyncio.CancelledError:
+                pass
+            drive_train.close()
     producer.cancel()
     try:
         await producer
@@ -212,6 +219,11 @@ class DriveCommand(BaseModel):
 @app.post("/api/drive")
 @limiter.limit("600/minute")
 def drive(request: Request, command: DriveCommand):
+    if drive_train is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Motors unavailable",
+        )
     command_timer.record_command()
     drive_train.drive(command.left, command.right)
     return {"status": "ok"}
@@ -241,7 +253,7 @@ async def api_stream(request: Request):
 
 
 @app.get("/video")
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 def video(request: Request):
     global _video_active
 

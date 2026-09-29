@@ -4,6 +4,9 @@ const CPU_ELEVATED_PCT = 70;
 const CPU_CRITICAL_PCT = 90;
 const MAX_POINTS = 120; // ~2 minutes at 1 Hz
 const CHART_HEIGHT = 152;
+const FEED_RETRY_BASE_MS = 2000; // 2, 4, 8, 16 s...
+const FEED_RETRY_MAX_MS = 30000; // ...then every 30 s
+const FEED_STABLE_MS = 30000; // up this long = healthy again, back to 2 s
 
 const els = {
   status: document.getElementById("status"),
@@ -38,6 +41,8 @@ const els = {
 const history = [];
 let events = null;
 let charts = null;
+let feedFailures = 0;
+let feedStableTimer = null;
 
 function setStatus(state) {
   els.status.className = state;
@@ -381,18 +386,30 @@ window.addEventListener("resize", () => {
   resizeCharts();
 });
 
+// /video's rate limit is shared by every viewer, so back off instead of
+// burning through it with fixed 2 s retries.
 els.feed.onerror = () => {
   els.feed.closest(".cell-feed")?.classList.remove("is-live");
   els.feed.closest(".cell-feed")?.classList.add("is-reconnecting");
+  clearTimeout(feedStableTimer);
+  feedStableTimer = null;
+  const retryDelay = Math.min(FEED_RETRY_BASE_MS * 2 ** feedFailures, FEED_RETRY_MAX_MS);
+  feedFailures += 1;
   setTimeout(() => {
     els.feed.src = "/video?t=" + Date.now();
-  }, 2000);
+  }, retryDelay);
 };
 
 els.feed.onload = () => {
   const card = els.feed.closest(".cell-feed");
   card?.classList.remove("is-reconnecting");
   card?.classList.add("is-live");
+  // Some browsers fire load on every MJPEG frame; only arm the timer once.
+  if (feedStableTimer == null) {
+    feedStableTimer = setTimeout(() => {
+      feedFailures = 0;
+    }, FEED_STABLE_MS);
+  }
 };
 
 startEvents();

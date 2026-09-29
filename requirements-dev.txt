@@ -1,2 +1,4 @@
+-r requirements.txt
 gpiozero
 pytest
+httpx

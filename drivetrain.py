@@ -2,21 +2,19 @@ import math
 import threading
 import time
 
-from gpiozero import DigitalOutputDevice, PWMOutputDevice
-
-# Tunables — change these in one place only.
-DEADZONE = 0.05  # inputs below this are treated as 0
+DEADZONE = 0.05
 SPEED_FLOOR = 0.4  # lowest duty cycle that still turns the wheels
 MAX_SPEED = 0.6
 PWM_FREQUENCY_HZ = 1000
+REVERSAL_PAUSE_S = 0.15
 
 # L298N wiring (BCM numbers). IN1/IN3 high = forward.
-LEFT_FORWARD_PIN = 17  # IN1
-LEFT_BACKWARD_PIN = 27  # IN2
-LEFT_ENABLE_PIN = 12  # ENA
-RIGHT_FORWARD_PIN = 22  # IN3
-RIGHT_BACKWARD_PIN = 23  # IN4
-RIGHT_ENABLE_PIN = 13  # ENB
+LEFT_FORWARD_PIN = 17
+LEFT_BACKWARD_PIN = 27
+LEFT_ENABLE_PIN = 12
+RIGHT_FORWARD_PIN = 22
+RIGHT_BACKWARD_PIN = 23
+RIGHT_ENABLE_PIN = 13
 
 
 def scale_speed(value: float) -> float:
@@ -50,39 +48,67 @@ class CommandTimer:
         return stale
 
 
+class MotorSide:
+    """One side of the L298N: two direction pins and one PWM enable pin."""
+
+    def __init__(self, forward_pin: int, backward_pin: int, enable_pin: int, pin_factory) -> None:
+        # Imported here, not at the top: if the venv can't see apt's gpiozero,
+        # DriveTrain() fails (and app.py carries on without motors) instead of
+        # `import drivetrain` taking the whole app down.
+        from gpiozero import DigitalOutputDevice, PWMOutputDevice
+
+        self._forward = DigitalOutputDevice(forward_pin, pin_factory=pin_factory)
+        self._backward = DigitalOutputDevice(backward_pin, pin_factory=pin_factory)
+        self._enable = PWMOutputDevice(
+            enable_pin, frequency=PWM_FREQUENCY_HZ, pin_factory=pin_factory
+        )
+        self._applied_speed = 0.0
+        self._last_direction = 0.0
+        self._stopped_at = -math.inf
+
+    def set_speed(self, speed: float, now: float) -> None:
+        # Caller holds the lock. Slamming straight into reverse spikes the
+        # current (and can brown out the Pi), so a reversal only goes through
+        # once this side has been stopped for REVERSAL_PAUSE_S; until then it
+        # stays at 0 and the browser's next resend applies the new direction.
+        reversing = speed * self._last_direction < 0
+        paused_long_enough = (
+            self._applied_speed == 0 and now - self._stopped_at >= REVERSAL_PAUSE_S
+        )
+        applied_speed = 0.0 if reversing and not paused_long_enough else speed
+        if applied_speed == 0 and self._applied_speed != 0:
+            self._stopped_at = now
+        if applied_speed != 0:
+            self._last_direction = applied_speed
+        self._applied_speed = applied_speed
+
+        # EN goes to 0 first so the H-bridge never sees a direction flip while powered.
+        self._enable.value = 0
+        self._forward.value = applied_speed > 0
+        self._backward.value = applied_speed < 0
+        self._enable.value = abs(applied_speed)
+
+    def close(self) -> None:
+        self._forward.close()
+        self._backward.close()
+        self._enable.close()
+
+
 class DriveTrain:
     """Sole owner of the six motor pins; every pin change happens under one lock."""
 
-    def __init__(self, pin_factory=None) -> None:
+    def __init__(self, pin_factory=None, clock=time.monotonic) -> None:
         self._lock = threading.Lock()
-        self._left_forward = DigitalOutputDevice(LEFT_FORWARD_PIN, pin_factory=pin_factory)
-        self._left_backward = DigitalOutputDevice(LEFT_BACKWARD_PIN, pin_factory=pin_factory)
-        self._left_enable = PWMOutputDevice(
-            LEFT_ENABLE_PIN, frequency=PWM_FREQUENCY_HZ, pin_factory=pin_factory
+        self._clock = clock
+        self._left = MotorSide(LEFT_FORWARD_PIN, LEFT_BACKWARD_PIN, LEFT_ENABLE_PIN, pin_factory)
+        self._right = MotorSide(
+            RIGHT_FORWARD_PIN, RIGHT_BACKWARD_PIN, RIGHT_ENABLE_PIN, pin_factory
         )
-        self._right_forward = DigitalOutputDevice(RIGHT_FORWARD_PIN, pin_factory=pin_factory)
-        self._right_backward = DigitalOutputDevice(RIGHT_BACKWARD_PIN, pin_factory=pin_factory)
-        self._right_enable = PWMOutputDevice(
-            RIGHT_ENABLE_PIN, frequency=PWM_FREQUENCY_HZ, pin_factory=pin_factory
-        )
-
-    def _set_side(
-        self,
-        forward: DigitalOutputDevice,
-        backward: DigitalOutputDevice,
-        enable: PWMOutputDevice,
-        speed: float,
-    ) -> None:
-        # Caller holds the lock. EN goes to 0 first so the H-bridge never
-        # sees a direction flip while powered.
-        enable.value = 0
-        forward.value = speed > 0
-        backward.value = speed < 0
-        enable.value = abs(speed)
 
     def _set_both(self, left_speed: float, right_speed: float) -> None:
-        self._set_side(self._left_forward, self._left_backward, self._left_enable, left_speed)
-        self._set_side(self._right_forward, self._right_backward, self._right_enable, right_speed)
+        now = self._clock()
+        self._left.set_speed(left_speed, now)
+        self._right.set_speed(right_speed, now)
 
     def drive(self, left: float, right: float) -> None:
         left_speed = scale_speed(left)
@@ -97,12 +123,5 @@ class DriveTrain:
     def close(self) -> None:
         with self._lock:
             self._set_both(0.0, 0.0)
-            for device in (
-                self._left_forward,
-                self._left_backward,
-                self._left_enable,
-                self._right_forward,
-                self._right_backward,
-                self._right_enable,
-            ):
-                device.close()
+            self._left.close()
+            self._right.close()

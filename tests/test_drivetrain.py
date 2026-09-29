@@ -8,6 +8,19 @@ import drivetrain
 from drivetrain import CommandTimer, DriveTrain
 
 
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 100.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock():
+    return FakeClock()
+
+
 @pytest.fixture
 def factory():
     mock_factory = MockFactory(pin_class=MockPWMPin)
@@ -16,8 +29,8 @@ def factory():
 
 
 @pytest.fixture
-def train(factory):
-    drive_train = DriveTrain(pin_factory=factory)
+def train(factory, clock):
+    drive_train = DriveTrain(pin_factory=factory, clock=clock)
     yield drive_train
     drive_train.close()
 
@@ -32,21 +45,23 @@ def read_side(factory, forward_pin, backward_pin, enable_pin):
 
 
 def read_left(factory):
-    return read_side(
+    left_state = read_side(
         factory,
         drivetrain.LEFT_FORWARD_PIN,
         drivetrain.LEFT_BACKWARD_PIN,
         drivetrain.LEFT_ENABLE_PIN,
     )
+    return left_state
 
 
 def read_right(factory):
-    return read_side(
+    right_state = read_side(
         factory,
         drivetrain.RIGHT_FORWARD_PIN,
         drivetrain.RIGHT_BACKWARD_PIN,
         drivetrain.RIGHT_ENABLE_PIN,
     )
+    return right_state
 
 
 FORWARD_FULL = {"forward": True, "backward": False, "enable": pytest.approx(drivetrain.MAX_SPEED)}
@@ -117,8 +132,10 @@ def test_close(factory):
         drive_train.drive(1, 1)
 
 
-def test_enable_drops_before_direction_flips(factory, train, monkeypatch):
+def test_enable_drops_before_direction_flips(factory, train, clock, monkeypatch):
     train.drive(1, 1)
+    train.stop()
+    clock.now += drivetrain.REVERSAL_PAUSE_S
 
     changes = []
     original_change_state = MockPin._change_state
@@ -141,17 +158,62 @@ def test_enable_drops_before_direction_flips(factory, train, monkeypatch):
     assert enable_off_at < backward_on_at < enable_on_at
 
 
-class FakeClock:
-    def __init__(self) -> None:
-        self.now = 100.0
+def test_reversal_stops_side_first(factory, train, clock):
+    train.drive(1, 1)
+    train.drive(-1, 1)
+    assert read_left(factory) == STOPPED
+    assert read_right(factory) == FORWARD_FULL
 
-    def __call__(self) -> float:
-        return self.now
+
+def test_reversal_applies_after_pause(factory, train, clock):
+    train.drive(1, 1)
+    train.drive(-1, 1)
+    clock.now += drivetrain.REVERSAL_PAUSE_S
+    train.drive(-1, 1)
+    assert read_left(factory) == BACKWARD_FULL
 
 
-@pytest.fixture
-def clock():
-    return FakeClock()
+def test_reversal_waits_out_short_pause(factory, train, clock):
+    train.drive(1, 1)
+    train.drive(-1, 1)
+    clock.now += drivetrain.REVERSAL_PAUSE_S / 2
+    train.drive(-1, 1)
+    assert read_left(factory) == STOPPED
+
+
+def test_reversal_after_quick_release_still_pauses(factory, train, clock):
+    train.drive(1, -1)
+    train.stop()
+    clock.now += drivetrain.REVERSAL_PAUSE_S / 2
+    train.drive(-1, 1)
+    assert read_left(factory) == STOPPED
+    assert read_right(factory) == STOPPED
+
+
+def test_long_stop_allows_immediate_reversal(factory, train, clock):
+    train.drive(1, 1)
+    train.stop()
+    clock.now += drivetrain.REVERSAL_PAUSE_S
+    train.drive(-1, -1)
+    assert read_left(factory) == BACKWARD_FULL
+    assert read_right(factory) == BACKWARD_FULL
+
+
+def test_watchdog_stops_do_not_extend_pause(factory, train, clock):
+    train.drive(1, 1)
+    train.stop()
+    for _ in range(5):
+        clock.now += drivetrain.REVERSAL_PAUSE_S / 3
+        train.stop()
+    train.drive(-1, -1)
+    assert read_left(factory) == BACKWARD_FULL
+
+
+def test_same_direction_never_pauses(factory, train, clock):
+    train.drive(1, 1)
+    train.drive(0.5, 0.5)
+    assert read_left(factory)["forward"]
+    assert read_left(factory)["enable"] > 0
 
 
 @pytest.fixture

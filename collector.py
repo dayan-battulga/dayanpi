@@ -100,7 +100,7 @@ def temperature_celcius() -> float:
 
 def uptime_seconds() -> float:
     uptime_seconds_path = Path("/proc/uptime")
-    uptime_seconds = round(float(uptime_seconds_path.read_text().strip()[0]), 2)
+    uptime_seconds = round(float(uptime_seconds_path.read_text().split()[0]), 2)
     return uptime_seconds
 
 
