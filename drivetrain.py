@@ -9,11 +9,11 @@ PWM_FREQUENCY_HZ = 1000
 REVERSAL_PAUSE_S = 0.15
 
 # L298N wiring (BCM numbers). IN1/IN3 high = forward.
-LEFT_FORWARD_PIN = 17
-LEFT_BACKWARD_PIN = 27
+LEFT_FORWARD_PIN = 27
+LEFT_BACKWARD_PIN = 17
 LEFT_ENABLE_PIN = 12
-RIGHT_FORWARD_PIN = 22
-RIGHT_BACKWARD_PIN = 23
+RIGHT_FORWARD_PIN = 23
+RIGHT_BACKWARD_PIN = 22
 RIGHT_ENABLE_PIN = 13
 
 
@@ -44,14 +44,18 @@ class CommandTimer:
 
     def is_stale(self) -> bool:
         last_command_at = self._last_command_at
-        stale = last_command_at is None or self._clock() - last_command_at > self._timeout_s
+        stale = (
+            last_command_at is None or self._clock() - last_command_at > self._timeout_s
+        )
         return stale
 
 
 class MotorSide:
     """One side of the L298N: two direction pins and one PWM enable pin."""
 
-    def __init__(self, forward_pin: int, backward_pin: int, enable_pin: int, pin_factory) -> None:
+    def __init__(
+        self, forward_pin: int, backward_pin: int, enable_pin: int, pin_factory
+    ) -> None:
         # Imported here, not at the top: if the venv can't see apt's gpiozero,
         # DriveTrain() fails (and app.py carries on without motors) instead of
         # `import drivetrain` taking the whole app down.
@@ -100,7 +104,9 @@ class DriveTrain:
     def __init__(self, pin_factory=None, clock=time.monotonic) -> None:
         self._lock = threading.Lock()
         self._clock = clock
-        self._left = MotorSide(LEFT_FORWARD_PIN, LEFT_BACKWARD_PIN, LEFT_ENABLE_PIN, pin_factory)
+        self._left = MotorSide(
+            LEFT_FORWARD_PIN, LEFT_BACKWARD_PIN, LEFT_ENABLE_PIN, pin_factory
+        )
         self._right = MotorSide(
             RIGHT_FORWARD_PIN, RIGHT_BACKWARD_PIN, RIGHT_ENABLE_PIN, pin_factory
         )
