@@ -7,7 +7,8 @@ The dayanpi service owns the camera, so stop it first:
 
 It walks you through three phases (working, on your phone, away), prints what
 the detector sees about once a second, saves one marked-up snapshot per phase
-into focus_check/, and ends with a summary (also saved to focus_check/summary.txt).
+into focus_check/ plus a clean frame every 2 seconds into focus_check/frames/,
+and ends with a summary (also saved to focus_check/summary.txt).
 """
 
 import argparse
@@ -25,6 +26,8 @@ from camera import CameraStream
 from detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "focus_check"
+FRAMES_FOLDER = "frames"
+FRAME_SAVE_INTERVAL_S = 2.0
 PHASE_SECONDS = 20
 GET_READY_SECONDS = 5
 SCAN_INTERVAL_S = 1.0
@@ -179,9 +182,19 @@ def count_down(phase: Phase, seconds: int) -> None:
     print(" " * 30, end="\r")
 
 
+def clear_saved_frames() -> None:
+    frames_dir = OUTPUT_DIR / FRAMES_FOLDER
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    for old_frame in frames_dir.glob("*.jpg"):
+        old_frame.unlink()
+
+
 def run_phase(stream: CameraStream, scanner: DeskScanner, phase: Phase, seconds: int) -> PhaseSummary:
     readings = []
     snapshot_saved = False
+    frames_dir = OUTPUT_DIR / FRAMES_FOLDER
+    frames_saved = 0
+    next_frame_save = 0.0
     started = time.monotonic()
     elapsed = 0.0
 
@@ -193,6 +206,11 @@ def run_phase(stream: CameraStream, scanner: DeskScanner, phase: Phase, seconds:
             reading = scanner.scan(image)
             readings.append(reading)
             print(f"[{phase.name:<7} {elapsed:3.0f}s] {describe_reading(reading)}")
+            if elapsed >= next_frame_save:
+                # The camera's own JPEG bytes, unmarked: drawn boxes fool the model when re-testing.
+                (frames_dir / f"{phase.name}_{frames_saved:02d}.jpg").write_bytes(jpeg)
+                frames_saved += 1
+                next_frame_save = elapsed + FRAME_SAVE_INTERVAL_S
             if not snapshot_saved and elapsed >= seconds / 2:
                 caption = f"{phase.name}: {describe_reading(reading)}"
                 cv2.imwrite(str(OUTPUT_DIR / f"{phase.name}.jpg"), draw_reading(image, reading, caption))
@@ -230,7 +248,7 @@ def run_check(seconds: int) -> int:
             report = format_report(summaries)
             print(report)
             (OUTPUT_DIR / "summary.txt").write_text(report + "\n")
-            print(f"\nSnapshots and summary are in {OUTPUT_DIR}/")
+            print(f"\nSnapshots and summary are in {OUTPUT_DIR}/, clean frames in {OUTPUT_DIR / FRAMES_FOLDER}/")
     finally:
         stream.stop()
 
@@ -244,6 +262,7 @@ def main() -> int:
 
     logging.basicConfig(level=logging.WARNING)
     OUTPUT_DIR.mkdir(exist_ok=True)
+    clear_saved_frames()
 
     missing = [path.name for path in (OBJECT_MODEL_PATH, FACE_MODEL_PATH) if not path.exists()]
     exit_code = 1

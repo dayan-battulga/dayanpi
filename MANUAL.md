@@ -221,7 +221,22 @@ About once a second it prints a line like this:
 - **tilt:** where your nose sits between your eyes (0) and your mouth (1). This changes when you look down.
 - **ms:** how long one check took.
 
-At the end it prints a summary table. The summary and one marked-up snapshot per phase go into `focus_check/` (`working.jpg`, `phone.jpg`, `away.jpg`, `summary.txt`). Send the summary and snapshots to Claude, and they'll be used to set the thresholds for step 2. Want longer phases? Use `--seconds 30`.
+At the end it prints a summary table. Everything lands in `focus_check/`:
+
+- `summary.txt`, plus one marked-up snapshot per phase (`working.jpg`, `phone.jpg`, `away.jpg`)
+- `frames/`: a clean, unmarked camera frame every 2 seconds (`working_00.jpg`, `phone_03.jpg`, ...). These are for re-testing the detector off the Pi. The drawn boxes on the snapshots confuse the model, so it needs the clean ones. Each run clears out the old frames.
+
+Want longer phases? Use `--seconds 30`.
+
+### Getting the files to your Mac
+
+These are photos of you and your room, so don't commit them (the repo is public). Copy them over SSH instead. On the Mac:
+
+```bash
+scp -r dayoon@dayoon.tail279594.ts.net:~/Desktop/site-page/dayanpi/focus_check ~/Desktop/
+```
+
+(Use whatever address you normally SSH to if that one doesn't work.) Then attach `summary.txt`, the snapshots and the `frames/` files in the chat with Claude.
 
 If it says **No camera frames**, the service is still running. Run `sudo systemctl stop dayanpi` and try again.
 

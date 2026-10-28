@@ -1,5 +1,6 @@
 import sys
 
+import cv2
 import numpy as np
 import pytest
 
@@ -59,6 +60,35 @@ def test_main_stops_early_when_a_model_is_missing(monkeypatch, tmp_path, capsys)
     monkeypatch.setattr(sys, "argv", ["focus_check.py"])
     assert focus_check.main() == 1
     assert "missing.onnx" in capsys.readouterr().out
+
+
+class FakeStream:
+    def latest_frame(self) -> bytes:
+        return cv2.imencode(".jpg", np.full((480, 640, 3), 90, np.uint8))[1].tobytes()
+
+
+class FakeScanner:
+    def scan(self, image: np.ndarray) -> FrameReading:
+        return make_reading(person=0.9, phone=0.4, tilt=0.5)
+
+
+def test_run_phase_saves_clean_frames_and_one_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setattr(focus_check, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(focus_check, "SCAN_INTERVAL_S", 0.05)
+    monkeypatch.setattr(focus_check, "FRAME_SAVE_INTERVAL_S", 0.0)
+    focus_check.clear_saved_frames()
+    stale = tmp_path / "frames" / "old.jpg"
+    stale.write_bytes(b"x")
+    focus_check.clear_saved_frames()
+
+    summary = focus_check.run_phase(FakeStream(), FakeScanner(), focus_check.PHASES[1], 0.3)
+
+    frames = sorted(path.name for path in (tmp_path / "frames").glob("*.jpg"))
+    assert not stale.exists()
+    assert len(frames) == summary.frames
+    assert frames[0] == "phone_00.jpg"
+    assert (tmp_path / "frames" / "phone_00.jpg").read_bytes() == FakeStream().latest_frame()
+    assert (tmp_path / "phone.jpg").exists()
 
 
 def test_draw_reading_keeps_the_frame_size():
