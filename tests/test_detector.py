@@ -2,7 +2,17 @@ import numpy as np
 import pytest
 
 import detector
-from detector import Box, DeskScanner, Letterbox, decode_objects, fit_to_input, read_face
+from detector import (
+    Box,
+    DeskScanner,
+    Detection,
+    Letterbox,
+    decode_objects,
+    find_zoom_region,
+    fit_to_input,
+    read_face,
+    shift_box,
+)
 
 CLASS_COUNT = 80
 PLAIN_LETTERBOX = Letterbox(image=np.zeros((480, 640, 3), np.uint8), scale=1.0, pad_left=0, pad_top=0)
@@ -96,6 +106,60 @@ def test_read_face_turned_and_tilted():
     face = read_face(yunet_row(nose_x=130, nose_y=132))
     assert face.turn == pytest.approx(0.25)
     assert face.tilt == pytest.approx(0.8)
+
+
+def test_zoom_region_adds_margin_and_stays_in_frame():
+    region = find_zoom_region(Box(x1=300, y1=150, x2=500, y2=450), frame_width=640, frame_height=480)
+    assert region == Box(x1=270, y1=135, x2=530, y2=480)
+    edge = find_zoom_region(Box(x1=0, y1=0, x2=640, y2=480), frame_width=640, frame_height=480)
+    assert edge == Box(x1=0, y1=0, x2=640, y2=480)
+
+
+def test_shift_box_moves_crop_boxes_back_onto_the_frame():
+    assert shift_box(Box(x1=10, y1=20, x2=30, y2=40), 100, 50) == Box(x1=110, y1=70, x2=130, y2=90)
+
+
+class FakeObjectDetector:
+    """First call is the full frame, every later call is the zoomed crop."""
+
+    def __init__(self, full_frame: list[Detection], zoomed: list[Detection]) -> None:
+        self.full_frame = full_frame
+        self.zoomed = zoomed
+        self.shapes = []
+
+    def detect(self, image: np.ndarray) -> list[Detection]:
+        self.shapes.append(image.shape)
+        found = self.full_frame if len(self.shapes) == 1 else self.zoomed
+        return found
+
+
+class FakeFaceDetector:
+    def detect(self, image: np.ndarray) -> list:
+        return []
+
+
+def test_scanner_takes_phones_from_the_zoomed_crop_only():
+    person = Detection("person", 0.9, Box(x1=300, y1=150, x2=500, y2=450))
+    far_phone = Detection("phone", 0.4, Box(x1=10, y1=10, x2=30, y2=40))
+    crop_phone = Detection("phone", 0.7, Box(x1=20, y1=200, x2=60, y2=260))
+    objects = FakeObjectDetector(full_frame=[person, far_phone], zoomed=[crop_phone])
+
+    reading = DeskScanner(objects, FakeFaceDetector()).scan(np.zeros((480, 640, 3), np.uint8))
+
+    assert objects.shapes == [(480, 640, 3), (345, 260, 3)]
+    assert reading.people == [person]
+    assert [phone.confidence for phone in reading.phones] == [pytest.approx(0.7)]
+    assert reading.phones[0].box == Box(x1=290, y1=335, x2=330, y2=395)
+
+
+def test_scanner_skips_the_zoom_without_a_clear_person():
+    unsure_person = Detection("person", 0.4, Box(x1=300, y1=150, x2=500, y2=450))
+    objects = FakeObjectDetector(full_frame=[unsure_person], zoomed=[])
+
+    reading = DeskScanner(objects, FakeFaceDetector()).scan(np.zeros((480, 640, 3), np.uint8))
+
+    assert len(objects.shapes) == 1
+    assert reading.phones == []
 
 
 @pytest.mark.skipif(

@@ -192,6 +192,8 @@ The webcam sits at your desk, pointed down at your face, hands and desk. The pla
 
 It runs two small models on the Pi itself (nothing goes to the cloud), and they're in `models/`. They run through OpenCV, which is already installed, so there's nothing new to `pip install`.
 
+From across the desk a phone is only a few dozen pixels, which is too small for the model to spot reliably. So each check runs the model twice: once on the whole frame to find you, then again on a zoomed-in crop around you to find the phone. That roughly doubles the time per check, which is still fine at one check a second.
+
 ### Step 1: detector check
 
 This shows what the camera can actually pick up at your desk. The site owns the camera, so stop it while the check runs:

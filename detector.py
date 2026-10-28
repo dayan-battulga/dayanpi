@@ -6,6 +6,11 @@ Two small ONNX models run through plain OpenCV, so the Pi needs nothing new:
 - models/face_detection_yunet_2023mar.onnx: OpenCV's YuNet face detector. It
   gives 5 face points (eyes, nose tip, mouth corners), which is enough for a
   rough "facing the screen vs. looking down or away".
+
+Phones are found in a second, zoomed-in pass: crop around the person, run YOLO
+again on the crop. At desk distance the phone is too small for the full-frame
+pass (it scored 0.00-0.37 on a phone in hand); the zoomed pass scored 0.26-0.72
+on the same frames and 0.00 on every frame of real work.
 """
 
 import math
@@ -32,6 +37,11 @@ BOX_VALUES = 4
 MIN_CONFIDENCE = 0.15
 NMS_IOU = 0.5
 FACE_MIN_CONFIDENCE = 0.6
+
+ZOOM_PERSON_MIN = 0.5
+ZOOM_MARGIN_SIDES = 0.15
+ZOOM_MARGIN_TOP = 0.05
+ZOOM_MARGIN_BOTTOM = 0.10
 
 
 @dataclass
@@ -166,6 +176,24 @@ def decode_objects(output: np.ndarray, letterbox: Letterbox) -> list[Detection]:
     return detections
 
 
+def find_zoom_region(person: Box, frame_width: int, frame_height: int) -> Box:
+    """The person's box plus some margin (hands and lap stick out of it), in whole pixels."""
+    width = person.x2 - person.x1
+    height = person.y2 - person.y1
+    region = Box(
+        x1=float(max(0, int(person.x1 - ZOOM_MARGIN_SIDES * width))),
+        y1=float(max(0, int(person.y1 - ZOOM_MARGIN_TOP * height))),
+        x2=float(min(frame_width, int(person.x2 + ZOOM_MARGIN_SIDES * width))),
+        y2=float(min(frame_height, int(person.y2 + ZOOM_MARGIN_BOTTOM * height))),
+    )
+    return region
+
+
+def shift_box(box: Box, offset_x: float, offset_y: float) -> Box:
+    shifted = Box(x1=box.x1 + offset_x, y1=box.y1 + offset_y, x2=box.x2 + offset_x, y2=box.y2 + offset_y)
+    return shifted
+
+
 def midpoint(first: Point, second: Point) -> Point:
     middle = Point(x=(first.x + second.x) / 2, y=(first.y + second.y) / 2)
     return middle
@@ -235,7 +263,10 @@ class FaceDetector:
 
 
 class DeskScanner:
-    """One object detector plus one face detector, run together on a frame."""
+    """Full-frame pass for people, zoomed pass for phones, plus faces.
+
+    Phones only come from the zoomed pass, so no person means no phone check.
+    """
 
     def __init__(
         self,
@@ -245,14 +276,27 @@ class DeskScanner:
         self._objects = object_detector or ObjectDetector()
         self._faces = face_detector or FaceDetector()
 
+    def find_phones(self, image: np.ndarray, people: list[Detection]) -> list[Detection]:
+        phones = []
+        main_person = max(people, key=lambda person: person.confidence, default=None)
+        if main_person is not None and main_person.confidence >= ZOOM_PERSON_MIN:
+            frame_height, frame_width = image.shape[:2]
+            region = find_zoom_region(main_person.box, frame_width, frame_height)
+            crop = image[int(region.y1):int(region.y2), int(region.x1):int(region.x2)]
+            phones = [
+                Detection(label=found.label, confidence=found.confidence, box=shift_box(found.box, region.x1, region.y1))
+                for found in self._objects.detect(crop)
+                if found.label == "phone"
+            ]
+        return phones
+
     def scan(self, image: np.ndarray) -> FrameReading:
         started = time.perf_counter()
-        detections = self._objects.detect(image)
-        faces = self._faces.detect(image)
+        people = [detection for detection in self._objects.detect(image) if detection.label == "person"]
         reading = FrameReading(
-            people=[detection for detection in detections if detection.label == "person"],
-            phones=[detection for detection in detections if detection.label == "phone"],
-            faces=faces,
+            people=people,
+            phones=self.find_phones(image, people),
+            faces=self._faces.detect(image),
             elapsed_ms=(time.perf_counter() - started) * 1000,
         )
         return reading
