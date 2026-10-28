@@ -230,7 +230,7 @@ Want longer phases? Use `--seconds 30`.
 
 ### Getting the files to your Mac
 
-These are photos of you and your room, so don't commit them (the repo is public). Copy them over SSH instead. On the Mac:
+These are photos of you and your room, so keep them out of git (`focus_check/` is in `.gitignore`, so a normal `git add .` skips them). Copy them over SSH instead. On the Mac:
 
 ```bash
 scp -r dayoon@dayoon.tail279594.ts.net:~/Desktop/site-page/dayanpi/focus_check ~/Desktop/
