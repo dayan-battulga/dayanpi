@@ -10,7 +10,7 @@ After Stage 7 the app is password-protected and bound to **localhost only**. You
 
 | Machine | Role |
 | --- | --- |
-| **Mac** | Edit code, push to GitHub |
+| **Mac** or **Claude (cloud)** | Edit code, push to GitHub |
 | **GitHub** | `main` branch (`dayan-battulga/dayanpi`) |
 | **Pi** (`dayoon`) | Runs the app at `~/Desktop/site-page/dayanpi` |
 
@@ -121,10 +121,13 @@ Skip `lo`. If you use Ethernet, change `wlan0` to `eth0` in `app.py` (`RateSampl
 
 ## Everyday: ship code Mac → Pi
 
+Claude pushes to `main` from the cloud too, so your Mac copy can fall behind. Pull before you edit there.
+
 **On Mac**
 
 ```bash
 cd ~/Desktop/code/projects/site-page
+git pull origin main
 git add .
 git commit -m "describe the change"
 git push origin main
@@ -183,7 +186,65 @@ When finished: `Ctrl+C`, then `sudo systemctl start dayanpi`.
 
 ---
 
+## Focus tracker
+
+The webcam sits at your desk, pointed down at your face, hands and desk. The plan is for the site to show whether you're **working**, **on your phone**, or **away**, plus today's totals. It's being built one step at a time.
+
+It runs two small models on the Pi itself (nothing goes to the cloud), and they're in `models/`. They run through OpenCV, which is already installed, so there's nothing new to `pip install`.
+
+### Step 1: detector check
+
+This shows what the camera can actually pick up at your desk. The site owns the camera, so stop it while the check runs:
+
+```bash
+cd ~/Desktop/site-page/dayanpi
+git pull origin main
+sudo systemctl stop dayanpi
+.venv/bin/python focus_check.py
+sudo systemctl start dayanpi
+```
+
+It walks you through three 20-second phases with a 5-second countdown before each:
+
+1. **Working:** sit and work like normal.
+2. **Phone:** pick up your phone and use it like you normally would.
+3. **Away:** get up and walk out of view.
+
+About once a second it prints a line like this:
+
+```text
+[working   7s] person 0.91      | phone -    | face turn +0.04 tilt 0.47   |  212 ms
+```
+
+- **person / phone:** how sure the model is (0 to 1). `-` means it saw nothing.
+- **turn:** how far your nose is left or right of center, in eye-widths. Around 0 means you're facing the camera.
+- **tilt:** where your nose sits between your eyes (0) and your mouth (1). This changes when you look down.
+- **ms:** how long one check took.
+
+At the end it prints a summary table. The summary and one marked-up snapshot per phase go into `focus_check/` (`working.jpg`, `phone.jpg`, `away.jpg`, `summary.txt`). Send the summary and snapshots to Claude, and they'll be used to set the thresholds for step 2. Want longer phases? Use `--seconds 30`.
+
+If it says **No camera frames**, the service is still running. Run `sudo systemctl stop dayanpi` and try again.
+
+### Where the models come from
+
+- `models/face_detection_yunet_2023mar.onnx` is YuNet from OpenCV's model zoo (github.com/opencv/opencv_zoo, MIT license).
+- `models/yolo11n_480x640.onnx` is Ultralytics' YOLO11 nano (AGPL-3.0), converted to ONNX at the camera's 640x480 size. The original weights are a PyTorch file, so the conversion happens on the Mac, not the Pi. To redo it:
+
+```bash
+python3 -m venv /tmp/yolo-export
+/tmp/yolo-export/bin/pip install ultralytics onnx onnxslim onnxruntime
+cd /tmp
+/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
+mv /tmp/yolo11n.onnx ~/Desktop/code/projects/site-page/models/yolo11n_480x640.onnx
+```
+
+`opset=12` keeps it loadable by OpenCV's DNN module, and `imgsz=(480, 640)` means the camera frame goes in as-is, with no padding.
+
+---
+
 ## Driving the rover
+
+**Paused right now.** The motors are unplugged and the Drive card is hidden. To bring it back, plug the motor wires back in (the pin table is in `CLAUDE.md`), remove `hidden` from the `drive-card` div in `static/index.html`, and add `<script type="module" src="/drive.js"></script>` back after the `app.js` line.
 
 The **Drive** card sits right under the camera. Whatever you press gets sent to the Pi about 7 times a second, and the card shows what's going out (`L` / `R`, from -1 to +1) plus whether you're driving.
 
