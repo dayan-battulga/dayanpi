@@ -4,263 +4,269 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>dayanpi</title>
+    <script>
+      // Set the theme before the first paint so the page never flashes the wrong one.
+      (function () {
+        var theme = null;
+        try {
+          theme = window.localStorage.getItem("dayanpi.theme");
+        } catch (error) {}
+        if (theme !== "light" && theme !== "dark") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/vendor/uPlot.min.css" />
   </head>
   <body>
-    <div class="atmosphere" aria-hidden="true"></div>
-
-    <div class="frame">
-      <header class="reveal" style="--d: 0">
+    <div class="shell">
+      <header class="topbar rise" style="--d: 0">
         <div class="brand">
-          <h1>dayanpi</h1>
-          <p class="tagline">live host metrics</p>
+          <span class="wordmark">dayanpi</span>
+          <span class="label">pi 5 · desk</span>
         </div>
-        <p id="status" class="disconnected" aria-live="polite">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span class="status-label">disconnected</span>
-        </p>
+        <nav class="sections" aria-label="Sections">
+          <a href="#focus-card">Focus</a>
+          <a href="#camera">Camera</a>
+          <a href="#pi">Pi</a>
+        </nav>
+        <div class="topbar-end">
+          <span id="power-alert" class="pill pill-hot" hidden>Undervoltage</span>
+          <p id="status" class="pill" data-state="disconnected" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span class="status-label">Offline</span>
+          </p>
+          <button type="button" id="theme-toggle" class="icon-button" aria-label="Switch theme">
+            <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"></path>
+            </svg>
+          </button>
+        </div>
       </header>
 
-      <div class="layout">
-        <section class="stage reveal" style="--d: 1">
-          <div class="cell cell-feed">
-            <div class="feed-head">
-              <h2>Camera</h2>
-              <span class="live-pill" aria-hidden="true">
-                <span class="live-dot"></span>
-                live
-              </span>
+      <section id="focus-card" class="card focus rise" style="--d: 1" data-state="unknown" aria-label="Focus">
+        <div class="focus-top">
+          <div class="focus-chips">
+            <span class="state-chip label">
+              <span class="state-dot" aria-hidden="true"></span>
+              <span id="focus-state" aria-live="polite">Starting</span>
+            </span>
+            <span id="focus-block-chip" class="label plain-chip" hidden>Block on</span>
+          </div>
+          <span id="focus-date" class="mono muted small"></span>
+        </div>
+
+        <div class="focus-headline">
+          <h1 id="focus-label">Waiting</h1>
+          <p class="focus-timer mono" aria-label="Time in this state">
+            <span id="focus-timer">0:00</span>
+          </p>
+        </div>
+
+        <div class="focus-actions">
+          <p id="focus-caption" class="muted">Waiting for the first snapshot</p>
+          <button type="button" id="focus-block" class="button button-primary" disabled>Start block</button>
+        </div>
+
+        <div class="timeline-wrap">
+          <div id="focus-timeline" class="timeline" role="img" aria-label="Today's timeline"></div>
+          <div id="focus-hours" class="timeline-hours mono" aria-hidden="true"></div>
+        </div>
+
+        <dl class="focus-stats">
+          <div><dt class="label">Focus</dt><dd id="focus-working" class="mono">--</dd></div>
+          <div><dt class="label">Phone</dt><dd id="focus-phone" class="mono">--</dd></div>
+          <div>
+            <dt class="label">Pickups</dt>
+            <dd class="mono"><span class="pickups"><span id="focus-ripple" class="ripple" aria-hidden="true"></span><span id="focus-pickups">--</span></span></dd>
+          </div>
+          <div><dt class="label">Phone-free</dt><dd id="focus-free" class="mono">--</dd></div>
+          <div><dt class="label">Snacks</dt><dd id="focus-snacks" class="mono">--</dd></div>
+          <div><dt class="label">Best streak</dt><dd id="focus-best" class="mono">--</dd></div>
+        </dl>
+      </section>
+
+      <div class="row">
+        <section id="camera" class="card camera rise" style="--d: 2" aria-label="Camera">
+          <div class="card-head">
+            <div class="card-title">
+              <h2 class="label">Camera</h2>
+              <span id="camera-status" class="mono muted small">hidden · nothing saved</span>
             </div>
+            <button type="button" id="peek-toggle" class="button button-ghost button-small" aria-pressed="false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span id="peek-label">Peek</span>
+            </button>
+          </div>
+          <div class="camera-body">
             <div class="feed-frame">
-              <img
-                id="feed"
-                src="/video"
-                alt="Live camera feed"
-                width="640"
-                height="480"
-              />
-            </div>
-          </div>
-
-          <div id="drive-card" class="cell cell-drive" hidden>
-            <div class="feed-head">
-              <h2>Drive</h2>
-              <span class="live-pill">
-                <span class="live-dot" aria-hidden="true"></span>
-                <span id="drive-state" aria-live="polite">idle</span>
-              </span>
-            </div>
-            <div class="drive-body">
-              <div class="drive-keys" aria-hidden="true">
-                <kbd data-key="KeyW">W</kbd>
-                <kbd data-key="KeyA">A</kbd>
-                <kbd data-key="KeyS">S</kbd>
-                <kbd data-key="KeyD">D</kbd>
+              <img id="feed" alt="Live camera feed" width="640" height="480" />
+              <div class="scan" aria-hidden="true"></div>
+              <div class="veil">
+                <span class="veil-icon" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="11" width="14" height="10" rx="2.5"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                </span>
+                <span class="veil-title">Hidden while you work</span>
+                <span class="veil-text">The readings keep updating. Peek when you want the picture.</span>
               </div>
-              <p class="detail drive-command">
-                <span class="net-leg">L</span>
-                <span id="drive-left" class="net-val">+0.00</span>
-                <span class="sep">·</span>
-                <span class="net-leg">R</span>
-                <span id="drive-right" class="net-val">+0.00</span>
-              </p>
             </div>
-            <div class="drive-pad">
-              <button type="button" class="drive-pad-up" data-key="KeyW" aria-label="Forward">▲</button>
-              <button type="button" class="drive-pad-left" data-key="KeyA" aria-label="Turn left">◀&#xFE0E;</button>
-              <button type="button" class="drive-pad-right" data-key="KeyD" aria-label="Turn right">▶&#xFE0E;</button>
-              <button type="button" class="drive-pad-down" data-key="KeyS" aria-label="Backward">▼</button>
-            </div>
-            <p id="drive-error" class="detail sub drive-error" role="alert"></p>
-          </div>
-
-          <div id="focus-card" class="cell cell-focus" data-state="unknown">
-            <div class="feed-head">
-              <h2>Focus</h2>
-              <span class="live-pill">
-                <span class="live-dot" aria-hidden="true"></span>
-                <span id="focus-state" aria-live="polite">starting</span>
-              </span>
-            </div>
-            <div class="focus-body">
-              <div class="focus-main">
-                <p class="reading focus-timer"><span id="focus-timer">--:--</span></p>
-                <p id="focus-caption" class="detail sub">waiting for the camera</p>
+            <div class="readings">
+              <h3 class="label">What the Pi sees</h3>
+              <div class="reading-rows">
+                <div class="reading" data-key="person">
+                  <div class="reading-line"><span>Person</span><span class="reading-value mono">—</span></div>
+                  <div class="reading-track"><div class="reading-fill"></div></div>
+                </div>
+                <div class="reading reading-phone" data-key="phone">
+                  <div class="reading-line"><span>Phone in hand</span><span class="reading-value mono">—</span></div>
+                  <div class="reading-track"><div class="reading-fill"></div></div>
+                </div>
+                <div class="reading" data-key="food">
+                  <div class="reading-line"><span>Food</span><span class="reading-value mono">—</span></div>
+                  <div class="reading-track"><div class="reading-fill"></div></div>
+                </div>
+                <div class="reading" data-key="drink">
+                  <div class="reading-line"><span>Drink</span><span class="reading-value mono">—</span></div>
+                  <div class="reading-track"><div class="reading-fill"></div></div>
+                </div>
               </div>
-              <dl class="focus-totals">
-                <div><dt>Focus</dt><dd id="focus-working">--</dd></div>
-                <div><dt>Phone</dt><dd id="focus-phone">--</dd></div>
-                <div><dt>Pickups</dt><dd id="focus-pickups">--</dd></div>
-                <div><dt>Snacks</dt><dd id="focus-snacks">--</dd></div>
-                <div><dt>Best streak</dt><dd id="focus-best">--</dd></div>
-              </dl>
-            </div>
-            <div class="focus-timeline" id="focus-timeline" role="img" aria-label="Today's timeline"></div>
-            <div class="focus-hours" aria-hidden="true">
-              <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
-            </div>
-            <div class="focus-foot">
-              <button type="button" id="focus-block" class="focus-block" disabled>Start block</button>
-              <p id="focus-note" class="detail sub"></p>
-            </div>
-            <div id="sign-preview" class="sign-preview" hidden>
-              <p class="sign-label">LED sign</p>
-              <img id="sign-image" alt="What the LED sign is showing" width="768" height="192" />
+              <div class="readings-foot mono muted small">
+                <span>1 check / s</span>
+                <span id="check-ms">--</span>
+              </div>
             </div>
           </div>
-
-          <aside
-            id="power-rail"
-            class="power-rail throttle-ok"
-            aria-live="assertive"
-          >
-            <div class="power-copy">
-              <p class="power-label">Power</p>
-              <p id="throttle">all clear</p>
-            </div>
-            <span class="power-chip" aria-hidden="true">PSU</span>
-          </aside>
         </section>
 
-        <main class="reveal" style="--d: 2">
-          <section class="cell cell-gauge">
-            <h2>Temp</h2>
-            <div class="gauge">
-              <div
-                class="meter meter-vertical"
-                role="progressbar"
-                aria-label="Temperature"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow="0"
-                data-level="nominal"
-                id="temp-meter"
-              >
-                <div class="meter-fill" id="temp-fill"></div>
-              </div>
-              <p class="reading">
-                <span id="temp" data-level="nominal">--</span
-                ><span class="unit">°C</span>
-              </p>
+        <section class="card sign rise" style="--d: 3" aria-label="LED sign and today">
+          <div class="card-head">
+            <div class="card-title">
+              <h2 class="label">LED sign</h2>
+              <span id="sign-page" class="mono muted small"></span>
             </div>
-          </section>
-
-          <section class="cell cell-gauge">
-            <h2>CPU</h2>
-            <div class="gauge">
-              <div
-                class="meter meter-vertical"
-                role="progressbar"
-                aria-label="CPU usage"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow="0"
-                data-level="nominal"
-                id="cpu-meter"
-              >
-                <div class="meter-fill" id="cpu-fill"></div>
-              </div>
-              <p class="reading">
-                <span id="cpu" data-level="nominal">--</span
-                ><span class="unit">%</span>
-              </p>
-            </div>
-          </section>
-
-          <section class="cell cell-wide">
-            <div class="cell-head">
-              <h2>Memory</h2>
-              <p class="detail">
-                <span id="mem-percent">--</span><span class="unit">%</span>
-              </p>
-            </div>
-            <div
-              class="meter"
-              role="progressbar"
-              aria-label="Memory used"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="0"
-              id="mem-meter"
-            >
-              <div class="meter-fill" id="mem-fill"></div>
-            </div>
-            <p class="detail sub">
-              <span id="mem-available">--</span>
-              <span class="sep">/</span>
-              <span id="mem-total">--</span>
-              <span class="unit">MB avail</span>
-            </p>
-          </section>
-
-          <section class="cell cell-wide">
-            <div class="cell-head">
-              <h2>Disk</h2>
-              <p class="detail">
-                <span id="disk-percent">--</span><span class="unit">%</span>
-              </p>
-            </div>
-            <div
-              class="meter"
-              role="progressbar"
-              aria-label="Disk used"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="0"
-              id="disk-meter"
-            >
-              <div class="meter-fill" id="disk-fill"></div>
-            </div>
-            <p class="detail sub">
-              <span id="disk-free">--</span>
-              <span class="sep">/</span>
-              <span id="disk-total">--</span>
-              <span class="unit">GB free</span>
-            </p>
-          </section>
-
-          <section class="cell cell-wide">
-            <h2>Network</h2>
-            <p class="detail net">
-              <span class="net-leg">RX</span>
-              <span id="rx" class="net-val">--</span>
-              <span class="sep">·</span>
-              <span class="net-leg">TX</span>
-              <span id="tx" class="net-val">--</span>
-            </p>
-          </section>
-
-          <section class="cell cell-wide">
-            <h2>Uptime</h2>
-            <p class="reading reading-sm"><span id="uptime">--</span></p>
-          </section>
-        </main>
+          </div>
+          <div class="led">
+            <img id="sign-image" alt="What the LED sign is showing" width="768" height="192" hidden />
+            <p id="sign-empty" class="led-empty mono">Waiting for the sign…</p>
+          </div>
+          <h2 class="label today-title">Today</h2>
+          <ol id="today-list" class="today-list">
+            <li class="today-empty muted">Nothing yet today.</li>
+          </ol>
+        </section>
       </div>
 
-      <section class="charts reveal" style="--d: 3" aria-label="Trends">
-        <article class="cell chart-card">
-          <h2>CPU · 2 min</h2>
-          <div id="chart-cpu" class="chart"></div>
-        </article>
-        <article class="cell chart-card">
-          <h2>Temp · 2 min</h2>
-          <div id="chart-temp" class="chart"></div>
-        </article>
-        <article class="cell chart-card">
-          <h2>Memory · 2 min</h2>
-          <div id="chart-mem" class="chart"></div>
-        </article>
+      <div id="drive-card" class="card drive" hidden>
+        <div class="card-head">
+          <h2 class="label">Drive</h2>
+          <span class="pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="drive-state" aria-live="polite">idle</span>
+          </span>
+        </div>
+        <div class="drive-body">
+          <div class="drive-keys" aria-hidden="true">
+            <kbd data-key="KeyW">W</kbd>
+            <kbd data-key="KeyA">A</kbd>
+            <kbd data-key="KeyS">S</kbd>
+            <kbd data-key="KeyD">D</kbd>
+          </div>
+          <p class="mono drive-command">
+            <span class="muted">L</span>
+            <span id="drive-left">+0.00</span>
+            <span class="muted">·</span>
+            <span class="muted">R</span>
+            <span id="drive-right">+0.00</span>
+          </p>
+        </div>
+        <div class="drive-pad">
+          <button type="button" class="drive-pad-up" data-key="KeyW" aria-label="Forward">▲</button>
+          <button type="button" class="drive-pad-left" data-key="KeyA" aria-label="Turn left">◀&#xFE0E;</button>
+          <button type="button" class="drive-pad-right" data-key="KeyD" aria-label="Turn right">▶&#xFE0E;</button>
+          <button type="button" class="drive-pad-down" data-key="KeyS" aria-label="Backward">▼</button>
+        </div>
+        <p id="drive-error" class="small drive-error" role="alert"></p>
+      </div>
+
+      <section id="pi" class="pi rise" style="--d: 4" aria-labelledby="pi-summary">
+        <div class="pi-head">
+          <div>
+            <span class="label">Raspberry Pi 5</span>
+            <h2 id="pi-summary" class="pi-summary">Connecting…</h2>
+          </div>
+          <span class="mono muted small">updates every second</span>
+        </div>
+
+        <div class="tiles">
+          <div class="card tile">
+            <span class="label">Temp</span>
+            <div class="gauge">
+              <svg viewBox="0 0 120 92" aria-hidden="true">
+                <path class="gauge-track" pathLength="100" d="M20.16 83 A46 46 0 1 1 99.84 83"></path>
+                <path id="temp-arc" class="gauge-value" pathLength="100" d="M20.16 83 A46 46 0 1 1 99.84 83"></path>
+              </svg>
+              <div class="gauge-text">
+                <span class="mono gauge-number"><span id="temp" data-level="nominal">--</span>°</span>
+                <span class="muted small">throttles near 80°</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tile">
+            <div class="tile-head"><span class="label">CPU</span><span class="mono muted small">all cores</span></div>
+            <p class="mono tile-number"><span id="cpu" data-level="nominal">--</span><span class="unit"> %</span></p>
+            <div id="cpu-blocks" class="blocks" role="progressbar" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+
+          <div class="card tile">
+            <div class="tile-head"><span class="label">Memory</span><span id="mem-detail" class="mono muted small">--</span></div>
+            <p class="mono tile-number"><span id="mem-percent">--</span><span class="unit"> %</span></p>
+            <div id="mem-blocks" class="blocks" role="progressbar" aria-label="Memory used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+
+          <div class="card tile">
+            <div class="tile-head"><span class="label">Disk</span><span id="disk-detail" class="mono muted small">--</span></div>
+            <p class="mono tile-number"><span id="disk-percent">--</span><span class="unit"> %</span></p>
+            <div id="disk-blocks" class="blocks" role="progressbar" aria-label="Disk used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+        </div>
+
+        <div class="card status-bar">
+          <dl>
+            <div><dt class="label">Network</dt><dd id="net" class="mono">--</dd></div>
+            <div><dt class="label">Uptime</dt><dd id="uptime" class="mono">--</dd></div>
+            <div><dt class="label">Power</dt><dd id="power" class="mono" data-level="nominal">--</dd></div>
+            <div><dt class="label">Voice</dt><dd id="voice" class="mono">--</dd></div>
+            <div><dt class="label">Mac</dt><dd id="mac" class="mono">--</dd></div>
+            <div><dt class="label">Sign</dt><dd id="sign-mode" class="mono">--</dd></div>
+          </dl>
+        </div>
       </section>
+
+      <footer class="footer mono muted small">
+        <span>dayanpi · served from the Pi on your desk</span>
+        <span>tailscale serve · private</span>
+      </footer>
     </div>
 
-    <script src="/vendor/uPlot.min.js"></script>
+    <script src="/ui.js"></script>
     <script src="/app.js"></script>
     <script src="/focus.js"></script>
   </body>

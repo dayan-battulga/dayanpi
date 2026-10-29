@@ -1,5 +1,6 @@
 import importlib
 import os
+import re
 import sys
 import tempfile
 import time
@@ -68,6 +69,17 @@ def test_dashboard_runs_without_camera(factory, caplog):
         assert client.get("/api/health", auth=AUTH).status_code == 200
         assert app.stream._thread.is_alive()
     assert "camera unavailable at startup" in caplog.text
+
+
+def test_dashboard_serves_every_file_it_links(factory):
+    with TestClient(app.app) as client:
+        page = client.get("/", auth=AUTH)
+        assert page.status_code == 200
+        linked = re.findall(r'(?:src|href)="(/[^"#?]+)"', page.text)
+        assert {"/styles.css", "/ui.js", "/app.js", "/focus.js"} <= set(linked)
+        for path in linked:
+            assert client.get(path, auth=AUTH).status_code == 200, path
+        assert client.get("/", headers={}).status_code == 401
 
 
 def test_drive_moves_then_watchdog_stops(factory):

@@ -8,10 +8,11 @@ Want the step-by-step commands? That's all in **[docs/MANUAL.md](docs/MANUAL.md)
 
 ## What it's for
 
-- **Keeping an eye on the Pi.** CPU, temperature, memory, disk, network speed and uptime, updated live every second, plus 2-minute charts for CPU, temp and memory. There's also a Power card that turns red if the Pi is undervolted or throttling.
+- **Keeping an eye on the Pi.** Temperature (as a gauge), CPU, memory and disk, updated live every second, plus a status bar with network speed, uptime, power, the voice, the Mac's front app and the sign mode. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
 - **Seeing what the rover sees.** A live camera feed right on the page.
 - **Driving the rover.** Hold `W A S D` on the Mac or the arrow pad on the phone and the wheels move. Let go and they stop. (Paused right now; the Drive card is hidden.)
-- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, today's focus and phone time, pickups, snacks, my best streak and a timeline of the day, and every change gets logged on the Pi. It all runs on the Pi, with no video saved.
+- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup, snacks and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**. Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
+- **Light and dark.** The page follows your device's light or dark setting. The sun/moon button flips it, and your browser remembers the choice.
 
 It's a personal project, so it's built for one person (me) on my own devices, not for a crowd.
 
@@ -33,7 +34,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
              ├─ vision/     → detector (people, phones, faces, food), pose, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
              ├─ sign/       → the LED sign renderer, font and icons, page controller
-             └─ static/     → the dashboard page (app.js for stats, focus.js for the Focus card)
+             └─ static/     → the dashboard page (app.js for stats, theme and camera, focus.js for the Focus card)
 ```
 
 - **The app only listens on localhost.** Your home network can't reach it directly. Tailscale is the only way in, and it handles HTTPS for you.
@@ -68,7 +69,7 @@ The full commands, with checks after each one, are in [MANUAL.md → First-time 
 ## Using it day to day
 
 - **Making changes:** edit on the Mac, push `main`, then on the Pi run `git pull` and `sudo systemctl restart dayanpi`.
-- **Looking around:** open the site, log in, and watch the stats, charts and camera.
+- **Looking around:** open the site, log in, and watch the Focus card and the stats. Press **Peek** to see the camera.
 - **Driving:** use the **Drive** card under the camera.
   - Mac: `W`/`S` for forward/back, `A`/`D` to spin, and combos like `W`+`A` to arc.
   - Phone: the same moves on the ▲ ◀ ▶ ▼ pad; two thumbs work for arcs.
@@ -128,7 +129,7 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
-| `dayanpi/static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
+| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and all the motion), `ui.js` (helpers the scripts share), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, sign, Today list), `drive.js` (driving, not loaded while the rover is paused) |
 | `scripts/` | What you run by hand on the Pi: `focus_check.py` and `focus_stats.py` |
 | `models/` | The ONNX models: YOLO11 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |

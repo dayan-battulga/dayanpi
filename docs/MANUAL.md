@@ -1,6 +1,6 @@
 # dayanpi — Run Manual
 
-Live telemetry dashboard for a Raspberry Pi 5: stats, charts, SSE updates, and a camera feed.
+Live dashboard for a Raspberry Pi 5: focus tracking, Pi stats, live updates over SSE, and a camera feed.
 
 After Stage 7 the app is password-protected and bound to **localhost only**. You reach it through Tailscale Serve (private) or Funnel (public).
 
@@ -262,7 +262,7 @@ mv /tmp/yolo11n.onnx ~/Desktop/code/projects/site-page/models/yolo11n_480x640.on
 
 ### Steps 2 to 4: the tracker runs inside the site
 
-Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the Focus card says "models not loaded on the Pi".
+Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the Focus card says "The detector isn't running on the Pi".
 
 **The states**
 
@@ -277,7 +277,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), snacks (food spotted in 3 of 5 checks; one snack per sitting), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on the dashboard shows the state, a live timer, today's totals, a 24-hour timeline (teal = focused, red = phone, grey = away) and a **Start block** button. A work block is just a flag for now: while it's on, the sign dims to ambient and a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
+**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6), today's totals and a **Start block** button. A work block is just a flag for now: while it's on, the sign dims to ambient and a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
@@ -313,7 +313,7 @@ If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
 
-**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, so "focused" can later be split into coding / docs / browser / Slack. App names only, nothing else. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The Focus card shows the current app under the block button.
+**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, so "focused" can later be split into coding / docs / browser / Slack. App names only, nothing else. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **Mac** entry in the status bar at the bottom of the page shows the current app.
 
 **Deploy it:**
 
@@ -712,7 +712,7 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 
 ### How the app drives it
 
-`DAYANPI_SIGN` in `/etc/dayanpi.env` picks where the sign goes. With `preview` (the default) or `panel`, the app renders it a few times a second and the dashboard shows the preview under the Focus card:
+`DAYANPI_SIGN` in `/etc/dayanpi.env` picks where the sign goes. With `preview` (the default) or `panel`, the app renders it a few times a second and the dashboard shows the preview in the LED sign card next to the camera:
 
 | Value | What |
 | --- | --- |
@@ -1019,7 +1019,7 @@ Open: **https://dayoon.tail279594.ts.net/**
 
 Log in with `/etc/dayanpi.env` credentials.
 
-Scroll down for **CPU / Temp / Memory** charts (fill over ~2 minutes; empty right after refresh is normal).
+The Focus card is at the top, the camera and the LED sign under it, and the Pi's stats at the bottom. See [The dashboard](#the-dashboard) for what's what.
 
 ---
 
@@ -1142,7 +1142,7 @@ Turning the motor battery on at any point is safe. The motor pins sit low (off) 
 | Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
 | Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
 | Drive card says unavailable | `journalctl -u dayanpi -b \| grep -i motors`, then check the `gpio` group and whether a script is holding the pins |
-| Power card is red | The battery or supply is too weak, especially with the motors running. Undervoltage can reboot the Pi mid-drive |
+| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak, especially with the motors or the sign running. Undervoltage can reboot the Pi |
 
 ---
 
@@ -1173,13 +1173,15 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 ---
 
-## Charts
+## The dashboard
 
-- Below the video and stats section
-- Three cards: CPU · 2 min, Temp · 2 min, Memory · 2 min
-- Need live SSE data — wait 10–30+ seconds for lines; ~2 minutes to fill the window
-- Hard-refresh if the page was cached: `Cmd+Shift+R`
-- Vendor file must exist: `ls dayanpi/static/vendor/uPlot.min.js`
+- **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, snacks, best streak.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview and a list of today's last few changes.
+- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU, memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
+- **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**, which also saves on the shared `/video` rate limit. Press **Hide** to close it again. Your browser remembers which one you picked.
+- **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
+- **Animations** turn themselves off if your device is set to reduce motion.
+- Hard-refresh if the page looks old after an update: `Cmd+Shift+R`.
 
 ---
 
@@ -1195,7 +1197,8 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | 401 everywhere | Use credentials from `/etc/dayanpi.env` |
 | Port in use | `sudo lsof -i :8000` — stop leftover uvicorn or the service |
 | Camera busy / black | Only one opener; restart service; confirm `video` in `groups` |
-| Empty charts | Wait for SSE; hard refresh; check `dayanpi/static/vendor/` |
+| Camera says "Hidden while you work" | That's on purpose: press **Peek** |
+| Numbers stuck on `--` | The live stream isn't connecting: check the pill at the top right says **Live**, then hard refresh |
 | "GPIO busy" in a REPL or script | The service owns the motor pins, so `sudo systemctl stop dayanpi` first |
 | Service won't start, GPIO permission error | `groups` must include `gpio`, then restart |
 | Drive card says `drive failed` | Check the service is running and you're logged in; `journalctl -u dayanpi -n 50 --no-pager` |
