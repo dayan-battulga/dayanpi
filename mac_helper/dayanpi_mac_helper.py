@@ -263,12 +263,10 @@ class PiClient:
             self.app_url,
             data=encode_app(app_name),
             method="POST",
-            headers={
-                "Authorization": f"Basic {token}",
-                "Content-Type": "application/json",
-                "User-Agent": USER_AGENT,
-            },
+            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
         )
+        # urllib copies ordinary headers onto a redirect, even to another host; this one stays behind.
+        request.add_unredirected_header("Authorization", f"Basic {token}")
         return request
 
     def send_app(self, app_name: str) -> SendResult:

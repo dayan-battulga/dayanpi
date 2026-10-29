@@ -245,13 +245,17 @@ app = FastAPI(
 async def basic_auth_middleware(request: Request, call_next):
     # Covers API routes and StaticFiles — app dependencies don't apply to mounts.
     if not _authorized(request):
-        return Response(
+        response = Response(
             content="Unauthorized",
             status_code=status.HTTP_401_UNAUTHORIZED,
             headers={"WWW-Authenticate": 'Basic realm="dayanpi"'},
             media_type="text/plain",
         )
-    return await call_next(request)
+    else:
+        response = await call_next(request)
+    # The browser reuses the saved login inside frames, so another page could frame the dashboard.
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
 def frame_generator() -> Iterator[bytes]:

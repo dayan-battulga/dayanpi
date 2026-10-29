@@ -560,3 +560,12 @@ def test_launch_agent_template_runs_this_script():
     assert agent["EnvironmentVariables"] == {"DAYANPI_USER": "__DAYANPI_USER__"}
     assert agent["StandardOutPath"] == "__HOME__/Library/Logs/dayanpi-mac-helper.log"
     assert agent["StandardErrorPath"] == agent["StandardOutPath"]
+
+
+def test_the_password_never_follows_a_redirect():
+    client = helper.PiClient(APP_URL, USER, FakeMac().run, FakePi().send)
+    client.load_password()
+    request = client.build_request("Code")
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(request, None, 302, "Found", {}, "http://elsewhere.example/")
+    assert request.get_header("Authorization") == make_auth_header(PASSWORD)
+    assert redirected.get_header("Authorization") is None

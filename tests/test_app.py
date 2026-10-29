@@ -320,3 +320,10 @@ def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(factory, monke
         finally:
             for _ in held:
                 app._video_slots.release()
+
+
+def test_every_response_refuses_to_be_framed(factory):
+    with TestClient(app.app) as client:
+        responses = [client.get("/api/health", auth=AUTH), client.get("/", auth=AUTH), client.get("/api/health")]
+        assert [response.status_code for response in responses] == [200, 200, 401]
+        assert all(response.headers["x-frame-options"] == "DENY" for response in responses)
