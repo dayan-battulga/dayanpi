@@ -21,6 +21,8 @@ const STATE_COPY = {
   unknown: { chip: "Unknown", label: "Waiting" },
 };
 const SIGN_PAGES = { now: "Now", today: "Today", summary: "Day done" };
+const SIGN_PAGE_ORDER = ["now", "today", "summary"];
+const SIGN_SETTLE_MS = 250; // the sign redraws 8 times a second; give it a frame before fetching the picture
 
 const focusEls = {
   card: document.getElementById("focus-card"),
@@ -44,6 +46,8 @@ const focusEls = {
   signImage: document.getElementById("sign-image"),
   signEmpty: document.getElementById("sign-empty"),
   signPage: document.getElementById("sign-page"),
+  signDots: document.getElementById("sign-dots"),
+  signFlip: document.getElementById("sign-flip"),
   signMode: document.getElementById("sign-mode"),
   voice: document.getElementById("voice"),
   mac: document.getElementById("mac"),
@@ -66,7 +70,11 @@ let latestFocus = null;
 let latestFocusAt = 0;
 let lastState = null;
 let lastPickups = null;
+let lastSnacks = null;
+let lastSignPage = null;
+let signBusy = false;
 let todaySegments = [];
+let todaySnacks = [];
 let timelineDrawn = false;
 let timelineStartHour = null;
 let liveSegment = null;
@@ -254,29 +262,48 @@ function describeLength(segment, now) {
   return text;
 }
 
+// State changes and snacks, newest first. A segment row's length keeps ticking while it's open.
+function buildTodayItems(known, snacks) {
+  const items = known.map((segment, index) => ({
+    at: segment.start,
+    kind: segment.state,
+    title: describeSegment(segment, known[index - 1]),
+    segment,
+  }));
+  snacks.forEach((at, index) => {
+    items.push({ at, kind: "snack", title: "Snack spotted", meta: `${index + 1} of ${snacks.length}` });
+  });
+  items.sort((first, second) => second.at - first.at);
+  const recent = items.slice(0, TODAY_LIST_LENGTH);
+  return recent;
+}
+
 function renderToday(now) {
-  const known = mergeKnownSegments(todaySegments, readLocalMidnight());
-  const recent = known.slice(-TODAY_LIST_LENGTH).reverse();
-  const signature = recent.map((segment) => `${segment.state}@${segment.start}:${segment.end == null}`).join("|");
+  const midnight = readLocalMidnight();
+  const known = mergeKnownSegments(todaySegments, midnight);
+  const recent = buildTodayItems(known, todaySnacks.filter((at) => at >= midnight));
+  const signature = recent.map((item) => `${item.kind}@${item.at}:${item.segment?.end == null}`).join("|");
   if (signature !== todaySignature) {
     todaySignature = signature;
     todayMetas = [];
-    const rows = recent.map((segment, index) => {
+    const rows = recent.map((item, index) => {
       const row = document.createElement("li");
       const time = document.createElement("span");
       const dot = document.createElement("span");
       const what = document.createElement("span");
       const meta = document.createElement("span");
-      const previous = known[known.length - 1 - index - 1];
       row.style.animationDelay = `${index * SEGMENT_STAGGER_MS}ms`;
       time.className = "today-time mono";
-      time.textContent = formatTimeOfDay(segment.start);
-      dot.className = `today-dot is-${segment.state}`;
+      time.textContent = formatTimeOfDay(item.at);
+      dot.className = `today-dot is-${item.kind}`;
       what.className = "today-what";
-      what.textContent = describeSegment(segment, previous);
+      what.textContent = item.title;
       meta.className = "today-meta mono";
+      meta.textContent = item.meta ?? "";
       row.append(time, dot, what, meta);
-      todayMetas.push({ el: meta, segment });
+      if (item.segment != null) {
+        todayMetas.push({ el: meta, segment: item.segment });
+      }
       return row;
     });
     if (rows.length === 0) {
@@ -313,6 +340,7 @@ async function refreshTimeline() {
     if (response.ok) {
       const body = await response.json();
       todaySegments = body.segments ?? [];
+      todaySnacks = body.snack_times ?? [];
       const now = Date.now() / 1000;
       renderTimeline(now);
       renderToday(now);
@@ -397,10 +425,26 @@ function renderOverlay(focus) {
   }
 }
 
+function setSignPage(page) {
+  if (page !== lastSignPage) {
+    if (lastSignPage != null && !focusEls.signImage.hidden) {
+      replayAnimation(focusEls.signImage, "slide-a", "slide-b");
+    }
+    lastSignPage = page;
+    const index = SIGN_PAGE_ORDER.indexOf(page);
+    focusEls.signPage.textContent = SIGN_PAGES[page] ?? "";
+    Array.from(focusEls.signDots.children).forEach((dot, dotIndex) => {
+      dot.classList.toggle("is-on", dotIndex === index);
+    });
+    focusEls.signDots.setAttribute("aria-label", index >= 0 ? `Sign page ${index + 1} of 3: ${SIGN_PAGES[page]}` : "Sign page");
+  }
+}
+
 function renderSign(focus) {
   const sign = focus.sign ?? { mode: "off", page: null };
   focusEls.signMode.textContent = sign.mode;
-  focusEls.signPage.textContent = SIGN_PAGES[sign.page] ?? "";
+  focusEls.signFlip.disabled = sign.mode === "off" || signBusy;
+  setSignPage(sign.page);
   if (sign.mode === "off") {
     focusEls.signImage.hidden = true;
     focusEls.signEmpty.hidden = false;
@@ -483,8 +527,9 @@ window.addEventListener("dayanpi:snapshot", (event) => {
     latestFocusAt = Date.now();
     renderFocus(focus);
     tick();
-    if (focus.state !== lastState) {
+    if (focus.state !== lastState || focus.today.snacks !== lastSnacks) {
       lastState = focus.state;
+      lastSnacks = focus.today.snacks;
       refreshTimeline();
     }
   }
@@ -503,7 +548,32 @@ function loadSignPicture() {
   focusEls.signImage.src = `/api/sign.png?t=${Date.now()}`;
 }
 
+async function flipSignPage() {
+  if (!signBusy) {
+    signBusy = true;
+    focusEls.signFlip.disabled = true;
+    try {
+      const response = await fetch("/api/sign/page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: 1 }),
+      });
+      if (response.ok) {
+        const body = await response.json();
+        setSignPage(body.page);
+        setTimeout(loadSignPicture, SIGN_SETTLE_MS);
+      }
+    } catch (error) {
+      // The next snapshot shows the real page either way.
+    } finally {
+      signBusy = false;
+      focusEls.signFlip.disabled = latestFocus == null || latestFocus.sign?.mode === "off";
+    }
+  }
+}
+
 focusEls.block.addEventListener("click", toggleBlock);
+focusEls.signFlip.addEventListener("click", flipSignPage);
 focusEls.timer.replaceChildren();
 loadSignPicture();
 

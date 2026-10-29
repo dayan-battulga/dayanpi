@@ -121,6 +121,7 @@ class DayReplay:
     segments: list[Segment] = field(default_factory=list)
     pickups: int = 0
     snacks: int = 0
+    snack_times: list[float] = field(default_factory=list)
     block_active: bool = False
     block_started_at: float | None = None
     day_done: bool = False
@@ -155,6 +156,7 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
             replay.pickups += 1
         elif kind == "snack":
             replay.snacks += 1
+            replay.snack_times.append(event["ts"])
         elif kind == "block":
             replay.block_active = event.get("action") == "start"
             replay.block_started_at = event["ts"] if replay.block_active else None
@@ -319,6 +321,7 @@ class FocusTracker:
         self._phone_hits: deque[bool] = deque(maxlen=PHONE_WINDOW)
         self._food_hits: deque[bool] = deque(maxlen=SNACK_WINDOW)
         self._snacking = False
+        self._snack_times: list[float] = []
         self._last_food_at: float | None = None
         self._returned_at: float | None = None
         self._away_since: float | None = None
@@ -382,6 +385,11 @@ class FocusTracker:
     def segments(self) -> list[dict]:
         with self._lock:
             copied = [asdict(segment) for segment in self._segments]
+        return copied
+
+    def snack_times(self) -> list[float]:
+        with self._lock:
+            copied = list(self._snack_times)
         return copied
 
     def restore(self, events: list[dict], now: float) -> int:
@@ -544,6 +552,7 @@ class FocusTracker:
         if not self._snacking and food_hits >= SNACK_ENTER_HITS:
             self._snacking = True
             self._totals.snacks += 1
+            self._snack_times.append(now)
             self._write({"event": "snack", "count": self._totals.snacks}, now)
             callouts.append(Callout("snack", f"Snack number {self._totals.snacks}.", speak=False))
         elif self._snacking and self._last_food_at is not None and now - self._last_food_at >= SNACK_END_S:
@@ -571,6 +580,7 @@ class FocusTracker:
             self._accumulate(now)
             self._write({"event": "day_summary", **self._totals_dict()}, now, day=self._totals.day)
             self._totals = DayTotals(day=today)
+            self._snack_times = []
             self._close_segment(now)
             self._segments = [Segment(state=self._state, start=now)]
             if self._state == "working":
@@ -640,6 +650,7 @@ class FocusTracker:
     def _restore_locked(self, events: list[dict], now: float) -> int:
         replay = replay_day(events, format_day(now))
         self._totals = total_day(replay)
+        self._snack_times = list(replay.snack_times)
         self._segments = replay.segments + [Segment(state="unknown", start=now)]
         self._trim_segments()
         self._state = "unknown"

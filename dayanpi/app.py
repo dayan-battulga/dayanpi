@@ -347,6 +347,7 @@ def drive(request: Request, command: DriveCommand):
 def focus_now(request: Request):
     status = build_focus_status()
     status["segments"] = tracker.segments()
+    status["snack_times"] = tracker.snack_times()
     return status
 
 
@@ -365,6 +366,20 @@ def focus_block(request: Request, command: BlockCommand):
         active = command.action == "start"
         changed = tracker.set_block(active, now, source="api")
     return {"status": "ok", "active": active, "changed": changed}
+
+
+class SignPageCommand(BaseModel):
+    step: Literal[-1, 1]
+
+
+@app.post("/api/sign/page")
+@limiter.limit("30/minute")
+def flip_sign_page(request: Request, command: SignPageCommand):
+    """The website's version of the one-hand gestures: next or previous sign page."""
+    if sign_controller is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Sign is off")
+    page = sign_controller.flip_page(command.step)
+    return {"status": "ok", "page": page}
 
 
 class AppReport(BaseModel):

@@ -210,6 +210,28 @@ def test_snacks_count_once_per_sitting():
     assert desk.tracker.status(desk.now)["today"]["snacks"] == 2
 
 
+def test_snack_times_are_kept_for_the_today_list():
+    desk = settled_desk()
+    assert desk.tracker.snack_times() == []
+    desk.tick(make_reading(food=0.6), 3)
+    first = desk.tracker.snack_times()
+    assert len(first) == 1 and first[0] <= desk.now
+    desk.work(121)
+    desk.tick(make_reading(food=0.6), 3)
+    times = desk.tracker.snack_times()
+    assert len(times) == 2 and times[0] == first[0] and times[1] > times[0]
+
+
+def test_snack_times_start_over_at_midnight(tmp_path):
+    desk = Desk(start=datetime(2026, 10, 29, 23, 58, 0).timestamp(), log=FocusLog(tmp_path / "focus_log"))
+    desk.work(5)
+    desk.tick(make_reading(food=0.6), 3)
+    assert len(desk.tracker.snack_times()) == 1
+    desk.work(120)
+    assert desk.tracker.status(desk.now)["today"]["day"] == "2026-10-30"
+    assert desk.tracker.snack_times() == []
+
+
 def test_no_frames_keeps_state_briefly_then_unknown():
     desk = settled_desk()
     assert desk.tick(None, 29) == "working"
@@ -276,6 +298,7 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
     assert status["state"] == "unknown"
     assert status["today"]["pickups"] == 1
     assert status["today"]["snacks"] == 1
+    assert fresh.snack_times() == pytest.approx(desk.tracker.snack_times(), abs=0.01)
     # The open segment closes at the last logged event (a sample at 90 s), so up to 30 s is lost: 64 + 17.
     assert status["today"]["working_seconds"] == pytest.approx(81, abs=2)
     assert status["today"]["longest_streak_seconds"] >= 60

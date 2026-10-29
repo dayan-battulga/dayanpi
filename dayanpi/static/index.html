@@ -76,7 +76,10 @@
 
         <div class="focus-actions">
           <p id="focus-caption" class="muted">Waiting for the first snapshot</p>
-          <button type="button" id="focus-block" class="button button-primary" disabled>Start block</button>
+          <div class="focus-buttons">
+            <button type="button" id="focus-block" class="button button-primary" disabled>Start block</button>
+            <button type="button" id="sign-flip" class="button button-ghost" disabled>Flip sign page</button>
+          </div>
         </div>
 
         <div class="timeline-wrap">
@@ -161,6 +164,11 @@
             <div class="card-title">
               <h2 class="label">LED sign</h2>
               <span id="sign-page" class="mono muted small"></span>
+            </div>
+            <div id="sign-dots" class="sign-dots" role="img" aria-label="Sign page">
+              <span class="sign-dot"></span>
+              <span class="sign-dot"></span>
+              <span class="sign-dot"></span>
             </div>
           </div>
           <div class="led">

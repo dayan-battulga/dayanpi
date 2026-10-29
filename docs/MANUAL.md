@@ -29,6 +29,7 @@ Always use the **`main`** branch on both machines.
 | `/api/focus` | Focus state, today's totals and timeline |
 | `/api/focus/block` | Start/stop a work block (POST) |
 | `/api/mac/app` | The Mac helper reports the front app (POST) |
+| `/api/sign/page` | Flip the LED sign to the next or previous page (POST `{"step": 1}` or `-1`) |
 | `/docs` | Disabled (404 on purpose) |
 
 ### How you open it
@@ -720,7 +721,7 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 | `panel` | Website preview **and** the real panels through the Matrix Bonnet |
 | `off` | Nothing, not even the preview |
 
-What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
+What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures or the **Flip sign page** button on the dashboard (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
 
 **The motors and the sign can't both be on.** The Matrix Bonnet uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 24, 26 and 27, which includes all six motor pins. With `DAYANPI_SIGN=panel` the app doesn't touch the motor pins at all (the Drive card is hidden anyway while the rover's paused, and `/api/drive` answers 503).
 
@@ -1176,7 +1177,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 ## The dashboard
 
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, snacks, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview and a list of today's last few changes.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview (the dots show which page it's on) and a list of today's last few changes and snacks.
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**, which also saves on the shared `/video` rate limit. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color, a phone in orange, food or drink in white, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.

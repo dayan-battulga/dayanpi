@@ -222,6 +222,29 @@ def test_sign_preview_renders_and_rides_the_status(factory):
         assert client.get("/api/sign.png").status_code == 401
 
 
+def test_the_site_can_flip_the_sign_page(factory):
+    with TestClient(app.app) as client:
+        assert client.post("/api/sign/page", json={"step": 1}).status_code == 401
+        assert client.post("/api/sign/page", json={"step": 1}, auth=AUTH).json() == {"status": "ok", "page": "today"}
+        assert client.post("/api/sign/page", json={"step": 1}, auth=AUTH).json()["page"] == "summary"
+        assert client.post("/api/sign/page", json={"step": -1}, auth=AUTH).json()["page"] == "today"
+        assert client.post("/api/sign/page", json={"step": 2}, auth=AUTH).status_code == 422
+        assert client.get("/api/focus", auth=AUTH).json()["sign"]["page"] == "today"
+
+
+def test_flipping_an_off_sign_says_so(monkeypatch, factory):
+    monkeypatch.setattr(app, "SIGN_MODE", "off")
+    with TestClient(app.app) as client:
+        response = client.post("/api/sign/page", json={"step": 1}, auth=AUTH)
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Sign is off"
+
+
+def test_focus_api_lists_todays_snack_times(factory):
+    with TestClient(app.app) as client:
+        assert client.get("/api/focus", auth=AUTH).json()["snack_times"] == []
+
+
 def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
     from dayanpi.focus import tracker as focus
 

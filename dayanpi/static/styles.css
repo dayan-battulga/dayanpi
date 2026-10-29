@@ -450,6 +450,12 @@ ol {
   font-size: 15px;
 }
 
+.focus-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .timeline-wrap {
   margin-top: 40px;
 }
@@ -859,6 +865,34 @@ ol {
 .led-empty {
   color: #8e8e96;
   font-size: 12px;
+}
+
+.led img.slide-a {
+  animation: slide-a 0.6s var(--ease);
+}
+
+.led img.slide-b {
+  animation: slide-b 0.6s var(--ease);
+}
+
+.sign-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.sign-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition:
+    width 0.5s var(--ease),
+    background-color 0.5s var(--ease);
+}
+
+.sign-dot.is-on {
+  width: 18px;
+  background: var(--ink);
 }
 
 .today-title {
@@ -1439,6 +1473,22 @@ ol {
   }
 }
 
+@keyframes slide-a {
+  from {
+    opacity: 0;
+    transform: translateX(8%);
+    filter: blur(4px);
+  }
+}
+
+@keyframes slide-b {
+  from {
+    opacity: 0;
+    transform: translateX(8%);
+    filter: blur(4px);
+  }
+}
+
 @keyframes box-in {
   from {
     opacity: 0;
@@ -1497,8 +1547,12 @@ ol {
     justify-content: center;
   }
 
-  .focus-actions .button {
+  .focus-buttons {
     width: 100%;
+  }
+
+  .focus-buttons .button {
+    flex: 1 1 140px;
     justify-content: center;
   }
 }
