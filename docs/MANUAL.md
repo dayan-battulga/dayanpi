@@ -2,7 +2,7 @@
 
 Live dashboard for a Raspberry Pi 5: focus tracking, Pi stats, live updates over SSE, and a camera feed.
 
-After Stage 7 the app is password-protected and bound to **localhost only**. You reach it through Tailscale Serve (private) or Funnel (public).
+The app is password-protected and bound to **localhost only**. You reach it through Tailscale Serve, which keeps it private to your own devices. Funnel stays off: the site shows a camera pointed at you all day.
 
 ---
 
@@ -37,8 +37,7 @@ Always use the **`main`** branch on both machines.
 | From | URL / method |
 | --- | --- |
 | **Pi itself** | http://127.0.0.1:8000/ |
-| **Mac (Tailscale app on)** | https://dayoon.tail279594.ts.net/ via **Serve** |
-| **Phone without Tailscale** | Same URL via **Funnel** (public internet) |
+| **Mac or phone (Tailscale app on)** | https://dayoon.tail279594.ts.net/ via **Serve** |
 | **Home LAN IP** `http://192.168.x.x:8000` | Does **not** work (app listens on 127.0.0.1 only) |
 
 Login is **HTTP Basic Auth** from `/etc/dayanpi.env` — not your Linux password.
@@ -939,6 +938,7 @@ If the card turns red and says `drive failed`, the Pi didn't get the command (lo
 
 - **Watchdog.** If the Pi doesn't hear a command for 0.5 s, it stops the wheels on its own. So if your phone dies, the tab crashes or Wi-Fi drops, the robot stops about half a second later.
 - **Speed cap.** The Pi never runs the motors above `MAX_SPEED` (60% power by default), no matter what the browser sends.
+- **Reversal pause.** Flipping a side from forward to backward stops it for a moment first, so the motors don't slam into reverse.
 - **The battery switch is the real emergency stop.** Everything above is software. If the Pi crashes hard (power glitch, kernel panic), the motor pins can stay stuck on whatever they were last doing. If the robot misbehaves, flip the battery switch. Test new code with the wheels up on a box.
 - Stopping or restarting the service (`sudo systemctl stop/restart dayanpi`) stops the motors cleanly first.
 
@@ -953,7 +953,7 @@ Change the numbers on the Mac, push, pull on the Pi, and restart the service.
 | `DEADZONE` | `dayanpi/hardware/drivetrain.py` | `0.05` | Anything smaller than this counts as zero. |
 | `DRIVE_TIMEOUT_S` | `dayanpi/app.py` | `0.5` | How long the watchdog waits before stopping the wheels. |
 
-About the watchdog timeout: the browser sends every 0.15 s, so the timeout has to stay well above that. If driving over Funnel or cellular feels jerky (keeps stopping and starting), the network is laggy; try `0.8`. Going lower than 0.5 makes it stop faster but stutter more.
+About the watchdog timeout: the browser sends every 0.15 s, so the timeout has to stay well above that. If driving over cellular feels jerky (keeps stopping and starting), the network is laggy; try `0.8`. Going lower than 0.5 makes it stop faster but stutter more.
 
 The arc turns come from the table at the top of `dayanpi/static/drive.js`. `0.4` there is the inner wheel's input *before* scaling, so it ends up a bit faster than `SPEED_FLOOR`.
 
@@ -969,126 +969,52 @@ sudo systemctl start dayanpi
 
 ---
 
-## Tailscale: Serve vs Funnel
+## Tailscale Serve
 
 You need **two** things for remote access:
 
 1. **`dayanpi` service** — the app on port 8000
-2. **Serve or Funnel** — HTTPS proxy from Tailscale → `127.0.0.1:8000`
+2. **Serve** — HTTPS proxy from Tailscale → `127.0.0.1:8000`, private to your own Tailscale devices
 
 ### Important: use `--bg`
 
 On this Pi, plain `sudo tailscale serve 8000` shows “Press Ctrl+C to exit”. **Ctrl+C clears the config** (`tailscale serve status` → `No serve config`).
 
-Always prefer background mode:
+Always use background mode:
 
 ```bash
-sudo tailscale serve --bg 8000    # private (Tailscale devices only)
-sudo tailscale funnel --bg 8000   # public internet
+sudo tailscale serve --bg 8000
 ```
 
-Then you **can close the terminal / disconnect SSH**.
+Then you **can close the terminal / disconnect SSH**. The app is systemd's job, so it doesn't need a terminal either.
 
 Check anytime:
 
 ```bash
 tailscale serve status
-sudo tailscale funnel status
 sudo systemctl status dayanpi
 ```
 
 ### First-time Tailscale permissions
 
-If Serve/Funnel says “not enabled” or “access denied”:
+If Serve says “not enabled” or “access denied”:
 
-1. Open the admin link Tailscale prints (login.tailscale.com) and approve Serve/Funnel
+1. Open the admin link Tailscale prints (login.tailscale.com) and approve Serve
 2. Optionally: `sudo tailscale set --operator=$USER` so you need less `sudo` later
 
----
+### Opening it from your Mac or phone
 
-## Access from your Mac (private)
+Install the Tailscale app, sign in to the same account, and keep it connected. Then open **https://dayoon.tail279594.ts.net/** and log in with the `/etc/dayanpi.env` credentials. See [The dashboard](#the-dashboard) for what's where.
 
-Tailscale app must be connected on the Mac.
+### Funnel stays off
 
-```bash
-sudo systemctl status dayanpi
-sudo tailscale serve --bg 8000
-tailscale serve status
-```
-
-Open: **https://dayoon.tail279594.ts.net/**
-
-Log in with `/etc/dayanpi.env` credentials.
-
-The Focus card is at the top, the camera and the LED sign under it, and the Pi's stats at the bottom. See [The dashboard](#the-dashboard) for what's what.
-
----
-
-## Access from iPhone without Tailscale (public Funnel)
-
-> **Heads up: the site can drive the robot now.** With Funnel on, anyone on the internet who gets your password can move it, and the login page is out there for anyone to hammer on. For driving, use **Serve** with the Tailscale app on your phone instead (see [Alternative: Tailscale on the phone](#alternative-tailscale-on-the-phone)). It's private to your devices. Keep Funnel off unless you really need it.
-
-Funnel puts the same hostname on the **public internet**. Only do this after Stage 7 auth is working.
-
-Serve and Funnel both want HTTPS port 443. If you see `listener already exists for port 443`, reset first:
-
-```bash
-sudo systemctl status dayanpi
-sudo tailscale serve reset
-sudo tailscale funnel --bg 8000
-sudo tailscale funnel status
-```
-
-You want status like:
-
-```
-Available on the internet:
-https://dayoon.tail279594.ts.net/
-|-- proxy http://127.0.0.1:8000
-Funnel started and running in the background.
-```
-
-On the phone:
-
-1. Open **https://dayoon.tail279594.ts.net/** (include `https://`)
-2. Prefer **cellular with Wi‑Fi off** to test like a stranger
-3. Enter Basic Auth when Safari prompts (refresh / Private tab if the dialog doesn’t appear)
-
-### Turn Funnel off (kill switch)
-
-```bash
-sudo tailscale funnel --https=443 off
-```
-
-or:
-
-```bash
-sudo tailscale funnel reset
-```
-
-Anyone with the URL can reach the login page while Funnel is on. Keep the password strong.
-
-### Alternative: Tailscale on the phone
-
-Install the Tailscale app, join the same account, use **Serve** instead of Funnel. Stays private. **This is the recommended way to drive from the phone.**
-
-If Funnel is currently on, switch back to Serve:
+Funnel would put the site on the public internet, and the site shows a camera pointed at you all day. If it ever gets turned on, this switches back to Serve:
 
 ```bash
 sudo tailscale funnel reset
 sudo tailscale serve --bg 8000
 tailscale serve status
 ```
-
----
-
-## Can I close the terminal?
-
-| Piece | Close terminal OK? |
-| --- | --- |
-| `dayanpi` (systemd) | Yes |
-| `tailscale serve --bg` / `funnel --bg` | Yes |
-| Foreground `tailscale serve 8000` (no `--bg`) | No — Ctrl+C / closing SSH clears Serve |
 
 ---
 
@@ -1147,7 +1073,7 @@ Turning the motor battery on at any point is safe. The motor pins sit low (off) 
 
 ---
 
-## Stage 7 security checklist (before Funnel)
+## Security checklist
 
 ```bash
 curl -s localhost:8000/api/stats
@@ -1195,7 +1121,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | `activating (auto-restart)` / crash loop | `journalctl -u dayanpi -n 50 --no-pager` |
 | `No module named 'slowapi'` | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
 | Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` |
-| Connection refused on LAN IP:8000 | Expected — use Serve or Funnel |
+| Connection refused on LAN IP:8000 | Expected — use Serve |
 | 401 everywhere | Use credentials from `/etc/dayanpi.env` |
 | Port in use | `sudo lsof -i :8000` — stop leftover uvicorn or the service |
 | Camera busy / black | Only one opener; restart service; confirm `video` in `groups` |
@@ -1207,9 +1133,8 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | Driving feels jerky (stops and starts) | Laggy network; raise `DRIVE_TIMEOUT_S` in `dayanpi/app.py` (see Tuning) |
 | `No serve config` after Ctrl+C | Use `sudo tailscale serve --bg 8000` |
 | Serve access denied | Approve in Tailscale admin; try `sudo` |
-| `listener already exists for port 443` | `sudo tailscale serve reset` then `sudo tailscale funnel --bg 8000` |
-| iPhone can’t open Funnel URL | Confirm Funnel status + `dayanpi` running; full `https://` URL; cellular; try Private tab |
-| Mac works, phone doesn’t (no Tailscale) | Phone needs Funnel or the Tailscale app |
+| `listener already exists for port 443` | Funnel is probably on: `sudo tailscale funnel reset` then `sudo tailscale serve --bg 8000` |
+| Mac works, phone doesn’t | The phone needs the Tailscale app, connected and signed in to the same account |
 
 ---
 
@@ -1217,8 +1142,6 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 1. Edit on Mac → push `main`
 2. Pull on Pi → `sudo systemctl restart dayanpi`
-3. Proxy with `serve --bg` (private) or `funnel --bg` (public)
+3. Proxy with `serve --bg` (private to your devices)
 4. Open https://dayoon.tail279594.ts.net/ → log in
 5. Leave systemd **enabled** so the app survives disconnects and reboots
-6. Harden first; Funnel second — never expose an unauthenticated camera. Now that the site drives the robot, stick to Serve.
-7. Funnel kill switch: `sudo tailscale funnel reset`

@@ -24,7 +24,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
  Mac / iPhone browser
         │  HTTPS + login
         ▼
- Tailscale (Serve = private, Funnel = public)
+ Tailscale Serve (private to my devices)
         │
         ▼
  Raspberry Pi 5 ── uvicorn on 127.0.0.1:8000 (systemd service "dayanpi")
@@ -45,24 +45,13 @@ It's a personal project, so it's built for one person (me) on my own devices, no
 
 ---
 
-## Setting it up (short version)
+## Setup, power and safety
 
-On the Pi:
+The step-by-step versions live in the manual, with a check after each step:
 
-1. Clone this repo to `~/Desktop/site-page/dayanpi`.
-2. Make a venv that can see apt's `gpiozero` and `lgpio`, then install the rest:
-   ```bash
-   python3 -m venv --system-site-packages .venv
-   .venv/bin/pip install -r requirements.txt
-   ```
-3. Make sure your user is in the `video` and `gpio` groups (`groups`).
-4. Copy `deploy/dayanpi.env.example` to `/etc/dayanpi.env`, pick a username and strong password, and lock the file down (`chmod 600`, owned by root).
-5. Install and start the systemd service from `deploy/dayanpi.service`.
-6. Expose it with Tailscale: `sudo tailscale serve --bg 8000`.
-
-Then open **https://dayoon.tail279594.ts.net/** and log in.
-
-The full commands, with checks after each one, are in [MANUAL.md → First-time setup](docs/MANUAL.md#first-time-setup-pi).
+- [First-time setup](docs/MANUAL.md#first-time-setup-pi): the venv, groups, password file and systemd service. Then [Tailscale Serve](docs/MANUAL.md#tailscale-serve) puts it on your devices.
+- [Unplugging and powering back on](docs/MANUAL.md#unplugging-and-powering-back-on): what has to stay enabled, and the safe shutdown order.
+- [Driving the rover](docs/MANUAL.md#driving-the-rover): the watchdog, speed cap, reversal pause and tuning. Read it before driving.
 
 ---
 
@@ -74,31 +63,6 @@ The full commands, with checks after each one, are in [MANUAL.md → First-time 
   - Mac: `W`/`S` for forward/back, `A`/`D` to spin, and combos like `W`+`A` to arc.
   - Phone: the same moves on the ▲ ◀ ▶ ▼ pad; two thumbs work for arcs.
 - **When something's off:** check `journalctl -u dayanpi -n 50 --no-pager` on the Pi, then the Troubleshooting table in the manual.
-
----
-
-## Turning it off and on
-
-Everything comes back by itself after a reboot or power cut, as long as the `dayanpi` service is enabled (`systemctl is-enabled dayanpi`) and Serve was set up with `--bg` (`tailscale serve status`).
-
-- **Off:** motor battery off first, then `sudo poweroff` on the Pi, then unplug once the green light stops blinking. Pulling the plug without shutting down can corrupt the SD card.
-- **On:** plug in the Pi, wait about a minute, and open the site. Then put the rover on a box and turn the motor battery on.
-- **Only the motor battery unplugged:** if it only powers the motors, the site keeps running and the wheels just won't move until it's back.
-
-Details and a "missing something after boot?" checklist: [MANUAL.md → Unplugging and powering back on](docs/MANUAL.md#unplugging-and-powering-back-on).
-
----
-
-## Safety (please read before driving)
-
-- **The watchdog.** If the Pi hears nothing for 0.5 s (dead phone, crashed tab, dropped Wi-Fi), it stops the wheels.
-- **The speed cap.** The Pi never goes above `MAX_SPEED` (60% power), whatever the browser sends.
-- **The reversal pause.** Flipping a side from forward to backward stops it for a moment first, so the motors don't slam into reverse.
-- **The battery switch is the real emergency stop.** All of the above is software. If the Pi crashes hard, the motors can keep doing whatever they were doing.
-- **Test new code with the wheels up on a box.**
-- **Use Serve, not Funnel.** Serve plus the Tailscale app on your phone keeps the site private to your own devices. Funnel puts the login page on the public internet, and now that the site can move a robot, that's not worth it.
-
-Speeds and timings (`SPEED_FLOOR`, `MAX_SPEED`, the watchdog timeout, and so on) are tunable. See [MANUAL.md → Tuning](docs/MANUAL.md#tuning).
 
 ---
 
