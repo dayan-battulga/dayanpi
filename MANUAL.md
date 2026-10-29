@@ -308,6 +308,8 @@ tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
 
+**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, so "focused" can later be split into coding / docs / browser / Slack. App names only, nothing else. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The Focus card shows the current app under the block button.
+
 **Deploy it:**
 
 ```bash

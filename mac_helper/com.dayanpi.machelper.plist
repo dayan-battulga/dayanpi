@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template: launchd doesn't expand ~ or $HOME, so the sed line in README.md fills
+  in the double-underscore placeholders while copying this file into
+  ~/Library/LaunchAgents. The password is not in here; it stays in the Keychain.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.dayanpi.machelper</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>__HOME__/dayanpi-mac-helper/dayanpi_mac_helper.py</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>DAYANPI_USER</key>
+		<string>__DAYANPI_USER__</string>
+		<key>DAYANPI_URL</key>
+		<string>__DAYANPI_URL__</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/dayanpi-mac-helper.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/dayanpi-mac-helper.log</string>
+</dict>
+</plist>

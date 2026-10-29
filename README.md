@@ -127,6 +127,7 @@ They cover the motor logic (speed scaling, clamping, reversal pause, pin order),
 | `focus_check.py` | Focus tracker step 1: a guided check you run on the Pi |
 | `models/` | The two ONNX models the detector uses (YOLO11 nano, YuNet) |
 | `static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
+| `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest with gpiozero's mock pins) |
 | `dayanpi.service` | The systemd unit for the Pi |
 | `dayanpi.env.example` | Template for the login file |
