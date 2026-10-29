@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -64,10 +64,8 @@ SIGN_MODE = os.environ.get("DAYANPI_SIGN", "preview").strip().lower() or "previe
 sign_preview = PreviewOutput()
 sign_controller: SignController | None = None
 
-_video_active = 0
-_stream_active = 0
-_video_lock = threading.Lock()
-_stream_lock = threading.Lock()
+_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
+_stream_slots = threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -225,16 +223,12 @@ async def lifespan(app: FastAPI):
     finally:
         if watchdog is not None:
             watchdog.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await watchdog
-            except asyncio.CancelledError:
-                pass
             drive_train.close()
     producer.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await producer
-    except asyncio.CancelledError:
-        pass
     if worker is not None:
         worker.stop()
         worker = None
@@ -291,7 +285,6 @@ def frame_generator() -> Iterator[bytes]:
 
 
 async def event_stream(request: Request) -> AsyncIterator[bytes]:
-    global _stream_active
     try:
         yield b"retry: 5000\n\n"
         while True:
@@ -306,8 +299,7 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 
             await asyncio.sleep(SNAPSHOT_INTERVAL_S)
     finally:
-        with _stream_lock:
-            _stream_active = max(0, _stream_active - 1)
+        _stream_slots.release()
         logger.info("SSE client disconnected")
 
 
@@ -417,14 +409,11 @@ def sign_png(request: Request):
 @app.get("/api/stream")
 @limiter.limit("5/minute")
 async def api_stream(request: Request):
-    global _stream_active
-    with _stream_lock:
-        if _stream_active >= STREAM_MAX_CONCURRENT:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Too many stream connections",
-            )
-        _stream_active += 1
+    if not _stream_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Too many stream connections",
+        )
 
     return StreamingResponse(
         event_stream(request),
@@ -440,23 +429,17 @@ async def api_stream(request: Request):
 @app.get("/video")
 @limiter.limit("30/minute")
 def video(request: Request):
-    global _video_active
-
-    with _video_lock:
-        if _video_active >= VIDEO_MAX_CONCURRENT:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Too many video connections",
-            )
-        _video_active += 1
+    if not _video_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Too many video connections",
+        )
 
     def guarded() -> Iterator[bytes]:
-        global _video_active
         try:
             yield from frame_generator()
         finally:
-            with _video_lock:
-                _video_active = max(0, _video_active - 1)
+            _video_slots.release()
 
     return StreamingResponse(
         guarded(),

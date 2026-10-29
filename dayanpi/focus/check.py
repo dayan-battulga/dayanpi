@@ -32,7 +32,6 @@ PHASE_SECONDS = 20
 GET_READY_SECONDS = 5
 SCAN_INTERVAL_S = 1.0
 FIRST_FRAME_TIMEOUT_S = 5.0
-FIRST_FRAME_POLL_S = 0.1
 
 # Only used for the summary percentages; step 2 picks the real thresholds.
 PERSON_SEEN = 0.5
@@ -166,15 +165,6 @@ def draw_reading(image: np.ndarray, reading: FrameReading, caption: str) -> np.n
     return marked
 
 
-def wait_for_first_frame(stream: CameraStream) -> bytes | None:
-    deadline = time.monotonic() + FIRST_FRAME_TIMEOUT_S
-    jpeg = stream.latest_frame()
-    while jpeg is None and time.monotonic() < deadline:
-        time.sleep(FIRST_FRAME_POLL_S)
-        jpeg = stream.latest_frame()
-    return jpeg
-
-
 def count_down(phase: Phase, seconds: int) -> None:
     print(f"\nNext: {phase.name.upper()}. {phase.instruction}")
     for remaining in range(seconds, 0, -1):
@@ -231,8 +221,8 @@ def run_check(seconds: int) -> int:
     exit_code = 0
 
     try:
-        jpeg = wait_for_first_frame(stream)
-        image = None if jpeg is None else decode_jpeg(jpeg)
+        first = stream.frame_after(-1, timeout=FIRST_FRAME_TIMEOUT_S)
+        image = None if first is None else decode_jpeg(first[0])
         if image is None:
             print(
                 "No camera frames. If the dayanpi service is running, it has the camera:\n"

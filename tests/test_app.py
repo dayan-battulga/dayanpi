@@ -308,3 +308,17 @@ def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
         assert (overlay["frame_width"], overlay["frame_height"]) == (640, 480)
         assert 1.5 <= overlay["age_s"] <= 3.0
     assert app.worker is None
+
+
+def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(factory, monkeypatch):
+    monkeypatch.setattr(app, "frame_generator", lambda: iter([b"frame"]))
+    with TestClient(app.app) as client:
+        for _ in range(app.VIDEO_MAX_CONCURRENT):
+            assert client.get("/video", auth=AUTH).status_code == 200
+        held = [app._video_slots.acquire(blocking=False) for _ in range(app.VIDEO_MAX_CONCURRENT)]
+        assert all(held)
+        try:
+            assert client.get("/video", auth=AUTH).status_code == 503
+        finally:
+            for _ in held:
+                app._video_slots.release()

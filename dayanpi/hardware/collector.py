@@ -1,4 +1,4 @@
-import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -164,9 +164,9 @@ def memory_usage() -> MemoryUsage:
 
 
 def disk_usage(path: str = "/") -> DiskUsage:
-    stats = os.statvfs(path)
-    total_gb = (stats.f_blocks * stats.f_frsize) / (1024**3)
-    free_gb = (stats.f_bavail * stats.f_frsize) / (1024**3)
+    usage = shutil.disk_usage(path)
+    total_gb = usage.total / (1024**3)
+    free_gb = usage.free / (1024**3)
     percent_used = (1 - free_gb / total_gb) * 100
 
     return DiskUsage(
