@@ -501,6 +501,199 @@ main {
   background: var(--danger);
 }
 
+/* Focus card */
+
+.cell-focus {
+  --state-color: var(--muted);
+  --state-soft: rgb(107 114 128 / 10%);
+}
+
+.cell-focus[data-state="working"] {
+  --state-color: var(--accent);
+  --state-soft: rgb(15 118 110 / 10%);
+}
+
+.cell-focus[data-state="phone"] {
+  --state-color: var(--danger);
+  --state-soft: rgb(190 18 60 / 10%);
+}
+
+.cell-focus[data-state="away"] {
+  --state-color: #475569;
+  --state-soft: rgb(71 85 105 / 10%);
+}
+
+.cell-focus .feed-head {
+  margin-bottom: 0.55rem;
+}
+
+.cell-focus .live-pill {
+  color: var(--state-color);
+  border-color: color-mix(in srgb, var(--state-color) 30%, transparent);
+  background: var(--state-soft);
+}
+
+.cell-focus .live-dot {
+  background: var(--state-color);
+}
+
+.cell-focus[data-state="working"] .live-dot,
+.cell-focus[data-state="phone"] .live-dot {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.focus-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.focus-timer {
+  color: var(--state-color);
+  transition: color 0.4s var(--ease);
+}
+
+.focus-totals {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+
+.focus-totals div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.focus-totals dt {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.focus-totals dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-timeline {
+  position: relative;
+  height: 0.9rem;
+  margin-top: 0.85rem;
+  border-radius: 999px;
+  background: rgb(20 23 28 / 7%);
+  overflow: hidden;
+}
+
+.focus-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.focus-segment.is-working {
+  background: var(--accent);
+}
+
+.focus-segment.is-phone {
+  background: var(--danger);
+}
+
+.focus-segment.is-away {
+  background: rgb(71 85 105 / 35%);
+}
+
+.focus-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+
+.focus-hours {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.focus-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: 0.7rem;
+}
+
+.focus-foot .detail.sub {
+  margin-top: 0;
+}
+
+.focus-block {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  background: rgb(15 118 110 / 8%);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.3s var(--ease), transform 0.3s var(--ease);
+}
+
+.focus-block:hover:not(:disabled) {
+  background: rgb(15 118 110 / 16%);
+  transform: translateY(-1px);
+}
+
+.focus-block:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.cell-focus.is-block .focus-block {
+  border-color: rgb(190 18 60 / 30%);
+  background: rgb(190 18 60 / 8%);
+  color: var(--danger);
+}
+
+.sign-preview {
+  margin-top: 0.85rem;
+}
+
+.sign-label {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sign-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.6rem;
+  image-rendering: pixelated;
+  box-shadow: var(--shadow);
+}
+
 .feed-frame {
   position: relative;
   overflow: hidden;
@@ -801,6 +994,10 @@ h2 {
 @media (max-width: 560px) {
   main {
     grid-template-columns: 1fr;
+  }
+
+  .focus-totals {
+    grid-template-columns: repeat(3, auto);
   }
 
   .cell-wide {

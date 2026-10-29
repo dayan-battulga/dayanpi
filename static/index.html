@@ -81,6 +81,41 @@
             <p id="drive-error" class="detail sub drive-error" role="alert"></p>
           </div>
 
+          <div id="focus-card" class="cell cell-focus" data-state="unknown">
+            <div class="feed-head">
+              <h2>Focus</h2>
+              <span class="live-pill">
+                <span class="live-dot" aria-hidden="true"></span>
+                <span id="focus-state" aria-live="polite">starting</span>
+              </span>
+            </div>
+            <div class="focus-body">
+              <div class="focus-main">
+                <p class="reading focus-timer"><span id="focus-timer">--:--</span></p>
+                <p id="focus-caption" class="detail sub">waiting for the camera</p>
+              </div>
+              <dl class="focus-totals">
+                <div><dt>Focus</dt><dd id="focus-working">--</dd></div>
+                <div><dt>Phone</dt><dd id="focus-phone">--</dd></div>
+                <div><dt>Pickups</dt><dd id="focus-pickups">--</dd></div>
+                <div><dt>Snacks</dt><dd id="focus-snacks">--</dd></div>
+                <div><dt>Best streak</dt><dd id="focus-best">--</dd></div>
+              </dl>
+            </div>
+            <div class="focus-timeline" id="focus-timeline" role="img" aria-label="Today's timeline"></div>
+            <div class="focus-hours" aria-hidden="true">
+              <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
+            </div>
+            <div class="focus-foot">
+              <button type="button" id="focus-block" class="focus-block" disabled>Start block</button>
+              <p id="focus-note" class="detail sub"></p>
+            </div>
+            <div id="sign-preview" class="sign-preview" hidden>
+              <p class="sign-label">LED sign</p>
+              <img id="sign-image" alt="What the LED sign is showing" width="768" height="192" />
+            </div>
+          </div>
+
           <aside
             id="power-rail"
             class="power-rail throttle-ok"
@@ -227,5 +262,6 @@
 
     <script src="/vendor/uPlot.min.js"></script>
     <script src="/app.js"></script>
+    <script src="/focus.js"></script>
   </body>
 </html>

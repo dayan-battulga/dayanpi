@@ -359,6 +359,8 @@ function startEvents() {
     render(sample);
     renderCharts();
     setStatus("connected");
+    // focus.js listens for this instead of opening a second stream.
+    window.dispatchEvent(new CustomEvent("dayanpi:snapshot", { detail: sample }));
   };
   // Browser already reconnects — only update the indicator.
   events.onerror = () => {
