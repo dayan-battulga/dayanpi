@@ -219,7 +219,7 @@ def test_no_frames_keeps_state_briefly_then_unknown():
 
 
 def test_day_rollover_resets_totals_and_logs_a_summary(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     desk = Desk(start=datetime(2026, 10, 29, 23, 59, 30).timestamp(), log=log)
     desk.work(20)
     desk.work(20)
@@ -234,11 +234,11 @@ def test_day_rollover_resets_totals_and_logs_a_summary(tmp_path):
 
 
 def test_log_lines_carry_ts_and_day(tmp_path):
-    log = FocusLog(tmp_path / "nested" / "focus.jsonl")
+    log = FocusLog(tmp_path / "nested" / "focus_log")
     desk = Desk(log=log)
     desk.work(3)
     desk.phone(3)
-    lines = (tmp_path / "nested" / "focus.jsonl").read_text().splitlines()
+    lines = (tmp_path / "nested" / "focus_log" / "2026-10-29.jsonl").read_text().splitlines()
     first = json.loads(lines[0])
     assert first["event"] == "state"
     assert first["state"] == "working"
@@ -249,7 +249,7 @@ def test_log_lines_carry_ts_and_day(tmp_path):
 
 
 def test_samples_are_logged_every_thirty_seconds(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     desk = Desk(log=log)
     desk.tick(make_reading(tilt=0.5), 61)
     samples = [event for event in log.read_all() if event["event"] == "sample"]
@@ -259,7 +259,7 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
 
 
 def test_restore_rebuilds_today_from_the_log(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     desk = Desk(log=log)
     desk.work(60)
     desk.phone(5)
@@ -285,16 +285,19 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
 
 
 def test_restore_ignores_other_days(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     yesterday = Desk(start=NOON - 86400, log=log)
     yesterday.work(60)
     fresh = FocusTracker(log=log, started_at=NOON)
     assert fresh.restore(log.read_all(), NOON) == 0
     assert fresh.status(NOON)["today"]["working_seconds"] == 0
+    assert log.days() == ["2026-10-28"]
+    assert log.read_day("2026-10-29") == []
+    assert len(log.read_day("2026-10-28")) == len(log.read_all())
 
 
 def test_record_app_logs_changes_only(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     tracker = FocusTracker(log=log, started_at=NOON)
     assert tracker.record_app("Code", NOON) is True
     assert tracker.record_app("Code", NOON + 1) is False
@@ -329,7 +332,7 @@ def test_night_window_crosses_midnight():
 
 
 def test_timestamps_are_rounded_in_log_without_breaking_restore(tmp_path):
-    log = FocusLog(tmp_path / "focus.jsonl")
+    log = FocusLog(tmp_path / "focus_log")
     tracker = FocusTracker(log=log, started_at=NOON)
     tracker.update(make_reading(), NOON + 1.23456)
     tracker.update(make_reading(), NOON + 2.34567)

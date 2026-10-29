@@ -156,31 +156,55 @@ def format_spoken_duration(seconds: float) -> str:
 
 
 class FocusLog:
-    """Append-only JSONL log of state changes and events. Never frames."""
+    """Append-only JSONL log of state changes and events, one file per day. Never frames.
 
-    def __init__(self, path: Path) -> None:
-        self._path = path
+    A sample row every 30 s adds up to well under a megabyte a day, and one file per
+    day means a restart only has to read today's file.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        self._directory = directory
         self._lock = threading.Lock()
 
     @property
-    def path(self) -> Path:
-        return self._path
+    def directory(self) -> Path:
+        return self._directory
+
+    def day_path(self, day: str) -> Path:
+        path = self._directory / f"{day}.jsonl"
+        return path
 
     def write(self, event: dict) -> None:
         line = json.dumps(event, separators=(",", ":"))
+        day = event.get("day") or day_key(event.get("ts", 0.0))
         with self._lock:
             try:
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-                with self._path.open("a", encoding="utf-8") as handle:
+                self._directory.mkdir(parents=True, exist_ok=True)
+                with self.day_path(day).open("a", encoding="utf-8") as handle:
                     handle.write(line + "\n")
             except OSError:
                 logger.exception("focus log write failed")
 
+    def read_day(self, day: str) -> list[dict]:
+        events = self._read_file(self.day_path(day))
+        return events
+
+    def days(self) -> list[str]:
+        """Every day that has a log file, oldest first."""
+        names = sorted(path.stem for path in self._directory.glob("????-??-??.jsonl")) if self._directory.exists() else []
+        return names
+
     def read_all(self) -> list[dict]:
+        events = []
+        for day in self.days():
+            events.extend(self._read_file(self.day_path(day)))
+        return events
+
+    def _read_file(self, path: Path) -> list[dict]:
         events = []
         with self._lock:
             try:
-                with self._path.open("r", encoding="utf-8") as handle:
+                with path.open("r", encoding="utf-8") as handle:
                     for line in handle:
                         stripped = line.strip()
                         if stripped:
@@ -188,11 +212,7 @@ class FocusLog:
             except FileNotFoundError:
                 pass
             except (OSError, ValueError):
-                logger.exception("focus log read failed")
-        return events
-
-    def read_day(self, day: str) -> list[dict]:
-        events = [event for event in self.read_all() if event.get("day") == day]
+                logger.exception("focus log read failed: %s", path)
         return events
 
 

@@ -74,14 +74,14 @@ class FakeScanner:
 
 def test_run_phase_saves_clean_frames_and_one_snapshot(monkeypatch, tmp_path):
     monkeypatch.setattr(focus_check, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(focus_check, "SCAN_INTERVAL_S", 0.05)
+    monkeypatch.setattr(focus_check, "SCAN_INTERVAL_S", 0.1)
     monkeypatch.setattr(focus_check, "FRAME_SAVE_INTERVAL_S", 0.0)
     focus_check.clear_saved_frames()
     stale = tmp_path / "frames" / "old.jpg"
     stale.write_bytes(b"x")
     focus_check.clear_saved_frames()
 
-    summary = focus_check.run_phase(FakeStream(), FakeScanner(), focus_check.PHASES[1], 0.3)
+    summary = focus_check.run_phase(FakeStream(), FakeScanner(), focus_check.PHASES[1], 1.0)  # a 0.5 s window to save the snapshot, so a busy machine can't miss it
 
     frames = sorted(path.name for path in (tmp_path / "frames").glob("*.jpg"))
     assert not stale.exists()

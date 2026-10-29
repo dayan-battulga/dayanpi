@@ -5,6 +5,7 @@ import logging
 import os
 import secrets
 import threading
+import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,12 +18,19 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from typing import Literal
+
 import collector
+import focus_worker
 from camera import CameraStream
 from drivetrain import CommandTimer, DriveTrain
+from focus import FocusLog, FocusTracker, FocusUpdate, day_key
+from focus_worker import FocusWorker
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+DATA_DIR = Path(os.environ.get("DAYANPI_DATA_DIR", str(BASE_DIR / "data")))
+FOCUS_LOG_DIR = DATA_DIR / "focus_log"
 
 FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
@@ -43,6 +51,9 @@ stream = CameraStream("/dev/video0")
 latest_snapshot: dict | None = None
 drive_train: DriveTrain | None = None
 command_timer = CommandTimer(DRIVE_TIMEOUT_S)
+focus_log = FocusLog(FOCUS_LOG_DIR)
+tracker = FocusTracker(focus_log, started_at=time.time())
+worker: FocusWorker | None = None
 
 _video_active = 0
 _stream_active = 0
@@ -74,12 +85,40 @@ def _authorized(request: Request) -> bool:
     return user_ok and pass_ok
 
 
+def focus_status() -> dict:
+    status = tracker.status(time.time())
+    status["enabled"] = worker is not None
+    return status
+
+
+def handle_focus_update(update: FocusUpdate, now: float) -> None:
+    """Runs on the worker thread after every check. Callouts fan out to the speaker and the sign from here."""
+    for callout in update.callouts:
+        logger.info("focus callout %s: %s", callout.name, callout.text)
+
+
+def start_focus_worker() -> FocusWorker | None:
+    started = None
+    scanner = focus_worker.build_scanner()
+    if scanner is not None:
+        now = time.time()
+        restored = tracker.restore(focus_log.read_day(day_key(now)), now)
+        if restored:
+            logger.info("focus tracker restored %s events from today's log", restored)
+        started = FocusWorker(stream, scanner, tracker, on_update=handle_focus_update)
+        started.start()
+        logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)
+    return started
+
+
 async def snapshot_producer() -> None:
     """One owner of the sampler; SSE clients only read latest_snapshot."""
     global latest_snapshot
     while True:
         try:
-            latest_snapshot = collector.snapshot(sampler)
+            snapshot = collector.snapshot(sampler)
+            snapshot["focus"] = focus_status()
+            latest_snapshot = snapshot
         except Exception:
             logger.exception("snapshot producer failed")
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
@@ -98,7 +137,7 @@ async def watch_drive_commands() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global drive_train
+    global drive_train, worker
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -106,6 +145,7 @@ async def lifespan(app: FastAPI):
         )
     sampler.sample()
     stream.start()
+    worker = start_focus_worker()
     drive_train = None
     watchdog = None
     try:
@@ -130,6 +170,9 @@ async def lifespan(app: FastAPI):
         await producer
     except asyncio.CancelledError:
         pass
+    if worker is not None:
+        worker.stop()
+        worker = None
     stream.stop()
 
 
@@ -227,6 +270,39 @@ def drive(request: Request, command: DriveCommand):
     command_timer.record_command()
     drive_train.drive(command.left, command.right)
     return {"status": "ok"}
+
+
+@app.get("/api/focus")
+@limiter.limit("60/minute")
+def focus_now(request: Request):
+    status = focus_status()
+    status["segments"] = tracker.segments()
+    return status
+
+
+class BlockCommand(BaseModel):
+    action: Literal["start", "stop", "toggle"]
+
+
+@app.post("/api/focus/block")
+@limiter.limit("30/minute")
+def focus_block(request: Request, command: BlockCommand):
+    now = time.time()
+    active = tracker.status(now)["block"]["active"]
+    wanted = {"start": True, "stop": False, "toggle": not active}[command.action]
+    changed = tracker.set_block(wanted, now, source="api")
+    return {"status": "ok", "active": wanted, "changed": changed}
+
+
+class AppReport(BaseModel):
+    app: str = Field(min_length=1, max_length=100)
+
+
+@app.post("/api/mac/app")
+@limiter.limit("120/minute")
+def mac_app(request: Request, report: AppReport):
+    changed = tracker.record_app(report.app.strip(), time.time())
+    return {"status": "ok", "changed": changed}
 
 
 @app.get("/api/stream")
