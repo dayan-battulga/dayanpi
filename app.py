@@ -26,6 +26,8 @@ from camera import create_stream
 from drivetrain import CommandTimer, DriveTrain
 from focus import FocusLog, FocusTracker, FocusUpdate, day_key
 from focus_worker import FocusWorker
+from sign import PanelOutput, PreviewOutput
+from sign_controller import SignController
 from voice import VoiceAnnouncer
 
 # uvicorn only configures its own loggers; without this the app's INFO lines
@@ -60,6 +62,9 @@ focus_log = FocusLog(FOCUS_LOG_DIR)
 tracker = FocusTracker(focus_log, started_at=time.time())
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
+SIGN_MODE = os.environ.get("DAYANPI_SIGN", "preview").strip().lower() or "preview"  # preview | panel | off
+sign_preview = PreviewOutput()
+sign_controller: SignController | None = None
 
 _video_active = 0
 _stream_active = 0
@@ -95,7 +100,26 @@ def focus_status() -> dict:
     status = tracker.status(time.time())
     status["enabled"] = worker is not None
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
+    status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page}
+    png = sign_preview.latest_png() if sign_controller is not None else None
+    status["sign_png"] = None if png is None else base64.b64encode(png).decode("ascii")
     return status
+
+
+def start_sign() -> SignController | None:
+    """The sign always renders for the website preview; the panels join in when DAYANPI_SIGN=panel."""
+    started = None
+    if SIGN_MODE != "off":
+        outputs = [sign_preview]
+        if SIGN_MODE == "panel":
+            try:
+                outputs.append(PanelOutput())
+                logger.info("sign: driving the panels")
+            except Exception:
+                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see MANUAL.md)")
+        started = SignController(tracker, outputs)
+        started.start()
+    return started
 
 
 def handle_focus_update(update: FocusUpdate, now: float) -> None:
@@ -104,6 +128,8 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
         logger.info("focus callout %s: %s", callout.name, callout.text)
         if callout.speak:
             voice.say(callout.text)
+        if sign_controller is not None:
+            sign_controller.show_callout(callout)
 
 
 def handle_gesture(name: str, now: float) -> None:
@@ -113,6 +139,8 @@ def handle_gesture(name: str, now: float) -> None:
         active = tracker.status(now)["block"]["active"]
         tracker.set_block(not active, now, source="gesture")
         voice.say("Block stopped." if active else "Block started.")
+    elif sign_controller is not None and name in ("next_page", "previous_page"):
+        sign_controller.flip_page(1 if name == "next_page" else -1)
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -155,7 +183,7 @@ async def watch_drive_commands() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global drive_train, worker
+    global drive_train, worker, sign_controller
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -164,15 +192,20 @@ async def lifespan(app: FastAPI):
     sampler.sample()
     stream.start()
     voice.start()
+    sign_controller = start_sign()
     worker = start_focus_worker()
     drive_train = None
     watchdog = None
-    try:
-        drive_train = DriveTrain()
-        watchdog = asyncio.create_task(watch_drive_commands(), name="drive-watchdog")
-    except Exception:
-        # Busy pins, no gpio permission, no lgpio/gpiozero: run the dashboard without motors.
-        logger.exception("motors unavailable; /api/drive will return 503")
+    if SIGN_MODE == "panel":
+        # The Matrix Bonnet uses the six motor pins (12, 13, 17, 22, 23, 27), so it's one or the other.
+        logger.info("sign on the panels, so the motors stay off; /api/drive will return 503")
+    else:
+        try:
+            drive_train = DriveTrain()
+            watchdog = asyncio.create_task(watch_drive_commands(), name="drive-watchdog")
+        except Exception:
+            # Busy pins, no gpio permission, no lgpio/gpiozero: run the dashboard without motors.
+            logger.exception("motors unavailable; /api/drive will return 503")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
     try:
         yield
@@ -192,6 +225,9 @@ async def lifespan(app: FastAPI):
     if worker is not None:
         worker.stop()
         worker = None
+    if sign_controller is not None:
+        sign_controller.stop()
+        sign_controller = None
     voice.stop()
     stream.stop()
 
@@ -335,6 +371,16 @@ def voice_say(request: Request, phrase: Phrase):
     """For trying the speaker from the browser or curl. Off means it only lands in the log."""
     queued = voice.say(phrase.text)
     return {"status": "ok", "queued": queued, "backend": voice.backend}
+
+
+@app.get("/api/sign.png")
+@limiter.limit("60/minute")
+def sign_png(request: Request):
+    """What the LED sign is showing right now, as the website preview image."""
+    png = sign_preview.latest_png() if sign_controller is not None else None
+    if png is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sign is off")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/stream")

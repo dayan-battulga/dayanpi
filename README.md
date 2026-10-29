@@ -125,7 +125,10 @@ They cover the motor logic (speed scaling, clamping, reversal pause, pin order),
 | `focus_worker.py` | The thread that runs the detector inside the site about once a second |
 | `focus_stats.py` | Prints day totals and focus-by-hour from the log |
 | `focus_check.py` | Focus tracker step 1: a guided check you run on the Pi |
-| `models/` | The two ONNX models the detector uses (YOLO11 nano, YuNet) |
+| `pose.py`, `gestures.py` | The pose model and the arm gestures that flip the sign's pages and toggle work blocks |
+| `sign.py`, `sign_glyphs.py`, `sign_controller.py` | The LED sign: the renderer, the font and icons, and what shows when |
+| `voice.py` | Says callouts out loud through a USB speaker (off until you turn it on) |
+| `models/` | The ONNX models: YOLO11 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
 | `static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest with gpiozero's mock pins) |

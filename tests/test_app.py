@@ -189,6 +189,57 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch, factory):
     assert said == ["Block started.", "Block stopped."]
 
 
+def test_sign_preview_renders_and_rides_the_status(factory):
+    with TestClient(app.app) as client:
+        deadline = time.monotonic() + 3
+        body = {}
+        while not body.get("sign_png") and time.monotonic() < deadline:
+            body = client.get("/api/focus", auth=AUTH).json()
+            time.sleep(0.05)
+        assert body["sign"] == {"mode": "preview", "page": "now"}
+        assert body["sign_png"], "the sign preview should be in the focus status"
+        response = client.get("/api/sign.png", auth=AUTH)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
+        assert client.get("/api/sign.png").status_code == 401
+
+
+def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
+    import focus
+
+    monkeypatch.setattr(app.voice, "say", lambda text: True)
+    with TestClient(app.app):
+        controller = app.sign_controller
+        assert controller is not None
+        app.handle_focus_update(
+            focus.FocusUpdate(state="phone", changed=True, previous_state="working", callouts=[focus.Callout("snack", "Snack number 1.", speak=False)]),
+            time.time(),
+        )
+        assert controller._queue or controller._active is not None
+        app.handle_gesture("next_page", time.time())
+        assert controller.page == "today"
+        app.handle_gesture("previous_page", time.time())
+        assert controller.page == "now"
+    assert app.sign_controller is None
+
+
+def test_panel_mode_keeps_the_motors_off(monkeypatch, factory, caplog):
+    import logging
+    import sign
+
+    caplog.set_level(logging.INFO, logger="app")
+    monkeypatch.setattr(app, "SIGN_MODE", "panel")
+    monkeypatch.setattr(sign, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
+    monkeypatch.setattr(app, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
+    with TestClient(app.app) as client:
+        assert app.drive_train is None
+        assert client.post("/api/drive", json=FORWARD, auth=AUTH).status_code == 503
+        assert app.sign_controller is not None
+    assert "panels unavailable, preview only" in caplog.text
+    assert "motors stay off" in caplog.text
+
+
 def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
     class FakeScanner:
         def scan(self, image):
