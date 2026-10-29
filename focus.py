@@ -98,6 +98,63 @@ class FocusUpdate:
     callouts: list[Callout] = field(default_factory=list)
 
 
+@dataclass
+class DayReplay:
+    """One day's log, replayed: closed segments plus the counters."""
+
+    day: str
+    segments: list[Segment] = field(default_factory=list)
+    pickups: int = 0
+    snacks: int = 0
+    block_active: bool = False
+    block_started_at: float | None = None
+    day_done: bool = False
+    last_ts: float | None = None
+    events: int = 0
+
+
+def replay_day(events: list[dict], day: str) -> DayReplay:
+    """Rebuilds a day from its log lines. The open segment closes at the last line of any kind."""
+    replay = DayReplay(day=day)
+    todays = sorted((event for event in events if event.get("day") == day and "ts" in event), key=lambda event: event["ts"])
+    for event in todays:
+        kind = event.get("event")
+        replay.last_ts = event["ts"]
+        replay.events += 1
+        if kind == "state":
+            if replay.segments:
+                replay.segments[-1].end = event["ts"]
+            replay.segments.append(Segment(state=event.get("state", "unknown"), start=event["ts"]))
+        elif kind == "pickup":
+            replay.pickups += 1
+        elif kind == "snack":
+            replay.snacks += 1
+        elif kind == "block":
+            replay.block_active = event.get("action") == "start"
+            replay.block_started_at = event["ts"] if replay.block_active else None
+        elif kind == "callout" and event.get("name") == "day_done":
+            replay.day_done = True
+    if replay.segments and replay.segments[-1].end is None:
+        replay.segments[-1].end = replay.last_ts
+    return replay
+
+
+def total_day(replay: DayReplay) -> DayTotals:
+    totals = DayTotals(day=replay.day, pickups=replay.pickups, snacks=replay.snacks)
+    for segment in replay.segments:
+        length = max(0.0, (segment.end if segment.end is not None else segment.start) - segment.start)
+        if segment.state == "working":
+            totals.working_seconds += length
+            totals.longest_streak_seconds = max(totals.longest_streak_seconds, length)
+        elif segment.state == "phone":
+            totals.phone_seconds += length
+        elif segment.state == "away":
+            totals.away_seconds += length
+        if segment.state in ("working", "phone") and totals.first_seen is None:
+            totals.first_seen = segment.start
+    return totals
+
+
 def day_key(now: float) -> str:
     key = datetime.fromtimestamp(now).strftime(DAY_FORMAT)
     return key
@@ -535,57 +592,16 @@ class FocusTracker:
     # ----- restore after a restart -----
 
     def _restore_locked(self, events: list[dict], now: float) -> int:
-        today = day_key(now)
-        todays = sorted((event for event in events if event.get("day") == today and "ts" in event), key=lambda event: event["ts"])
-        restored: list[Segment] = []
-        pickups = 0
-        snacks = 0
-        block_active = False
-        block_started_at = None
-        day_done = False
-        last_ts = None
-        for event in todays:
-            kind = event.get("event")
-            last_ts = event["ts"]
-            if kind == "state":
-                if restored:
-                    restored[-1].end = event["ts"]
-                restored.append(Segment(state=event.get("state", "unknown"), start=event["ts"]))
-            elif kind == "pickup":
-                pickups += 1
-            elif kind == "snack":
-                snacks += 1
-            elif kind == "block":
-                block_active = event.get("action") == "start"
-                block_started_at = event["ts"] if block_active else None
-            elif kind == "callout" and event.get("name") == "day_done":
-                day_done = True
-        if restored and restored[-1].end is None:
-            restored[-1].end = last_ts
-        self._apply_restored(restored, pickups, snacks, now)
-        self._block_active = block_active
-        self._block_started_at = block_started_at
-        self._day_done_fired = day_done
-        if todays:
-            self._write({"event": "restart", "restored_events": len(todays)}, now)
-        return len(todays)
-
-    def _apply_restored(self, restored: list[Segment], pickups: int, snacks: int, now: float) -> None:
-        totals = DayTotals(day=day_key(now), pickups=pickups, snacks=snacks)
-        for segment in restored:
-            length = max(0.0, (segment.end if segment.end is not None else segment.start) - segment.start)
-            if segment.state == "working":
-                totals.working_seconds += length
-                totals.longest_streak_seconds = max(totals.longest_streak_seconds, length)
-            elif segment.state == "phone":
-                totals.phone_seconds += length
-            elif segment.state == "away":
-                totals.away_seconds += length
-            if segment.state in ("working", "phone") and totals.first_seen is None:
-                totals.first_seen = segment.start
-        self._totals = totals
-        self._segments = restored + [Segment(state="unknown", start=now)]
+        replay = replay_day(events, day_key(now))
+        self._totals = total_day(replay)
+        self._segments = replay.segments + [Segment(state="unknown", start=now)]
         self._trim_segments()
         self._state = "unknown"
         self._state_since = now
         self._last_update_at = now
+        self._block_active = replay.block_active
+        self._block_started_at = replay.block_started_at
+        self._day_done_fired = replay.day_done
+        if replay.events:
+            self._write({"event": "restart", "restored_events": replay.events}, now)
+        return replay.events
