@@ -22,7 +22,7 @@ A FastAPI dashboard for my Raspberry Pi 5 (stats, charts, camera). It can also d
 - app.py calls logging.basicConfig(INFO) at import, because uvicorn only configures its own loggers and the app's INFO lines would otherwise never reach journalctl.
 - detector.py runs two ONNX models through plain OpenCV (cv2.dnn and cv2.FaceDetectorYN), so the Pi needs no new pip packages. The models live in models/: YOLO11 nano (COCO, exported at 640x480; class 0 = person, 67 = cell phone) and YuNet for faces.
 - Phones come from a second YOLO pass on a crop around the main person (person >= 0.5, box plus margin); full-frame phone hits are ignored. On my real desk frames that took a phone in hand from 10% to 80% of checks at >= 0.3, with no hits while working. It roughly doubles the time per check.
-- camera.py is the only thing that may open /dev/video0. Inside the app, read frames from the existing CameraStream. Standalone scripts like focus_check.py need `sudo systemctl stop dayanpi` first.
+- camera.py is the only thing that may open the camera. Inside the app, read frames from app.stream (camera.create_stream() picks the backend: DAYANPI_CAMERA = auto (default) | usb | picamera; PiCameraStream wraps picamera2 behind the same latest_frame/frame_after interface and skips USB webcams that libcamera also lists; DAYANPI_USB_DEVICE names the webcam, ideally a /dev/v4l/by-id path since /dev/video0 can move once a CSI camera is plugged in). Standalone scripts like focus_check.py need `sudo systemctl stop dayanpi` first.
 - Never save video or frames on the Pi, except focus_check.py's snapshots in focus_check/ (gitignored). Only state changes get logged.
 - The site shows a camera pointed at me all day, so it stays on Tailscale Serve, not Funnel.
 

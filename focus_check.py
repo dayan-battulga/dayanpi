@@ -22,7 +22,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from camera import CameraStream
+from camera import CameraStream, create_stream
 from detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "focus_check"
@@ -231,7 +231,7 @@ def run_phase(stream: CameraStream, scanner: DeskScanner, phase: Phase, seconds:
 def run_check(seconds: int) -> int:
     print("Loading models...")
     scanner = DeskScanner()
-    stream = CameraStream()
+    stream = create_stream()
     stream.start()
     exit_code = 0
 

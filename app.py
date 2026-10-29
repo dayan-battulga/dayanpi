@@ -22,7 +22,7 @@ from typing import Literal
 
 import collector
 import focus_worker
-from camera import CameraStream
+from camera import create_stream
 from drivetrain import CommandTimer, DriveTrain
 from focus import FocusLog, FocusTracker, FocusUpdate, day_key
 from focus_worker import FocusWorker
@@ -52,7 +52,7 @@ AUTH_USER = os.environ.get("DAYANPI_USER", "")
 AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
 
 sampler = collector.RateSampler("wlan0")
-stream = CameraStream("/dev/video0")
+stream = create_stream()
 latest_snapshot: dict | None = None
 drive_train: DriveTrain | None = None
 command_timer = CommandTimer(DRIVE_TIMEOUT_S)
