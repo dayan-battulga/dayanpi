@@ -573,7 +573,7 @@ The code is in `dayanpi/sign/`:
 
 Times are short so they fit: `45s`, `12m`, `1h05`, `10h30`.
 
-The icons are `fire`, `phone`, `zzz`, `question`, `food` (a donut), `cup`, `check`, `moon`, `hand` and `alert`. A callout with any other icon name shows the question mark.
+The icons are `fire`, `phone`, `zzz`, `question`, `food` (a donut), `check`, `moon` and `alert`. A callout with any other icon name shows the question mark.
 
 Nothing ever goes above 200 out of 255 on any color, even at full brightness. Full white is blinding up close, and both panels on full white would pull about 8 A from a 4 A supply. Every page also takes a brightness from 0 to 1, for dimming at night.
 
@@ -691,7 +691,7 @@ for page in pages:
     time.sleep(4)
 message = "Hello from the sign!"
 for scroll_px in range(sign.measure_callout(message) + 1):
-    panel.show(sign.render_page(sign.CalloutPage(message, "hand", (200, 140, 90), scroll_px)))
+    panel.show(sign.render_page(sign.CalloutPage(message, "check", (200, 140, 90), scroll_px)))
     time.sleep(0.03)
 EOF
 sudo systemctl start dayanpi

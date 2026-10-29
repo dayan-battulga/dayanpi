@@ -372,38 +372,3 @@ def create_stream() -> CameraStream:
         logger.info("camera: USB webcam at %s (%s)", usb_device, choice.reason)
     return stream
 
-
-if __name__ == "__main__":
-    import json
-
-    from dayanpi.hardware import collector
-
-    logging.basicConfig(level=logging.INFO)
-
-    stream = CameraStream()
-    sampler = collector.RateSampler("wlan0")
-    sampler.sample()  # baseline so rates aren't null
-
-    stream.start()
-    last_id = 0
-
-    try:
-        for i in range(30):
-            result = stream.frame_after(last_id, timeout=2.0)
-            if result is None:
-                print(f"frame {i}: timeout")
-                continue
-
-            jpeg, last_id = result
-            print(f"frame {i}: id={last_id} bytes={len(jpeg)}")
-
-            if i % 10 == 0:
-                path = f"checkpoint_{i:02d}.jpg"
-                with open(path, "wb") as file:
-                    file.write(jpeg)
-                print(f"  wrote {path}")
-
-            print(json.dumps(collector.snapshot(sampler), indent=2))
-    finally:
-        stream.stop()
-        print("stopped")

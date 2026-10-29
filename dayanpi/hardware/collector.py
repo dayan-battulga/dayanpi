@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import time
@@ -208,13 +207,3 @@ def snapshot(sampler: RateSampler) -> dict:
         "rates": rates._asdict() if rates is not None else None,
     }
 
-
-# ========== Main Run ============
-if __name__ == "__main__":
-    sampler = RateSampler("wlan0")  # or eth0 — ls /sys/class/net/
-    time.sleep(1)
-    print(json.dumps(snapshot(sampler), indent=2))
-    time.sleep(1)
-    print(json.dumps(snapshot(sampler), indent=2))
-    time.sleep(1)
-    print(json.dumps(snapshot(sampler), indent=2))

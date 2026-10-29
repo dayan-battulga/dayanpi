@@ -181,8 +181,6 @@ def test_callouts_reach_the_voice(monkeypatch):
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     update = focus.FocusUpdate(
         state="phone",
-        changed=True,
-        previous_state="working",
         callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("snack", "Snack 1.", speak=False)],
     )
     app.handle_focus_update(update, time.time())
@@ -253,7 +251,7 @@ def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
         controller = app.sign_controller
         assert controller is not None
         app.handle_focus_update(
-            focus.FocusUpdate(state="phone", changed=True, previous_state="working", callouts=[focus.Callout("snack", "Snack number 1.", speak=False)]),
+            focus.FocusUpdate(state="phone", callouts=[focus.Callout("snack", "Snack number 1.", speak=False)]),
             time.time(),
         )
         assert controller._queue or controller._active is not None

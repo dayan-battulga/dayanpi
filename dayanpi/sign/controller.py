@@ -42,7 +42,6 @@ CALLOUT_ICONS = {
     "break_over": "alert",
     "day_done": "check",
     "snack": "food",
-    "gesture": "hand",
 }
 CALLOUT_COLORS = {
     "instant_pickup": (200, 40, 40),
@@ -51,7 +50,6 @@ CALLOUT_COLORS = {
     "break_over": (200, 120, 0),
     "day_done": (60, 160, 90),
     "snack": (200, 140, 40),
-    "gesture": (80, 140, 200),
 }
 DEFAULT_CALLOUT_COLOR = (200, 200, 200)
 

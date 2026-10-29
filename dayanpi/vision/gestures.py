@@ -29,12 +29,6 @@ ALLOWED_MISSES = 1
 
 
 @dataclass
-class GestureProgress:
-    name: str
-    fraction: float
-
-
-@dataclass
 class GestureHold:
     name: str
     started_at: float
@@ -92,17 +86,6 @@ class GestureTracker:
 
     def __init__(self) -> None:
         self._hold: GestureHold | None = None
-        self._last_check = 0.0
-
-    @property
-    def progress(self) -> GestureProgress | None:
-        """How far the pending hold had got at the last check. None when nothing is pending."""
-        hold = self._hold
-        progress = None
-        if hold is not None and not hold.has_fired:
-            fraction = min(1.0, (self._last_check - hold.started_at) / HOLD_SECONDS[hold.name])
-            progress = GestureProgress(name=hold.name, fraction=fraction)
-        return progress
 
     def update(self, pose: PoseDetection | None, now: float) -> str | None:
         """Returns the gesture's name on the check where it fires, otherwise None.
@@ -112,7 +95,6 @@ class GestureTracker:
         gesture = read_gesture(pose)
         hold = self._hold
         fired_gesture = None
-        self._last_check = now
         if hold is None:
             self._start_hold(gesture, now)
         elif gesture == hold.name:

@@ -124,11 +124,10 @@ def test_totals_and_streak_add_up():
     assert today["longest_streak_seconds"] >= 32
 
 
-def test_live_streak_counts_up_while_working():
+def test_seconds_in_state_counts_up_while_working():
     desk = settled_desk()
     desk.work(20)
     status = desk.tracker.status(desk.now)
-    assert status["streak_seconds"] == pytest.approx(21, abs=1.5)
     assert status["seconds_in_state"] == pytest.approx(21, abs=1.5)
 
 
@@ -245,7 +244,7 @@ def test_day_rollover_resets_totals_and_logs_a_summary(tmp_path):
     desk = Desk(start=datetime(2026, 10, 29, 23, 59, 30).timestamp(), log=log)
     desk.work(20)
     desk.work(20)
-    events = log.read_all()
+    events = log.read_day("2026-10-29") + log.read_day("2026-10-30")
     kinds = [event["event"] for event in events]
     assert "day_summary" in kinds
     summary = next(event for event in events if event["event"] == "day_summary")
@@ -274,7 +273,7 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
     log = FocusLog(tmp_path / "focus_log")
     desk = Desk(log=log)
     desk.tick(make_reading(tilt=0.5), 61)
-    samples = [event for event in log.read_all() if event["event"] == "sample"]
+    samples = [event for event in log.read_day("2026-10-29") if event["event"] == "sample"]
     assert len(samples) == 2
     assert samples[0]["tilt"] == 0.5
     assert samples[0]["state"] == "working"
@@ -292,7 +291,7 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
 
     later = desk.now + 120
     fresh = FocusTracker(log=log, started_at=later)
-    used = fresh.restore(log.read_all(), later)
+    used = fresh.restore(log.read_day("2026-10-29"), later)
     assert used > 0
     status = fresh.status(later)
     assert status["state"] == "unknown"
@@ -304,7 +303,7 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
     assert status["today"]["longest_streak_seconds"] >= 60
     assert status["block"]["active"] is True
     assert [segment["state"] for segment in fresh.segments()][-1] == "unknown"
-    assert log.read_all()[-1]["event"] == "restart"
+    assert log.read_day("2026-10-29")[-1]["event"] == "restart"
 
 
 def test_restore_ignores_other_days(tmp_path):
@@ -312,11 +311,9 @@ def test_restore_ignores_other_days(tmp_path):
     yesterday = Desk(start=NOON - 86400, log=log)
     yesterday.work(60)
     fresh = FocusTracker(log=log, started_at=NOON)
-    assert fresh.restore(log.read_all(), NOON) == 0
+    assert fresh.restore(log.read_day("2026-10-28"), NOON) == 0
     assert fresh.status(NOON)["today"]["working_seconds"] == 0
-    assert log.days() == ["2026-10-28"]
     assert log.read_day("2026-10-29") == []
-    assert len(log.read_day("2026-10-28")) == len(log.read_all())
 
 
 def test_record_app_logs_changes_only(tmp_path):
@@ -325,7 +322,7 @@ def test_record_app_logs_changes_only(tmp_path):
     assert tracker.record_app("Code", NOON) is True
     assert tracker.record_app("Code", NOON + 1) is False
     assert tracker.record_app("Slack", NOON + 2) is True
-    assert [event["app"] for event in log.read_all()] == ["Code", "Slack"]
+    assert [event["app"] for event in log.read_day("2026-10-29")] == ["Code", "Slack"]
     assert tracker.status(NOON + 3)["app"] == "Slack"
 
 
@@ -333,7 +330,7 @@ def test_status_has_the_fields_the_dashboard_needs():
     desk = settled_desk()
     desk.tick(make_reading(tilt=0.4), 1)
     status = desk.tracker.status(desk.now)
-    assert set(status) >= {"state", "since", "seconds_in_state", "streak_seconds", "today", "block", "camera_ok", "last_check", "app", "snacking"}
+    assert set(status) >= {"state", "since", "seconds_in_state", "today", "block", "camera_ok", "last_check", "app"}
     assert status["last_check"]["tilt"] == 0.4
     assert status["camera_ok"] is True
 
@@ -359,7 +356,7 @@ def test_timestamps_are_rounded_in_log_without_breaking_restore(tmp_path):
     tracker = FocusTracker(log=log, started_at=NOON)
     tracker.update(make_reading(), NOON + 1.23456)
     tracker.update(make_reading(), NOON + 2.34567)
-    assert log.read_all()[0]["ts"] == round(NOON + 2.34567, 3)
+    assert log.read_day("2026-10-29")[0]["ts"] == round(NOON + 2.34567, 3)
 
 
 def test_restart_after_midnight_keeps_the_new_day(tmp_path):
@@ -428,4 +425,4 @@ def test_toggle_block_flips_under_the_lock(tmp_path):
     tracker = FocusTracker(log=log, started_at=NOON)
     assert tracker.toggle_block(NOON, source="gesture") is True
     assert tracker.toggle_block(NOON + 1, source="api") is False
-    assert [event["action"] for event in log.read_all() if event["event"] == "block"] == ["start", "stop"]
+    assert [event["action"] for event in log.read_day("2026-10-29") if event["event"] == "block"] == ["start", "stop"]

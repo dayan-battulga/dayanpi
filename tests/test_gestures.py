@@ -4,7 +4,7 @@ import pytest
 
 from dayanpi.vision import gestures
 from dayanpi.vision.detector import Box
-from dayanpi.vision.gestures import GestureProgress, GestureTracker, read_gesture
+from dayanpi.vision.gestures import GestureTracker, read_gesture
 from dayanpi.vision.pose import KEYPOINT_NAMES, LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
 
 CHECK_INTERVAL_S = 0.5
@@ -143,31 +143,3 @@ def test_a_wrist_must_clear_the_shoulder_by_the_margin():
     assert read_gesture(just_over) == "next_page"
     assert read_gesture(just_under) is None
 
-
-def test_progress_follows_the_pending_hold():
-    tracker = GestureTracker()
-    assert tracker.progress is None
-    tracker.update(BOTH_UP, 0.0)
-    assert tracker.progress == GestureProgress(name="toggle_block", fraction=0.0)
-    tracker.update(BOTH_UP, 0.5)
-    assert tracker.progress == GestureProgress(name="toggle_block", fraction=0.25)
-    tracker.update(BOTH_UP, 1.5)
-    assert tracker.progress == GestureProgress(name="toggle_block", fraction=0.75)
-    tracker.update(BOTH_UP, 2.0)
-    assert tracker.progress is None
-
-
-def test_progress_tops_out_at_full_through_a_missed_check():
-    tracker = GestureTracker()
-    tracker.update(RIGHT_UP, 0.0)
-    tracker.update(None, 1.2)
-    assert tracker.progress == GestureProgress(name="next_page", fraction=1.0)
-    assert tracker.update(RIGHT_UP, 1.4) == "next_page"
-
-
-def test_progress_is_empty_once_the_hands_come_down():
-    tracker = GestureTracker()
-    tracker.update(LEFT_UP, 0.0)
-    tracker.update(HANDS_DOWN, 0.5)
-    tracker.update(HANDS_DOWN, 1.0)
-    assert tracker.progress is None

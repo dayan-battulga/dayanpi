@@ -24,7 +24,7 @@ from dayanpi.sign.renderer import (
 )
 
 PIOMATTER = "adafruit_blinka_raspberry_pi5_piomatter"
-REQUIRED_ICONS = ["fire", "phone", "zzz", "question", "food", "cup", "check", "moon", "hand", "alert"]
+REQUIRED_ICONS = ["fire", "phone", "zzz", "question", "food", "check", "moon", "alert"]
 STATES = ["working", "phone", "away", "unknown"]
 HOURS_99 = 99 * 3600
 PINK = (200, 80, 140)
@@ -234,8 +234,8 @@ def test_callout_text_is_gone_once_scrolled_by_callout_width():
 @pytest.mark.parametrize("scroll_px", [-10**12, -500, -40, 0, 7, 100, 10**12, math.inf, math.nan])
 def test_callout_text_never_spills_into_the_icon_area(scroll_px):
     long_text = "W" * 10_000
-    with_text = render_page(CalloutPage(long_text, "cup", (200, 200, 200), scroll_px=scroll_px))
-    icon_only = render_page(CalloutPage("", "cup", (200, 200, 200)))
+    with_text = render_page(CalloutPage(long_text, "food", (200, 200, 200), scroll_px=scroll_px))
+    icon_only = render_page(CalloutPage("", "food", (200, 200, 200)))
     assert_is_frame(with_text)
     assert np.array_equal(crop_icon_area(with_text), crop_icon_area(icon_only))
 

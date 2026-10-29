@@ -9,29 +9,22 @@ from PALETTE, and '.' is dark.
 
 GLYPH_WIDTH = 5
 GLYPH_HEIGHT = 7
-ICON_SIZE = 16
 LIT = "#"
 DARK = "."
 
 # Keep every channel at or under sign.CHANNEL_CAP (200); the panels share one 4A supply.
 PALETTE = {
     "R": (200, 30, 10),  # red
-    "r": (110, 12, 4),  # dark red
     "O": (200, 96, 0),  # orange
     "Y": (200, 170, 20),  # yellow
     "M": (200, 185, 110),  # moon yellow
-    "W": (180, 180, 180),  # white
     "L": (130, 130, 136),  # light gray
-    "w": (80, 80, 86),  # gray
     "B": (30, 70, 200),  # blue
     "b": (90, 140, 200),  # light blue
     "C": (40, 170, 190),  # cyan
     "G": (40, 190, 50),  # green
     "P": (200, 70, 140),  # pink
-    "N": (100, 50, 12),  # brown
     "n": (170, 105, 40),  # tan
-    "S": (200, 140, 90),  # skin
-    "s": (140, 85, 45),  # skin shadow
 }
 
 FONT = {
@@ -983,24 +976,6 @@ ICONS = {
         ".....nnnnnn.....",
         "................",
     ),
-    "cup": (
-        ".....L...L......",
-        "....L...L.......",
-        ".....L...L......",
-        "....L...L.......",
-        "................",
-        "..WWWWWWWWWW....",
-        "..WNNNNNNNNW....",
-        "..WWWWWWWWWWWW..",
-        "..WWWWWWWWWW..W.",
-        "..WWWWWWWWWW..W.",
-        "..WWWWWWWWWW..W.",
-        "..WWWWWWWWWWWW..",
-        "...WWWWWWWWW....",
-        "....WWWWWWWW....",
-        "................",
-        "................",
-    ),
     "check": (
         "................",
         "................",
@@ -1036,24 +1011,6 @@ ICONS = {
         "...MMMMMMMMM....",
         "....MMMMMMM.....",
         "................",
-    ),
-    "hand": (
-        "......SS........",
-        "...SS.SS.SS.....",
-        "...SS.SS.SS.....",
-        "...SS.SS.SS.SS..",
-        "...SS.SS.SS.SS..",
-        "...SS.SS.SS.SS..",
-        "SS.SS.SS.SS.SS..",
-        "SS.SSSSSSSSSSS..",
-        ".SSSSSSSSSSSSS..",
-        ".SSSSSSSSSSSSS..",
-        "..SSSSSSSSSSSS..",
-        "..SSSSSSSSSSSs..",
-        "...SSSSSSSSSSs..",
-        "....SSSSSSSSs...",
-        ".....SSSSSSs....",
-        ".....SSSSSSs....",
     ),
     "alert": (
         ".......YY.......",

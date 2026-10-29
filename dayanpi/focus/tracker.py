@@ -47,7 +47,6 @@ SAMPLE_LOG_INTERVAL_S = 30.0
 MAX_STEP_S = 5.0  # checks run every second; a bigger gap is a stall or a clock jump, not time at the desk
 MAX_SEGMENTS = 2000
 
-STATES = ("working", "phone", "away", "unknown")
 DAY_FORMAT = "%Y-%m-%d"
 DATA_DIR_ENV = "DAYANPI_DATA_DIR"
 
@@ -108,8 +107,6 @@ class CheckSummary:
 @dataclass
 class FocusUpdate:
     state: str
-    changed: bool
-    previous_state: str | None
     callouts: list[Callout] = field(default_factory=list)
 
 
@@ -123,7 +120,6 @@ class DayReplay:
     snacks: int = 0
     snack_times: list[float] = field(default_factory=list)
     block_active: bool = False
-    block_started_at: float | None = None
     day_done: bool = False
     last_ts: float | None = None
     events: int = 0
@@ -159,7 +155,6 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
             replay.snack_times.append(event["ts"])
         elif kind == "block":
             replay.block_active = event.get("action") == "start"
-            replay.block_started_at = event["ts"] if replay.block_active else None
         elif kind == "callout" and event.get("name") == "day_done":
             replay.day_done = True
         replay.last_ts = event["ts"]
@@ -270,17 +265,6 @@ class FocusLog:
         events = self._read_file(self.day_path(day))
         return events
 
-    def days(self) -> list[str]:
-        """Every day that has a log file, oldest first."""
-        names = sorted(path.stem for path in self._directory.glob("????-??-??.jsonl")) if self._directory.exists() else []
-        return names
-
-    def read_all(self) -> list[dict]:
-        events = []
-        for day in self.days():
-            events.extend(self._read_file(self.day_path(day)))
-        return events
-
     def _read_file(self, path: Path) -> list[dict]:
         events = []
         skipped = 0
@@ -315,7 +299,6 @@ class FocusTracker:
         self._state_since = started_at
         self._last_update_at = started_at
         self._last_frame_at: float | None = None
-        self._first_frame_at: float | None = None
         self._last_person_at: float | None = None
         self._consecutive_person = 0
         self._phone_hits: deque[bool] = deque(maxlen=PHONE_WINDOW)
@@ -330,7 +313,6 @@ class FocusTracker:
         self._day_done_fired = False
         self._streak_start: float | None = None
         self._block_active = False
-        self._block_started_at: float | None = None
         self._current_app: str | None = None
         self._last_sample_at = started_at
         self._last_check: CheckSummary | None = None
@@ -372,7 +354,6 @@ class FocusTracker:
         changed = active != self._block_active
         if changed:
             self._block_active = active
-            self._block_started_at = now if active else None
             self._break_over_fired = False
             self._write({"event": "block", "action": "start" if active else "stop", "source": source}, now)
         return changed
@@ -410,8 +391,6 @@ class FocusTracker:
             next_state = self._state_without_frame(now)
         else:
             self._last_frame_at = now
-            if self._first_frame_at is None:
-                self._first_frame_at = now
             check = summarize_reading(reading, now)
             self._last_check = check
             self._note_person(check, now)
@@ -428,7 +407,7 @@ class FocusTracker:
         if not is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR):
             # The window runs 22:00-05:00 across midnight, so re-arm by daylight, not at the day rollover.
             self._day_done_fired = False
-        update = FocusUpdate(state=self._state, changed=changed, previous_state=previous if changed else None, callouts=callouts)
+        update = FocusUpdate(state=self._state, callouts=callouts)
         return update
 
     def _state_without_frame(self, now: float) -> str:
@@ -628,19 +607,15 @@ class FocusTracker:
         return totals
 
     def _status_locked(self, now: float) -> dict:
-        streak = None if self._streak_start is None else round(now - self._streak_start, 1)
         frame_age = None if self._last_frame_at is None else round(now - self._last_frame_at, 1)
         status = {
             "state": self._state,
             "since": round(self._state_since, 3),
             "seconds_in_state": round(max(0.0, now - self._state_since), 1),
-            "streak_seconds": streak,
             "today": self._totals_dict(),
-            "block": {"active": self._block_active, "started_at": self._block_started_at},
-            "snacking": self._snacking,
+            "block": {"active": self._block_active},
             "app": self._current_app,
             "camera_ok": frame_age is not None and frame_age < NO_FRAME_UNKNOWN_S,
-            "frame_age_s": frame_age,
             "last_check": None if self._last_check is None else asdict(self._last_check),
         }
         return status
@@ -657,7 +632,6 @@ class FocusTracker:
         self._state_since = now
         self._last_update_at = now
         self._block_active = replay.block_active
-        self._block_started_at = replay.block_started_at
         self._day_done_fired = replay.day_done
         if replay.events:
             self._write({"event": "restart", "restored_events": replay.events}, now)

@@ -109,7 +109,6 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
-    status["gesture"] = None if worker is None or worker.gestures.progress is None else asdict(worker.gestures.progress)
     include_png = sign_controller is not None and (sign_since_version is None or version != sign_since_version)
     png = sign_preview.latest_png() if include_png else None
     if png is not None:

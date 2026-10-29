@@ -175,7 +175,6 @@ def test_hands_down_means_no_gesture():
     for second in range(1, 5):
         worker.run_once(NOON + second)
     assert fired == []
-    assert worker.gestures.progress is None
 
 
 def test_a_frozen_camera_stops_counting_after_thirty_seconds():
