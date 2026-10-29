@@ -15,7 +15,7 @@ on the same frames and 0.00 on every frame of real work.
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -31,7 +31,12 @@ PAD_VALUE = 114
 
 PERSON_CLASS_ID = 0
 PHONE_CLASS_ID = 67
-LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone"}
+# COCO ids the zoomed pass also keeps, so snacks and drinks come for free.
+FOOD_CLASS_IDS = {45: "bowl", 46: "banana", 47: "apple", 48: "sandwich", 49: "orange", 52: "hot dog", 53: "pizza", 54: "donut", 55: "cake"}
+DRINK_CLASS_IDS = {39: "bottle", 40: "wine glass", 41: "cup"}
+LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone", **FOOD_CLASS_IDS, **DRINK_CLASS_IDS}
+FOOD_LABELS = set(FOOD_CLASS_IDS.values())
+DRINK_LABELS = set(DRINK_CLASS_IDS.values())
 BOX_VALUES = 4
 
 MIN_CONFIDENCE = 0.15
@@ -84,6 +89,17 @@ class FrameReading:
     phones: list[Detection]
     faces: list[FaceReading]
     elapsed_ms: float
+    food: list[Detection] = field(default_factory=list)
+    drinks: list[Detection] = field(default_factory=list)
+
+
+@dataclass
+class ZoomedFinds:
+    """What the zoomed pass around the person turned up."""
+
+    phones: list[Detection] = field(default_factory=list)
+    food: list[Detection] = field(default_factory=list)
+    drinks: list[Detection] = field(default_factory=list)
 
 
 @dataclass
@@ -262,10 +278,27 @@ class FaceDetector:
         return faces
 
 
-class DeskScanner:
-    """Full-frame pass for people, zoomed pass for phones, plus faces.
+def sort_zoomed_finds(found: list[Detection], region: Box) -> ZoomedFinds:
+    finds = ZoomedFinds()
+    for detection in found:
+        placed = Detection(
+            label=detection.label,
+            confidence=detection.confidence,
+            box=shift_box(detection.box, region.x1, region.y1),
+        )
+        if detection.label == "phone":
+            finds.phones.append(placed)
+        elif detection.label in FOOD_LABELS:
+            finds.food.append(placed)
+        elif detection.label in DRINK_LABELS:
+            finds.drinks.append(placed)
+    return finds
 
-    Phones only come from the zoomed pass, so no person means no phone check.
+
+class DeskScanner:
+    """Full-frame pass for people, zoomed pass for phones, food and drinks, plus faces.
+
+    Phones, food and drinks only come from the zoomed pass, so no person means no zoomed pass.
     """
 
     def __init__(
@@ -276,27 +309,30 @@ class DeskScanner:
         self._objects = object_detector or ObjectDetector()
         self._faces = face_detector or FaceDetector()
 
-    def find_phones(self, image: np.ndarray, people: list[Detection]) -> list[Detection]:
-        phones = []
+    def find_people(self, image: np.ndarray) -> list[Detection]:
+        people = [detection for detection in self._objects.detect(image) if detection.label == "person"]
+        return people
+
+    def scan_zoomed(self, image: np.ndarray, people: list[Detection]) -> ZoomedFinds:
+        finds = ZoomedFinds()
         main_person = max(people, key=lambda person: person.confidence, default=None)
         if main_person is not None and main_person.confidence >= ZOOM_PERSON_MIN:
             frame_height, frame_width = image.shape[:2]
             region = find_zoom_region(main_person.box, frame_width, frame_height)
             crop = image[int(region.y1):int(region.y2), int(region.x1):int(region.x2)]
-            phones = [
-                Detection(label=found.label, confidence=found.confidence, box=shift_box(found.box, region.x1, region.y1))
-                for found in self._objects.detect(crop)
-                if found.label == "phone"
-            ]
-        return phones
+            finds = sort_zoomed_finds(self._objects.detect(crop), region)
+        return finds
 
     def scan(self, image: np.ndarray) -> FrameReading:
         started = time.perf_counter()
-        people = [detection for detection in self._objects.detect(image) if detection.label == "person"]
+        people = self.find_people(image)
+        finds = self.scan_zoomed(image, people)
         reading = FrameReading(
             people=people,
-            phones=self.find_phones(image, people),
+            phones=finds.phones,
             faces=self._faces.detect(image),
             elapsed_ms=(time.perf_counter() - started) * 1000,
+            food=finds.food,
+            drinks=finds.drinks,
         )
         return reading

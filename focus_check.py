@@ -92,7 +92,13 @@ def describe_reading(reading: FrameReading) -> str:
         face = max(reading.faces, key=lambda found: found.confidence)
         face_text = f"face turn {face.turn:+.2f} tilt {face.tilt:.2f}"
 
-    line = f"person {person:<9} | phone {phone:<4} | {face_text:<25} | {reading.elapsed_ms:4.0f} ms"
+    snack_text = ""
+    snacks = reading.food + reading.drinks
+    if snacks:
+        best_snack = max(snacks, key=lambda found: found.confidence)
+        snack_text = f" | {best_snack.label} {best_snack.confidence:.2f}"
+
+    line = f"person {person:<9} | phone {phone:<4} | {face_text:<25} | {reading.elapsed_ms:4.0f} ms{snack_text}"
     return line
 
 
