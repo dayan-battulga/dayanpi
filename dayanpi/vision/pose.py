@@ -141,14 +141,9 @@ class PoseDeskScanner(DeskScanner):
     The zoomed pass (phones, food, drinks) and the face pass are unchanged.
     """
 
-    def __init__(
-        self,
-        pose_detector: PoseDetector | None = None,
-        object_detector=None,
-        face_detector=None,
-    ) -> None:
-        super().__init__(object_detector, face_detector)
-        self._poses = pose_detector or PoseDetector()
+    def __init__(self) -> None:
+        super().__init__()
+        self._poses = PoseDetector()
         self._last_poses: list[PoseDetection] = []
 
     def find_people(self, image: np.ndarray) -> list[Detection]:

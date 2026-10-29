@@ -51,14 +51,9 @@ DAY_FORMAT = "%Y-%m-%d"
 DATA_DIR_ENV = "DAYANPI_DATA_DIR"
 
 
-def find_data_dir() -> Path:
-    """Where the app keeps what it writes: DAYANPI_DATA_DIR, or data/ at the repo root."""
-    data_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR)
-    return data_dir
-
-
 def find_focus_log_dir() -> Path:
-    log_dir = find_data_dir() / "focus_log"
+    """focus_log/ inside DAYANPI_DATA_DIR, or inside data/ at the repo root."""
+    log_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR) / "focus_log"
     return log_dir
 
 
@@ -472,7 +467,7 @@ class FocusTracker:
 
         self._state = next_state
         self._state_since = now
-        self._close_segment(now)
+        close_open_segment(self._segments, now)
         self._segments.append(Segment(state=next_state, start=now))
         self._trim_segments()
         self._write({"event": "state", "state": next_state, "prev": previous, "seconds_in_prev": round(seconds_in_previous, 1)}, now)
@@ -560,15 +555,11 @@ class FocusTracker:
             self._write({"event": "day_summary", **self._totals_dict()}, now, day=self._totals.day)
             self._totals = DayTotals(day=today)
             self._snack_times = []
-            self._close_segment(now)
+            close_open_segment(self._segments, now)
             self._segments = [Segment(state=self._state, start=now)]
             if self._state == "working":
                 self._streak_start = now
             self._write({"event": "day_start", "state": self._state}, now)
-
-    def _close_segment(self, now: float) -> None:
-        if self._segments and self._segments[-1].end is None:
-            self._segments[-1].end = now
 
     def _trim_segments(self) -> None:
         if len(self._segments) > MAX_SEGMENTS:

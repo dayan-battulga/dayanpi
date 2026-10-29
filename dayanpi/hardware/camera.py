@@ -42,16 +42,8 @@ logger = logging.getLogger(__name__)
 class CameraStream:
     """One opener of /dev/video0; readers take copies of the latest JPEG."""
 
-    def __init__(
-        self,
-        device: str = DEVICE_PATH,
-        width: int = FRAME_WIDTH,
-        height: int = FRAME_HEIGHT,
-        frame_skip: int = FRAME_SKIP,
-    ) -> None:
+    def __init__(self, device: str = DEVICE_PATH, frame_skip: int = FRAME_SKIP) -> None:
         self._device = device
-        self._width = width
-        self._height = height
         self._frame_skip = max(1, frame_skip)
 
         self._capture: cv2.VideoCapture | None = None
@@ -70,8 +62,8 @@ class CameraStream:
         # Order matters: format before resolution.
         capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         capture.set(cv2.CAP_PROP_CONVERT_RGB, 0)
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return capture
 
@@ -100,16 +92,9 @@ class CameraStream:
             ok, frame = self._capture.read()
             if not ok or frame is None:
                 consecutive_failures += 1
-                if consecutive_failures == FAILURE_LOG_THRESHOLD:
+                if consecutive_failures % FAILURE_LOG_THRESHOLD == 0:
                     logger.warning(
                         "camera read failing (%s consecutive); reconnecting",
-                        consecutive_failures,
-                    )
-                elif consecutive_failures > FAILURE_LOG_THRESHOLD and (
-                    consecutive_failures % FAILURE_LOG_THRESHOLD == 0
-                ):
-                    logger.warning(
-                        "camera still failing (%s consecutive)",
                         consecutive_failures,
                     )
                 self._reconnect()
@@ -242,17 +227,17 @@ class PiCameraCapture:
     passthrough gives, so /video and the detector don't change.
     """
 
-    def __init__(self, camera_index: int, width: int, height: int, fps: float) -> None:
+    def __init__(self) -> None:
         from picamera2 import Picamera2
 
         pi_cameras = list_pi_cameras(Picamera2)
-        if camera_index >= len(pi_cameras):
-            raise OSError(f"no Pi camera #{camera_index} (libcamera sees {len(pi_cameras)})")
+        if PICAMERA_INDEX >= len(pi_cameras):
+            raise OSError(f"no Pi camera #{PICAMERA_INDEX} (libcamera sees {len(pi_cameras)})")
 
-        self._camera = Picamera2(pi_cameras[camera_index].position)
+        self._camera = Picamera2(pi_cameras[PICAMERA_INDEX].position)
         self._read_failures = 0
         try:
-            self._camera.configure(self._create_configuration(width, height, fps))
+            self._camera.configure(self._create_configuration())
             self._camera.start()
             self._turn_on_autofocus()
         except Exception:
@@ -260,14 +245,14 @@ class PiCameraCapture:
             self._camera.close()
             raise
 
-    def _create_configuration(self, width: int, height: int, fps: float) -> dict:
-        frame_duration_us = round(1_000_000 / fps)
+    def _create_configuration(self) -> dict:
+        frame_duration_us = round(1_000_000 / PICAMERA_FPS)
         full_view_mode = pick_full_view_mode(self._camera.sensor_modes) if PICAMERA_FULL_VIEW else None
         sensor = {}
         if full_view_mode is not None:
             sensor = {"output_size": full_view_mode["size"], "bit_depth": full_view_mode["bit_depth"]}
         configuration = self._camera.create_video_configuration(
-            main={"size": (width, height), "format": PICAMERA_FORMAT},
+            main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": PICAMERA_FORMAT},
             sensor=sensor,
             controls={"FrameDurationLimits": (frame_duration_us, frame_duration_us)},
         )
@@ -311,21 +296,13 @@ class PiCameraStream(CameraStream):
     the frame readers all come from CameraStream.
     """
 
-    def __init__(
-        self,
-        camera_index: int = PICAMERA_INDEX,
-        width: int = FRAME_WIDTH,
-        height: int = FRAME_HEIGHT,
-        fps: float = PICAMERA_FPS,
-    ) -> None:
-        # frame_skip=1: the camera itself is slowed down to fps, so skipping frames would halve it again.
-        super().__init__(f"Pi camera {camera_index}", width, height, frame_skip=1)
-        self._camera_index = camera_index
-        self._fps = fps
+    def __init__(self) -> None:
+        # frame_skip=1: the camera itself is slowed down to PICAMERA_FPS, so skipping frames would halve it again.
+        super().__init__(f"Pi camera {PICAMERA_INDEX}", frame_skip=1)
 
     def _open_capture(self) -> PiCameraCapture:
         try:
-            capture = PiCameraCapture(self._camera_index, self._width, self._height, self._fps)
+            capture = PiCameraCapture()
         except Exception as error:
             # CameraStream only retries on OSError, and picamera2 fails with ImportError, RuntimeError and more.
             raise OSError(f"can't open {self._device}: {type(error).__name__}: {error}") from error

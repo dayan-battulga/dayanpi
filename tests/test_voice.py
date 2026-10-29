@@ -158,7 +158,6 @@ def test_espeak_job_pipes_a_wav_into_aplay(device, player_command):
     assert job.synth_command == ["espeak-ng", "--stdout", "-v", "en-us", "-s", "165", "--stdin"]
     assert job.player_command == player_command
     assert job.text_input == b"Phone down.\n"
-    assert job.timeout_s == voice.STEP_TIMEOUT_S
 
 
 @pytest.mark.parametrize(("device", "device_args"), [(None, []), (DEVICE, ["-D", DEVICE])])
@@ -352,7 +351,7 @@ def test_runner_feeds_stdin_through_and_never_uses_a_shell():
     assert run.calls[1].options["input"] == b"RIFF fake wav"
     for call in run.calls:
         assert "shell" not in call.options
-        assert call.options["timeout"] == job.timeout_s
+        assert call.options["timeout"] == voice.STEP_TIMEOUT_S
         assert call.options["capture_output"] is True
 
 

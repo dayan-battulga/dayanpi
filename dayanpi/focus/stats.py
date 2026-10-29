@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
+from dayanpi.focus.tracker import DAY_FORMAT, DayReplay, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
 from dayanpi.sign.renderer import format_duration
 
 HOURS = 24
@@ -49,10 +49,10 @@ def add_segment_hours(totals: HourTotals, segment: Segment) -> None:
         cursor = piece_end
 
 
-def sum_hour_totals(log: FocusLog, days: list[str]) -> HourTotals:
+def sum_hour_totals(replays: list[DayReplay]) -> HourTotals:
     totals = HourTotals()
-    for day in days:
-        for segment in replay_day(log.read_day(day), day).segments:
+    for replay in replays:
+        for segment in replay.segments:
             add_segment_hours(totals, segment)
     return totals
 
@@ -80,17 +80,12 @@ def format_hour_table(totals: HourTotals) -> str:
 
 
 def build_report(log: FocusLog, days: list[str]) -> str:
-    lines = []
-    seen_any = False
-    for day in days:
-        replay = replay_day(log.read_day(day), day)
-        if replay.events:
-            seen_any = True
-            lines.append(format_day_line(total_day(replay)))
-    if not seen_any:
+    replays = [replay_day(log.read_day(day), day) for day in days]
+    lines = [format_day_line(total_day(replay)) for replay in replays if replay.events]
+    if not lines:
         lines.append(f"No focus log lines for {days[0]}..{days[-1]} in {log.directory}")
     elif len(days) > 1:
-        lines.append(format_hour_table(sum_hour_totals(log, days)))
+        lines.append(format_hour_table(sum_hour_totals(replays)))
     report = "\n".join(lines)
     return report
 

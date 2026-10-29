@@ -70,7 +70,6 @@ class SpeechJob:
     synth_command: list[str]
     player_command: list[str]
     text_input: bytes
-    timeout_s: float
 
 
 def read_settings(environ: Mapping[str, str] = os.environ) -> VoiceSettings:
@@ -129,7 +128,6 @@ def build_espeak_job(text: str, device: str | None) -> SpeechJob:
         synth_command=[ESPEAK_PROGRAM, "--stdout", "-v", ESPEAK_VOICE, "-s", str(ESPEAK_WORDS_PER_MINUTE), "--stdin"],
         player_command=build_player_command(device),
         text_input=encode_text(text),
-        timeout_s=STEP_TIMEOUT_S,
     )
     return job
 
@@ -142,7 +140,6 @@ def build_piper_job(text: str, model: Path, sample_rate: int, device: str | None
         synth_command=[sys.executable, "-m", "piper", "--model", str(model), "--output-raw"],
         player_command=build_player_command(device, raw_sample_rate=sample_rate),
         text_input=encode_text(text),
-        timeout_s=STEP_TIMEOUT_S,
     )
     return job
 
@@ -221,8 +218,8 @@ def run_speech_job(job: SpeechJob, run: Callable[..., subprocess.CompletedProces
     process to kill, and the timeout kills it. A phrase is a second or two of audio,
     so waiting for the whole clip costs next to nothing.
     """
-    audio = run_step(job.synth_name, job.synth_command, job.text_input, job.timeout_s, run)
-    run_step(PLAYER_PROGRAM, job.player_command, audio, job.timeout_s, run)
+    audio = run_step(job.synth_name, job.synth_command, job.text_input, STEP_TIMEOUT_S, run)
+    run_step(PLAYER_PROGRAM, job.player_command, audio, STEP_TIMEOUT_S, run)
 
 
 def discard_queued(phrases: queue.Queue) -> None:
@@ -259,17 +256,15 @@ class VoiceAnnouncer:
         )
         self._lock = threading.Lock()
         self._phrases: queue.Queue[str | None] | None = None
-        self._stop_event: threading.Event | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         with self._lock:
             if self.enabled and self._thread is None:
                 self._phrases = queue.Queue(maxsize=QUEUE_SIZE)
-                self._stop_event = threading.Event()
                 self._thread = threading.Thread(
                     target=self._speak_queued,
-                    args=(self._phrases, self._stop_event),
+                    args=(self._phrases,),
                     name="voice",
                     daemon=True,
                 )
@@ -285,13 +280,11 @@ class VoiceAnnouncer:
         with self._lock:
             thread = self._thread
             if thread is not None:
-                self._stop_event.set()
                 discard_queued(self._phrases)
-                # The worker may be waiting on an empty queue; without this it never wakes up to see the stop.
+                # None tells the worker to finish, and wakes it if it's waiting on an empty queue.
                 self._phrases.put_nowait(None)
                 self._thread = None
                 self._phrases = None
-                self._stop_event = None
         if thread is not None:
             thread.join(timeout=STOP_JOIN_TIMEOUT_S)
 
@@ -322,11 +315,9 @@ class VoiceAnnouncer:
                     logger.info("voice is busy, dropped %r", phrase)
         return queued
 
-    def _speak_queued(self, phrases: queue.Queue, stop_event: threading.Event) -> None:
-        while not stop_event.is_set():
-            phrase = phrases.get()
-            if phrase is not None and not stop_event.is_set():
-                self._speak(phrase)
+    def _speak_queued(self, phrases: queue.Queue) -> None:
+        while (phrase := phrases.get()) is not None:
+            self._speak(phrase)
 
     def _speak(self, phrase: str) -> None:
         try:
