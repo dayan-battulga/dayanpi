@@ -1,6 +1,6 @@
 """Turns arm positions from the pose model into gestures for the LED sign.
 
-They're holds, not swipes: the detector only manages about 1-3 checks a second, which is
+They're holds, not swipes: the detector only checks about once a second, which is
 too slow to catch a swipe.
 
 - next_page: right wrist up, left hand down, held 1 s.

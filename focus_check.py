@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 from camera import CameraStream, create_stream
-from detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg
+from detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg, find_best_confidence
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "focus_check"
 FRAMES_FOLDER = "frames"
@@ -71,21 +71,16 @@ PHASES = [
 ]
 
 
-def best_confidence(detections: list[Detection]) -> float:
-    best = max((detection.confidence for detection in detections), default=0.0)
-    return best
-
-
 def format_optional(value: float | None, pattern: str) -> str:
     text = "-" if value is None else format(value, pattern)
     return text
 
 
 def describe_reading(reading: FrameReading) -> str:
-    person = format_optional(best_confidence(reading.people) or None, ".2f")
+    person = format_optional(find_best_confidence(reading.people) or None, ".2f")
     if len(reading.people) > 1:
         person += f" (x{len(reading.people)})"
-    phone = format_optional(best_confidence(reading.phones) or None, ".2f")
+    phone = format_optional(find_best_confidence(reading.phones) or None, ".2f")
 
     face_text = "no face"
     if reading.faces:
@@ -110,10 +105,10 @@ def summarize_phase(name: str, readings: list[FrameReading]) -> PhaseSummary:
     summary = PhaseSummary(
         name=name,
         frames=frames,
-        person_share=sum(best_confidence(r.people) >= PERSON_SEEN for r in readings) / share_base,
-        phone_share=sum(best_confidence(r.phones) >= PHONE_SEEN for r in readings) / share_base,
+        person_share=sum(find_best_confidence(r.people) >= PERSON_SEEN for r in readings) / share_base,
+        phone_share=sum(find_best_confidence(r.phones) >= PHONE_SEEN for r in readings) / share_base,
         face_share=len(best_faces) / share_base,
-        best_phone=max((best_confidence(r.phones) for r in readings), default=0.0),
+        best_phone=max((find_best_confidence(r.phones) for r in readings), default=0.0),
         median_turn=statistics.median(face.turn for face in best_faces) if best_faces else None,
         median_tilt=statistics.median(face.tilt for face in best_faces) if best_faces else None,
         average_ms=statistics.fmean(r.elapsed_ms for r in readings) if readings else 0.0,

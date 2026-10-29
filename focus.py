@@ -10,13 +10,14 @@ clocks. Local-time rules (late night, day done, day rollover) use the Pi's time 
 
 import json
 import logging
+import os
 import threading
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from detector import Detection, FrameReading
+from detector import FrameReading, find_best_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +43,24 @@ DAY_DONE_START_HOUR = 22
 DAY_DONE_END_HOUR = 5
 BREAK_OVER_S = 15 * 60
 SAMPLE_LOG_INTERVAL_S = 30.0
+MAX_STEP_S = 5.0  # checks run every second; a bigger gap is a stall or a clock jump, not time at the desk
 MAX_SEGMENTS = 2000
 
 STATES = ("working", "phone", "away", "unknown")
 DAY_FORMAT = "%Y-%m-%d"
+DATA_DIR_ENV = "DAYANPI_DATA_DIR"
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+def find_data_dir() -> Path:
+    """Where the app keeps what it writes: DAYANPI_DATA_DIR, or data/ next to the code."""
+    data_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR)
+    return data_dir
+
+
+def find_focus_log_dir() -> Path:
+    log_dir = find_data_dir() / "focus_log"
+    return log_dir
 
 
 @dataclass
@@ -113,18 +128,29 @@ class DayReplay:
     events: int = 0
 
 
+def close_open_segment(segments: list[Segment], end: float | None) -> None:
+    if segments and segments[-1].end is None:
+        segments[-1].end = end if end is not None else segments[-1].start
+
+
 def replay_day(events: list[dict], day: str) -> DayReplay:
-    """Rebuilds a day from its log lines. The open segment closes at the last line of any kind."""
+    """Rebuilds a day from its log lines.
+
+    A "state" or "day_start" line opens a segment. A "restart" line means the service
+    was down: the open segment closes at the last line before it (a sample at most 30 s
+    old), not at the next state change, so an outage never counts as focus time. The
+    last open segment closes at the last line of any kind.
+    """
     replay = DayReplay(day=day)
     todays = sorted((event for event in events if event.get("day") == day and "ts" in event), key=lambda event: event["ts"])
     for event in todays:
         kind = event.get("event")
-        replay.last_ts = event["ts"]
-        replay.events += 1
-        if kind == "state":
-            if replay.segments:
-                replay.segments[-1].end = event["ts"]
+        if kind in ("state", "day_start"):
+            close_open_segment(replay.segments, event["ts"])
             replay.segments.append(Segment(state=event.get("state", "unknown"), start=event["ts"]))
+        elif kind == "restart":
+            close_open_segment(replay.segments, replay.last_ts)
+            replay.segments.append(Segment(state="unknown", start=event["ts"]))
         elif kind == "pickup":
             replay.pickups += 1
         elif kind == "snack":
@@ -134,8 +160,9 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
             replay.block_started_at = event["ts"] if replay.block_active else None
         elif kind == "callout" and event.get("name") == "day_done":
             replay.day_done = True
-    if replay.segments and replay.segments[-1].end is None:
-        replay.segments[-1].end = replay.last_ts
+        replay.last_ts = event["ts"]
+        replay.events += 1
+    close_open_segment(replay.segments, replay.last_ts)
     return replay
 
 
@@ -155,19 +182,19 @@ def total_day(replay: DayReplay) -> DayTotals:
     return totals
 
 
-def day_key(now: float) -> str:
+def format_day(now: float) -> str:
     key = datetime.fromtimestamp(now).strftime(DAY_FORMAT)
     return key
 
 
-def local_hour(now: float) -> int:
+def read_local_hour(now: float) -> int:
     hour = datetime.fromtimestamp(now).hour
     return hour
 
 
 def is_in_night_window(now: float, start_hour: int, end_hour: int) -> bool:
     """True between start_hour and end_hour, where the window crosses midnight when start > end."""
-    hour = local_hour(now)
+    hour = read_local_hour(now)
     if start_hour <= end_hour:
         inside = start_hour <= hour < end_hour
     else:
@@ -175,18 +202,13 @@ def is_in_night_window(now: float, start_hour: int, end_hour: int) -> bool:
     return inside
 
 
-def best_confidence(detections: list[Detection]) -> float:
-    best = max((detection.confidence for detection in detections), default=0.0)
-    return best
-
-
 def summarize_reading(reading: FrameReading, now: float) -> CheckSummary:
     summary = CheckSummary(
         at=now,
-        person=best_confidence(reading.people),
-        phone=best_confidence(reading.phones),
-        food=best_confidence(reading.food),
-        drink=best_confidence(reading.drinks),
+        person=find_best_confidence(reading.people),
+        phone=find_best_confidence(reading.phones),
+        food=find_best_confidence(reading.food),
+        drink=find_best_confidence(reading.drinks),
         elapsed_ms=reading.elapsed_ms,
     )
     if reading.faces:
@@ -233,7 +255,7 @@ class FocusLog:
 
     def write(self, event: dict) -> None:
         line = json.dumps(event, separators=(",", ":"))
-        day = event.get("day") or day_key(event.get("ts", 0.0))
+        day = event.get("day") or format_day(event.get("ts", 0.0))
         with self._lock:
             try:
                 self._directory.mkdir(parents=True, exist_ok=True)
@@ -259,17 +281,24 @@ class FocusLog:
 
     def _read_file(self, path: Path) -> list[dict]:
         events = []
+        skipped = 0
         with self._lock:
             try:
                 with path.open("r", encoding="utf-8") as handle:
                     for line in handle:
                         stripped = line.strip()
                         if stripped:
-                            events.append(json.loads(stripped))
+                            try:
+                                events.append(json.loads(stripped))
+                            except ValueError:
+                                # A power cut mid-write leaves a torn line; the rest of the day is still good.
+                                skipped += 1
             except FileNotFoundError:
                 pass
-            except (OSError, ValueError):
+            except OSError:
                 logger.exception("focus log read failed: %s", path)
+        if skipped:
+            logger.warning("skipped %s unreadable line(s) in %s", skipped, path)
         return events
 
 
@@ -302,7 +331,7 @@ class FocusTracker:
         self._current_app: str | None = None
         self._last_sample_at = started_at
         self._last_check: CheckSummary | None = None
-        self._totals = DayTotals(day=day_key(started_at))
+        self._totals = DayTotals(day=format_day(started_at))
         self._segments: list[Segment] = [Segment(state="unknown", start=started_at)]
 
     # ----- public API -----
@@ -326,12 +355,23 @@ class FocusTracker:
 
     def set_block(self, active: bool, now: float, source: str = "api") -> bool:
         with self._lock:
-            changed = active != self._block_active
-            if changed:
-                self._block_active = active
-                self._block_started_at = now if active else None
-                self._break_over_fired = False
-                self._write({"event": "block", "action": "start" if active else "stop", "source": source}, now)
+            changed = self._set_block_locked(active, now, source)
+        return changed
+
+    def toggle_block(self, now: float, source: str = "api") -> bool:
+        """Flips the block under the lock, so a gesture and the button at the same moment can't cancel out. Returns the new state."""
+        with self._lock:
+            active = not self._block_active
+            self._set_block_locked(active, now, source)
+        return active
+
+    def _set_block_locked(self, active: bool, now: float, source: str) -> bool:
+        changed = active != self._block_active
+        if changed:
+            self._block_active = active
+            self._block_started_at = now if active else None
+            self._break_over_fired = False
+            self._write({"event": "block", "action": "start" if active else "stop", "source": source}, now)
         return changed
 
     def status(self, now: float) -> dict:
@@ -377,6 +417,9 @@ class FocusTracker:
         if changed:
             callouts.extend(self._transition(previous, next_state, now))
         callouts.extend(self._track_break(now))
+        if not is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR):
+            # The window runs 22:00-05:00 across midnight, so re-arm by daylight, not at the day rollover.
+            self._day_done_fired = False
         update = FocusUpdate(state=self._state, changed=changed, previous_state=previous if changed else None, callouts=callouts)
         return update
 
@@ -457,7 +500,7 @@ class FocusTracker:
             callouts.append(Callout("instant_pickup", f"Sat down {since_return} ago and already on the phone."))
         if is_in_night_window(now, LATE_NIGHT_START_HOUR, LATE_NIGHT_END_HOUR) and not self._late_night_fired:
             self._late_night_fired = True
-            callouts.append(Callout("late_night_phone", f"It's {local_hour(now)} in the morning. Put the phone down and go to sleep."))
+            callouts.append(Callout("late_night_phone", f"It's {read_local_hour(now)} in the morning. Put the phone down and go to sleep."))
         return callouts
 
     def _callouts_on_return(self, now: float) -> list[Callout]:
@@ -511,7 +554,7 @@ class FocusTracker:
     # ----- totals, segments, day rollover -----
 
     def _accumulate(self, now: float) -> None:
-        elapsed = max(0.0, now - self._last_update_at)
+        elapsed = min(max(0.0, now - self._last_update_at), MAX_STEP_S)
         self._last_update_at = now
         if self._state == "working":
             self._totals.working_seconds += elapsed
@@ -523,12 +566,11 @@ class FocusTracker:
             self._totals.away_seconds += elapsed
 
     def _roll_day_if_needed(self, now: float) -> None:
-        today = day_key(now)
+        today = format_day(now)
         if today != self._totals.day:
             self._accumulate(now)
             self._write({"event": "day_summary", **self._totals_dict()}, now, day=self._totals.day)
             self._totals = DayTotals(day=today)
-            self._day_done_fired = False
             self._close_segment(now)
             self._segments = [Segment(state=self._state, start=now)]
             if self._state == "working":
@@ -564,7 +606,7 @@ class FocusTracker:
 
     def _write(self, event: dict, now: float, day: str | None = None) -> None:
         if self._log is not None:
-            stamped = {"ts": round(now, 3), "day": day or day_key(now), **event}
+            stamped = {"ts": round(now, 3), "day": day or format_day(now), **event}
             self._log.write(stamped)
 
     # ----- status -----
@@ -596,7 +638,7 @@ class FocusTracker:
     # ----- restore after a restart -----
 
     def _restore_locked(self, events: list[dict], now: float) -> int:
-        replay = replay_day(events, day_key(now))
+        replay = replay_day(events, format_day(now))
         self._totals = total_day(replay)
         self._segments = replay.segments + [Segment(state="unknown", start=now)]
         self._trim_segments()

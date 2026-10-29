@@ -337,3 +337,72 @@ def test_timestamps_are_rounded_in_log_without_breaking_restore(tmp_path):
     tracker.update(make_reading(), NOON + 1.23456)
     tracker.update(make_reading(), NOON + 2.34567)
     assert log.read_all()[0]["ts"] == round(NOON + 2.34567, 3)
+
+
+def test_restart_after_midnight_keeps_the_new_day(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(start=datetime(2026, 10, 29, 23, 50).timestamp(), log=log)
+    desk.work(40 * 60)
+    restarted = FocusTracker(log=log, started_at=desk.now + 5)
+    restarted.restore(log.read_day("2026-10-30"), desk.now + 5)
+    working = restarted.status(desk.now + 5)["today"]["working_seconds"]
+    # Midnight to about 00:30, minus the sample gap at the end.
+    assert 29 * 60 <= working <= 31 * 60
+
+
+def test_an_outage_never_counts_as_focus_time(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(start=datetime(2026, 10, 29, 18, 0).timestamp(), log=log)
+    desk.work(5 * 60)
+    # The Pi dies at 18:05 and comes back at 21:05.
+    back = desk.now + 3 * 3600
+    second = FocusTracker(log=log, started_at=back)
+    second.restore(log.read_day("2026-10-29"), back)
+    for second_tick in range(1, 61):
+        second.update(make_reading(), back + second_tick)
+    # A third start replays the restart line and must not bridge 18:05 to 21:06.
+    third = FocusTracker(log=log, started_at=back + 120)
+    third.restore(log.read_day("2026-10-29"), back + 120)
+    working = third.status(back + 120)["today"]["working_seconds"]
+    assert working < 7 * 60
+
+
+def test_a_torn_log_line_is_skipped_not_fatal(tmp_path, caplog):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(log=log)
+    desk.work(3)
+    desk.phone(3)
+    path = log.day_path("2026-10-29")
+    lines = path.read_text().splitlines()
+    lines.insert(1, '{"ts": 1, "day": "2026-10-29", "event": "sta')
+    path.write_text("\n".join(lines) + "\n")
+    events = log.read_day("2026-10-29")
+    assert [event["event"] for event in events] == ["state", "pickup", "state"]
+    assert "skipped 1 unreadable line" in caplog.text
+
+
+def test_a_clock_jump_adds_at_most_a_few_seconds():
+    desk = settled_desk()
+    desk.now += 3600  # NTP steps the clock forward an hour between two checks
+    desk.work(1)
+    assert desk.tracker.status(desk.now)["today"]["working_seconds"] <= 1 + focus.MAX_STEP_S + 1
+
+
+def test_day_done_fires_once_per_night_even_across_midnight():
+    desk = Desk(start=datetime(2026, 10, 29, 23, 30).timestamp())
+    desk.work(60)
+    desk.leave(10)
+    desk.work(40 * 60)  # back at the desk past midnight
+    desk.leave(10)
+    assert desk.names() == ["day_done"]
+    desk.work(22 * 3600)  # the next evening, past 10 pm again
+    desk.leave(10)
+    assert desk.names() == ["day_done", "day_done"]
+
+
+def test_toggle_block_flips_under_the_lock(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    tracker = FocusTracker(log=log, started_at=NOON)
+    assert tracker.toggle_block(NOON, source="gesture") is True
+    assert tracker.toggle_block(NOON + 1, source="api") is False
+    assert [event["action"] for event in log.read_all() if event["event"] == "block"] == ["start", "stop"]

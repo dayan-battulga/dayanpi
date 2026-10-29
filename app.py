@@ -18,13 +18,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from dataclasses import asdict
 from typing import Literal
 
 import collector
 import focus_worker
 from camera import create_stream
 from drivetrain import CommandTimer, DriveTrain
-from focus import FocusLog, FocusTracker, FocusUpdate, day_key
+from focus import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
 from focus_worker import FocusWorker
 from sign import PanelOutput, PreviewOutput
 from sign_controller import SignController
@@ -36,8 +37,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = Path(os.environ.get("DAYANPI_DATA_DIR", str(BASE_DIR / "data")))
-FOCUS_LOG_DIR = DATA_DIR / "focus_log"
+FOCUS_LOG_DIR = find_focus_log_dir()
 
 FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
@@ -96,13 +96,22 @@ def _authorized(request: Request) -> bool:
     return user_ok and pass_ok
 
 
-def focus_status() -> dict:
+def build_focus_status(sign_since_version: int | None = None) -> dict:
+    """The focus status for the API and the stats stream.
+
+    The sign preview PNG (about 8 KB) rides along only when the picture changed since
+    sign_since_version; None means always include it.
+    """
     status = tracker.status(time.time())
-    status["enabled"] = worker is not None
+    status["enabled"] = worker is not None and worker.running
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
-    status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page}
-    png = sign_preview.latest_png() if sign_controller is not None else None
-    status["sign_png"] = None if png is None else base64.b64encode(png).decode("ascii")
+    version = sign_preview.version if sign_controller is not None else None
+    status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
+    status["gesture"] = None if worker is None or worker.gestures.progress is None else asdict(worker.gestures.progress)
+    include_png = sign_controller is not None and (sign_since_version is None or version != sign_since_version)
+    png = sign_preview.latest_png() if include_png else None
+    if png is not None:
+        status["sign_png"] = base64.b64encode(png).decode("ascii")
     return status
 
 
@@ -136,9 +145,8 @@ def handle_gesture(name: str, now: float) -> None:
     """Runs on the worker thread when a held gesture fires."""
     tracker.record_gesture(name, now)
     if name == "toggle_block":
-        active = tracker.status(now)["block"]["active"]
-        tracker.set_block(not active, now, source="gesture")
-        voice.say("Block stopped." if active else "Block started.")
+        active = tracker.toggle_block(now, source="gesture")
+        voice.say("Block started." if active else "Block stopped.")
     elif sign_controller is not None and name in ("next_page", "previous_page"):
         sign_controller.flip_page(1 if name == "next_page" else -1)
 
@@ -148,10 +156,12 @@ def start_focus_worker() -> FocusWorker | None:
     scanner = focus_worker.build_scanner()
     if scanner is not None:
         now = time.time()
-        restored = tracker.restore(focus_log.read_day(day_key(now)), now)
+        restored = tracker.restore(focus_log.read_day(format_day(now)), now)
         if restored:
             logger.info("focus tracker restored %s events from today's log", restored)
-        started = FocusWorker(stream, scanner, tracker, on_update=handle_focus_update, on_gesture=handle_gesture)
+        started = FocusWorker(
+            stream, scanner, tracker, on_update=handle_focus_update, on_gesture=handle_gesture, wait_for_clock_first=True
+        )
         started.start()
         logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)
     return started
@@ -160,10 +170,12 @@ def start_focus_worker() -> FocusWorker | None:
 async def snapshot_producer() -> None:
     """One owner of the sampler; SSE clients only read latest_snapshot."""
     global latest_snapshot
+    sent_sign_version = None
     while True:
         try:
             snapshot = collector.snapshot(sampler)
-            snapshot["focus"] = focus_status()
+            snapshot["focus"] = build_focus_status(sign_since_version=sent_sign_version)
+            sent_sign_version = snapshot["focus"]["sign"]["version"]
             latest_snapshot = snapshot
         except Exception:
             logger.exception("snapshot producer failed")
@@ -331,7 +343,7 @@ def drive(request: Request, command: DriveCommand):
 @app.get("/api/focus")
 @limiter.limit("60/minute")
 def focus_now(request: Request):
-    status = focus_status()
+    status = build_focus_status()
     status["segments"] = tracker.segments()
     return status
 
@@ -344,10 +356,13 @@ class BlockCommand(BaseModel):
 @limiter.limit("30/minute")
 def focus_block(request: Request, command: BlockCommand):
     now = time.time()
-    active = tracker.status(now)["block"]["active"]
-    wanted = {"start": True, "stop": False, "toggle": not active}[command.action]
-    changed = tracker.set_block(wanted, now, source="api")
-    return {"status": "ok", "active": wanted, "changed": changed}
+    if command.action == "toggle":
+        active = tracker.toggle_block(now, source="api")
+        changed = True
+    else:
+        active = command.action == "start"
+        changed = tracker.set_block(active, now, source="api")
+    return {"status": "ok", "active": active, "changed": changed}
 
 
 class AppReport(BaseModel):

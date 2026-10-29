@@ -196,8 +196,13 @@ def test_sign_preview_renders_and_rides_the_status(factory):
         while not body.get("sign_png") and time.monotonic() < deadline:
             body = client.get("/api/focus", auth=AUTH).json()
             time.sleep(0.05)
-        assert body["sign"] == {"mode": "preview", "page": "now"}
+        assert body["sign"]["mode"] == "preview"
+        assert body["sign"]["page"] == "now"
+        assert body["sign"]["version"] >= 1
         assert body["sign_png"], "the sign preview should be in the focus status"
+        # The stats stream only carries the PNG when the picture changed since the last snapshot.
+        stats = client.get("/api/stats", auth=AUTH).json()
+        assert "sign" in stats["focus"]
         response = client.get("/api/sign.png", auth=AUTH)
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"

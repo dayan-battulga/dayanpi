@@ -19,11 +19,21 @@ def fake_jpeg() -> bytes:
 
 
 class FakeStream:
-    def __init__(self, jpeg: bytes | None) -> None:
-        self.jpeg = jpeg
+    """Hands out a new frame id on every call, like a live camera; frozen=True repeats the same id."""
 
-    def latest_frame(self) -> bytes | None:
-        return self.jpeg
+    def __init__(self, jpeg: bytes | None, frozen: bool = False) -> None:
+        self.jpeg = jpeg
+        self.frozen = frozen
+        self.frame_id = 0
+
+    def frame_after(self, last_id: int, timeout: float):
+        result = None
+        if self.jpeg is not None:
+            if not self.frozen:
+                self.frame_id += 1
+            if self.frame_id > last_id:
+                result = (self.jpeg, self.frame_id)
+        return result
 
 
 class FakeScanner:
@@ -143,6 +153,52 @@ def test_hands_down_means_no_gesture():
         worker.run_once(NOON + second)
     assert fired == []
     assert worker.gestures.progress is None
+
+
+def test_a_frozen_camera_stops_counting_after_thirty_seconds():
+    tracker = FocusTracker(started_at=NOON)
+    stream = FakeStream(fake_jpeg())
+    scanner = FakeScanner()
+    worker = FocusWorker(stream, scanner, tracker)
+    for second in range(1, 4):
+        worker.run_once(NOON + second)
+    assert worker.last_update.state == "working"
+    stream.frozen = True  # the webcam hangs and keeps serving the same JPEG
+    for second in range(4, 40):
+        worker.run_once(NOON + second)
+    assert scanner.scans == 3, "a stale frame must not be re-scanned"
+    assert worker.last_update.state == "unknown"
+    assert tracker.status(NOON + 40)["camera_ok"] is False
+
+
+def test_a_broken_tick_does_not_kill_the_loop(caplog):
+    import logging
+
+    tracker = FocusTracker(started_at=NOON)
+    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(), tracker, interval_s=0.01)
+    worker.run_once = lambda now: (_ for _ in ()).throw(RuntimeError("boom"))
+    with caplog.at_level(logging.ERROR):
+        worker.start()
+        deadline = time.monotonic() + 1.0
+        while worker.tick_failures < 3 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        worker.stop()
+    assert worker.tick_failures >= 3
+    assert caplog.text.count("tick failed") == 1
+
+
+def test_wait_for_clock_returns_when_the_sync_file_appears(tmp_path):
+    synced = tmp_path / "run" / "systemd" / "timesync" / "synchronized"
+    synced.parent.mkdir(parents=True)
+    assert focus_worker.wait_for_clock(synced, timeout_s=0.2, poll_s=0.01) is False
+    synced.write_text("")
+    assert focus_worker.wait_for_clock(synced, timeout_s=0.2, poll_s=0.01) is True
+
+
+def test_wait_for_clock_skips_machines_without_timesyncd(tmp_path):
+    started = time.monotonic()
+    assert focus_worker.wait_for_clock(tmp_path / "nope" / "systemd" / "timesync" / "synchronized", timeout_s=5.0, poll_s=0.01) is False
+    assert time.monotonic() - started < 1.0
 
 
 def test_build_scanner_uses_the_pose_model_when_present(monkeypatch, tmp_path, caplog):

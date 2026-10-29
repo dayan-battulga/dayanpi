@@ -277,7 +277,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), snacks (food spotted in 3 of 5 checks; one snack per sitting), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on the dashboard shows the state, a live timer, today's totals, a 24-hour timeline (teal = focused, red = phone, grey = away) and a **Start block** button. A work block is just a flag for now: while it's on, a break longer than 15 minutes gets flagged as "break over". Gestures will flip it later.
+**The Focus card** on the dashboard shows the state, a live timer, today's totals, a 24-hour timeline (teal = focused, red = phone, grey = away) and a **Start block** button. A work block is just a flag for now: while it's on, the sign dims to ambient and a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
@@ -285,7 +285,10 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 - *late night phone*: on the phone between 1 and 5 am
 - *long break*: you come back after 15+ minutes away
 - *break over*: 15 minutes away during a work block
-- *day done*: you leave after 10 pm (once a day, with the day's totals)
+- *day done*: you leave after 10 pm (once a night, with the day's totals)
+- *snack*: sign and log only, when a snack starts ("Snack number 2.")
+
+Gestures get a `gesture` line in the log too, and the both-hands gesture says "Block started." / "Block stopped."
 
 **The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, snacks, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone / food confidence, face turn and tilt). **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
 
@@ -297,6 +300,8 @@ cd ~/Desktop/site-page/dayanpi
 .venv/bin/python focus_stats.py --days 7   # the week, plus focus by hour of day
 tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
 ```
+
+If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point the script at it: `focus_stats.py --log-dir /your/folder/focus_log`.
 
 **Routes** (all behind the login):
 
@@ -381,7 +386,7 @@ Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' mod
 - Face the camera and sit like you normally do.
 - Keep both shoulders in the shot. No shoulders, no gestures.
 - Keep the raised hand in the shot too. The camera looks down at your desk, so a hand straight up can go off the top of the picture. Head height works better.
-- Hold still. The tracker only checks 1-3 times a second, so quick waves and swipes won't register.
+- Hold still. The tracker only checks about once a second, so quick waves and swipes won't register.
 
 #### Tuning
 
@@ -561,7 +566,7 @@ The code is in two files:
 | --- | --- |
 | **Now** | A big icon for what you're doing, a label, how long you've been doing it, and today's phone pickups (little phone + number) in the top right. Fire + `FOCUSED` in amber, phone + `PHONE` in red, zzz + `AWAY` in dim blue, `?` in gray when it's not sure. |
 | **Today** | `FOCUS 3h12` and `PHONE 45m` in big numbers, with snacks (donut) and pickups (little phone) on the right. |
-| **Callout** | An icon on the left and a message sliding past it, like "Snack time!" next to a donut, or a hand when it catches a gesture. |
+| **Callout** | An icon on the left and a message sliding past it, like "Snack number 2." next to a donut, or "Sat down 30 seconds ago and already on the phone." next to a phone. |
 | **Day done** | A big green check, `DAY DONE`, today's focus and phone time, your longest focus streak (`BEST`), and pickups. |
 
 Times are short so they fit: `45s`, `12m`, `1h05`, `10h30`.
@@ -589,7 +594,7 @@ open /tmp/sign.png
 
 #### Heads up: the sign and the rover share pins
 
-The bonnet uses 14 GPIO pins, and six of them are the rover's motor pins (12, 13, 17, 22, 23, 27). So the rover stays unplugged while the sign is on. Also, right now `app.py` sets up the motors at startup and holds those pins the whole time the service runs. The sign can't run alongside that, so the smoke test below stops the service first.
+The bonnet uses 14 GPIO pins, and six of them are the rover's motor pins (12, 13, 17, 22, 23, 27). So the rover stays unplugged while the sign is on. With `DAYANPI_SIGN=panel` the app leaves the motor pins alone; with any other setting it grabs them at startup, which is why the smoke test below stops the service first.
 
 #### What you need
 
@@ -683,7 +688,7 @@ for page in pages:
     panel.show(sign.render_page(page))
     time.sleep(4)
 message = "Hello from the sign!"
-for scroll_px in range(sign.callout_width(message) + 1):
+for scroll_px in range(sign.measure_callout(message) + 1):
     panel.show(sign.render_page(sign.CalloutPage(message, "hand", (200, 140, 90), scroll_px)))
     time.sleep(0.03)
 EOF
@@ -706,7 +711,7 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 
 ### How the app drives it
 
-The app renders the sign a few times a second whatever you've set, so the dashboard always shows the preview under the Focus card. `DAYANPI_SIGN` in `/etc/dayanpi.env` picks what else happens:
+`DAYANPI_SIGN` in `/etc/dayanpi.env` picks where the sign goes. With `preview` (the default) or `panel`, the app renders it a few times a second and the dashboard shows the preview under the Focus card:
 
 | Value | What |
 | --- | --- |
@@ -714,7 +719,7 @@ The app renders the sign a few times a second whatever you've set, so the dashbo
 | `panel` | Website preview **and** the real panels through the Matrix Bonnet |
 | `off` | Nothing, not even the preview |
 
-What it shows is decided in `sign_controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages (gestures, or `/api/focus/block` for now), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
+What it shows is decided in `sign_controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
 
 **The motors and the sign can't both be on.** The Matrix Bonnet uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 24, 26 and 27, which includes all six motor pins. With `DAYANPI_SIGN=panel` the app doesn't touch the motor pins at all (the Drive card is hidden anyway while the rover's paused, and `/api/drive` answers 503).
 

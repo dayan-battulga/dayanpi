@@ -199,7 +199,7 @@ def build_text_mask(text: str) -> np.ndarray:
     return mask
 
 
-def text_width(text: str, scale: int = 1) -> int:
+def measure_text(text: str, scale: int = 1) -> int:
     """Pixel width of text drawn at this scale, with no gap after the last letter."""
     advance = sign_glyphs.GLYPH_WIDTH + LETTER_GAP
     width = max(0, len(text) * advance - LETTER_GAP) * sanitize_scale(scale)
@@ -258,7 +258,7 @@ def draw_icon(
 
 def find_badge_left(icon_name: str, text: str) -> int:
     """Left edge of a badge (mini icon plus small text) that ends EDGE_MARGIN from the right edge."""
-    badge_width = MINI_ICON_BITMAPS[icon_name].mask.shape[1] + BADGE_GAP + text_width(text)
+    badge_width = MINI_ICON_BITMAPS[icon_name].mask.shape[1] + BADGE_GAP + measure_text(text)
     left = SIGN_WIDTH - EDGE_MARGIN - badge_width
     return left
 
@@ -367,9 +367,9 @@ def draw_today_page(frame: np.ndarray, page: TodayPage) -> None:
     )
 
 
-def callout_width(text: str) -> int:
+def measure_callout(text: str) -> int:
     """How far scroll_px has to go before a CalloutPage's text has fully scrolled out of view."""
-    width = text_width(text, CALLOUT_TEXT_SCALE)
+    width = measure_text(text, CALLOUT_TEXT_SCALE)
     return width
 
 
@@ -377,7 +377,7 @@ def draw_callout_page(frame: np.ndarray, page: CalloutPage) -> None:
     """Icon fixed on the left; the text slides through the area right of it and is clipped there."""
     text_area = Region(left=CALLOUT_TEXT_LEFT, top=0, right=SIGN_WIDTH, bottom=SIGN_HEIGHT)
     # Past either end nothing shows, so clamping changes no pixels but keeps inf and NaN out of int().
-    scroll = int(clamp(page.scroll_px, -SIGN_WIDTH, callout_width(page.text)))
+    scroll = int(clamp(page.scroll_px, -SIGN_WIDTH, measure_callout(page.text)))
     draw_icon(frame, page.icon, 0, 0, scale=BIG_ICON_SCALE)
     draw_text(
         frame,
@@ -468,12 +468,21 @@ class PreviewOutput:
         self._png: bytes | None = None
         self._version = 0
 
+    @property
+    def version(self) -> int:
+        """Goes up only when the picture actually changes, so callers can skip re-sending it."""
+        with self._lock:
+            version = self._version
+        return version
+
     def show(self, frame: np.ndarray) -> None:
         frame_copy = np.array(frame, dtype=np.uint8, copy=True)
         with self._lock:
-            self._frame = frame_copy
-            self._png = None
-            self._version += 1
+            unchanged = self._frame is not None and np.array_equal(self._frame, frame_copy)
+            if not unchanged:
+                self._frame = frame_copy
+                self._png = None
+                self._version += 1
 
     def latest_png(self) -> bytes | None:
         with self._lock:

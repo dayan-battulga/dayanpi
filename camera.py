@@ -250,6 +250,7 @@ class PiCameraCapture:
             raise OSError(f"no Pi camera #{camera_index} (libcamera sees {len(pi_cameras)})")
 
         self._camera = Picamera2(pi_cameras[camera_index].position)
+        self._read_failures = 0
         try:
             self._camera.configure(self._create_configuration(width, height, fps))
             self._camera.start()
@@ -286,8 +287,12 @@ class PiCameraCapture:
             frame = self._camera.capture_array("main", wait=PICAMERA_CAPTURE_TIMEOUT_S)
             encoded, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, PICAMERA_JPEG_QUALITY])
             jpeg = buffer if encoded else None
+            self._read_failures = 0
         except Exception as error:
-            logger.warning("Pi camera capture failed: %r", error)
+            # The capture loop already warns and reconnects; this just says why, and not 15 times a second.
+            self._read_failures += 1
+            if self._read_failures == 1:
+                logger.warning("Pi camera capture failed: %r", error)
         read_result = (jpeg is not None, jpeg)
         return read_result
 

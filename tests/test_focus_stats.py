@@ -2,12 +2,12 @@ from datetime import datetime
 
 import focus_stats
 from focus import FocusLog, Segment
-from focus_stats import HourTotals, add_segment_hours, build_report, recent_days
+from focus_stats import HourTotals, add_segment_hours, build_report, list_recent_days
 
 
 def test_recent_days_counts_back_from_the_last_day():
-    assert recent_days(datetime(2026, 10, 29), 3) == ["2026-10-27", "2026-10-28", "2026-10-29"]
-    assert recent_days(datetime(2026, 10, 29), 1) == ["2026-10-29"]
+    assert list_recent_days(datetime(2026, 10, 29), 3) == ["2026-10-27", "2026-10-28", "2026-10-29"]
+    assert list_recent_days(datetime(2026, 10, 29), 1) == ["2026-10-29"]
 
 
 def test_segment_hours_split_at_the_hour():

@@ -113,6 +113,11 @@ class Letterbox:
     pad_top: int
 
 
+def find_best_confidence(detections: list[Detection]) -> float:
+    best = max((detection.confidence for detection in detections), default=0.0)
+    return best
+
+
 def decode_jpeg(jpeg: bytes) -> np.ndarray | None:
     image = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
     return image

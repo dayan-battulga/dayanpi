@@ -46,6 +46,15 @@ def test_pages_flip_and_fall_back_to_now():
     assert controller.page == "now"
 
 
+def test_a_hand_flip_to_the_summary_page_falls_back_too():
+    controller = make_controller()
+    controller.flip_page(1)
+    controller.flip_page(1)
+    assert controller.page == "summary"
+    controller.render(NOON + sign_controller.PAGE_FLIP_RETURN_S + 1)
+    assert controller.page == "now"
+
+
 def test_callouts_scroll_then_clear():
     controller = make_controller()
     controller.show_callout(Callout("instant_pickup", "Sat down 30 seconds ago and already on the phone."))
@@ -53,7 +62,7 @@ def test_callouts_scroll_then_clear():
     later = controller.render(NOON + 1.5)
     assert not np.array_equal(first, later), "the text should have scrolled"
     assert controller._active is not None
-    width = sign.callout_width("Sat down 30 seconds ago and already on the phone.")
+    width = sign.measure_callout("Sat down 30 seconds ago and already on the phone.")
     controller.render(NOON + width / sign_controller.SCROLL_PX_PER_S + 1)
     assert controller._active is None
 

@@ -16,11 +16,11 @@ from sign import (
     PreviewOutput,
     SummaryPage,
     TodayPage,
-    callout_width,
+    measure_callout,
     format_duration,
     render_page,
     render_preview_png,
-    text_width,
+    measure_text,
 )
 
 PIOMATTER = "adafruit_blinka_raspberry_pi5_piomatter"
@@ -109,7 +109,7 @@ def test_palette_stays_under_the_channel_cap():
     [("", 1, 0), ("", 2, 0), ("A", 1, 5), ("AB", 1, 11), ("1h05", 1, 23), ("AB", 2, 22), ("10h30", 2, 58)],
 )
 def test_text_width(text, scale, width):
-    assert text_width(text, scale) == width
+    assert measure_text(text, scale) == width
 
 
 @pytest.mark.parametrize("scale", [1, 2])
@@ -118,7 +118,7 @@ def test_text_width_matches_the_drawn_pixels(scale):
     sign.draw_text(canvas, "MWM", 0, 0, (200, 200, 200), scale=scale, clip=sign.Region(0, 0, 200, 20))
     lit_columns = np.flatnonzero(canvas.any(axis=(0, 2)))
     assert lit_columns[0] == 0
-    assert lit_columns[-1] + 1 == text_width("MWM", scale)
+    assert lit_columns[-1] + 1 == measure_text("MWM", scale)
 
 
 @pytest.mark.parametrize("clip", [sign.Region(0, 0, 20, 10), sign.Region(-100, -100, 100, 100)])
@@ -219,14 +219,14 @@ def test_callout_with_an_unknown_icon_shows_the_question_mark():
 
 
 def test_callout_width_is_the_width_of_the_scrolling_text():
-    assert callout_width("") == 0
-    assert callout_width("Snack time") == text_width("Snack time", sign.CALLOUT_TEXT_SCALE)
+    assert measure_callout("") == 0
+    assert measure_callout("Snack time") == measure_text("Snack time", sign.CALLOUT_TEXT_SCALE)
 
 
 def test_callout_text_is_gone_once_scrolled_by_callout_width():
     text = "Snack time"
-    almost_gone = render_page(CalloutPage(text, "food", PINK, scroll_px=callout_width(text) - 1))
-    gone = render_page(CalloutPage(text, "food", PINK, scroll_px=callout_width(text)))
+    almost_gone = render_page(CalloutPage(text, "food", PINK, scroll_px=measure_callout(text) - 1))
+    gone = render_page(CalloutPage(text, "food", PINK, scroll_px=measure_callout(text)))
     assert crop_text_area(almost_gone).any()
     assert not crop_text_area(gone).any()
 
@@ -242,7 +242,7 @@ def test_callout_text_never_spills_into_the_icon_area(scroll_px):
 
 def test_callout_scrolled_past_the_end_shows_only_the_icon():
     text = "Put the phone down"
-    frame = render_page(CalloutPage(text, "alert", (200, 170, 20), scroll_px=callout_width(text) + 500))
+    frame = render_page(CalloutPage(text, "alert", (200, 170, 20), scroll_px=measure_callout(text) + 500))
     assert not crop_text_area(frame).any()
     assert crop_icon_area(frame).any()
 
