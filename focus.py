@@ -320,6 +320,10 @@ class FocusTracker:
                 self._write({"event": "mac_app", "app": app}, now)
         return changed
 
+    def record_gesture(self, name: str, now: float) -> None:
+        with self._lock:
+            self._write({"event": "gesture", "name": name}, now)
+
     def set_block(self, active: bool, now: float, source: str = "api") -> bool:
         with self._lock:
             changed = active != self._block_active

@@ -26,6 +26,11 @@ from camera import CameraStream
 from drivetrain import CommandTimer, DriveTrain
 from focus import FocusLog, FocusTracker, FocusUpdate, day_key
 from focus_worker import FocusWorker
+from voice import VoiceAnnouncer
+
+# uvicorn only configures its own loggers; without this the app's INFO lines
+# ("focus tracker running", "voice off, would say ...") never reach journalctl.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -54,6 +59,7 @@ command_timer = CommandTimer(DRIVE_TIMEOUT_S)
 focus_log = FocusLog(FOCUS_LOG_DIR)
 tracker = FocusTracker(focus_log, started_at=time.time())
 worker: FocusWorker | None = None
+voice = VoiceAnnouncer()
 
 _video_active = 0
 _stream_active = 0
@@ -88,6 +94,7 @@ def _authorized(request: Request) -> bool:
 def focus_status() -> dict:
     status = tracker.status(time.time())
     status["enabled"] = worker is not None
+    status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     return status
 
 
@@ -95,6 +102,17 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
     """Runs on the worker thread after every check. Callouts fan out to the speaker and the sign from here."""
     for callout in update.callouts:
         logger.info("focus callout %s: %s", callout.name, callout.text)
+        if callout.speak:
+            voice.say(callout.text)
+
+
+def handle_gesture(name: str, now: float) -> None:
+    """Runs on the worker thread when a held gesture fires."""
+    tracker.record_gesture(name, now)
+    if name == "toggle_block":
+        active = tracker.status(now)["block"]["active"]
+        tracker.set_block(not active, now, source="gesture")
+        voice.say("Block stopped." if active else "Block started.")
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -105,7 +123,7 @@ def start_focus_worker() -> FocusWorker | None:
         restored = tracker.restore(focus_log.read_day(day_key(now)), now)
         if restored:
             logger.info("focus tracker restored %s events from today's log", restored)
-        started = FocusWorker(stream, scanner, tracker, on_update=handle_focus_update)
+        started = FocusWorker(stream, scanner, tracker, on_update=handle_focus_update, on_gesture=handle_gesture)
         started.start()
         logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)
     return started
@@ -145,6 +163,7 @@ async def lifespan(app: FastAPI):
         )
     sampler.sample()
     stream.start()
+    voice.start()
     worker = start_focus_worker()
     drive_train = None
     watchdog = None
@@ -173,6 +192,7 @@ async def lifespan(app: FastAPI):
     if worker is not None:
         worker.stop()
         worker = None
+    voice.stop()
     stream.stop()
 
 
@@ -303,6 +323,18 @@ class AppReport(BaseModel):
 def mac_app(request: Request, report: AppReport):
     changed = tracker.record_app(report.app.strip(), time.time())
     return {"status": "ok", "changed": changed}
+
+
+class Phrase(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/voice/say")
+@limiter.limit("30/minute")
+def voice_say(request: Request, phrase: Phrase):
+    """For trying the speaker from the browser or curl. Off means it only lands in the log."""
+    queued = voice.say(phrase.text)
+    return {"status": "ok", "queued": queued, "backend": voice.backend}
 
 
 @app.get("/api/stream")

@@ -147,6 +147,48 @@ def test_block_route_starts_stops_and_toggles(factory):
         assert client.post("/api/focus/block", json={"action": "dance"}, auth=AUTH).status_code == 422
 
 
+def test_voice_say_route_logs_when_the_voice_is_off(factory, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="voice")
+    with TestClient(app.app) as client:
+        assert client.post("/api/voice/say", json={"text": "Phone down."}).status_code == 401
+        response = client.post("/api/voice/say", json={"text": "Phone down."}, auth=AUTH)
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "queued": False, "backend": "off"}
+        assert client.post("/api/voice/say", json={"text": ""}, auth=AUTH).status_code == 422
+        status = client.get("/api/focus", auth=AUTH).json()
+        assert status["voice"] == {"enabled": False, "backend": "off", "problem": None}
+    assert "would say: 'Phone down.'" in caplog.text
+
+
+def test_callouts_reach_the_voice(monkeypatch):
+    import focus
+
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    update = focus.FocusUpdate(
+        state="phone",
+        changed=True,
+        previous_state="working",
+        callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("snack", "Snack 1.", speak=False)],
+    )
+    app.handle_focus_update(update, time.time())
+    assert said == ["Already?"]
+
+
+def test_gesture_toggles_the_block_and_speaks(monkeypatch, factory):
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    with TestClient(app.app) as client:
+        client.post("/api/focus/block", json={"action": "stop"}, auth=AUTH)
+        app.handle_gesture("toggle_block", time.time())
+        assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is True
+        app.handle_gesture("toggle_block", time.time())
+        assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is False
+    assert said == ["Block started.", "Block stopped."]
+
+
 def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
     class FakeScanner:
         def scan(self, image):
