@@ -15,7 +15,6 @@ FRAME_SKIP = 2  # keep 1 of every N frames when streaming
 RECONNECT_SLEEP_S = 1.0
 LOOP_SLEEP_S = 0.01
 FAILURE_LOG_THRESHOLD = 3
-START_TIMEOUT_S = 2.0
 STOP_JOIN_TIMEOUT_S = 2.0
 
 # Pi camera (ribbon cable) through Picamera2.
@@ -118,12 +117,10 @@ class CameraStream:
         if self._running:
             return
 
-        opened = True
         try:
             self._capture = self._open_capture()
         except OSError as error:
             # _capture stays None; the capture loop keeps reconnecting.
-            opened = False
             logger.warning("camera unavailable at startup, will keep retrying: %s", error)
 
         self._running = True
@@ -133,18 +130,6 @@ class CameraStream:
             daemon=True,
         )
         self._thread.start()
-
-        if opened:
-            with self._condition:
-                ready = self._condition.wait_for(
-                    lambda: self._frame is not None,
-                    timeout=START_TIMEOUT_S,
-                )
-            if not ready:
-                logger.warning(
-                    "camera started but no frame within %.1fs",
-                    START_TIMEOUT_S,
-                )
 
     def stop(self) -> None:
         self._running = False

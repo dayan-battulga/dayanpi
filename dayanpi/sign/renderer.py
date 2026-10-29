@@ -57,7 +57,6 @@ SUMMARY_VALUE_LEFT = 72
 SUMMARY_LINE_PITCH = 8
 
 PREVIEW_SCALE = 6
-PREVIEW_MAX_SCALE = 16
 PREVIEW_BOARD = (10, 10, 12)
 PREVIEW_UNLIT_DOT = (34, 34, 38)
 PREVIEW_DOT_FILL = 0.78
@@ -155,13 +154,7 @@ def build_bitmap(rows: tuple[str, ...]) -> Bitmap:
 
 
 GLYPH_MASKS = {char: build_glyph_mask(rows) for char, rows in glyphs.FONT.items()}
-ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in glyphs.ICONS.items()}
 MINI_ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in glyphs.MINI_ICONS.items()}
-
-
-def sanitize_scale(scale: int) -> int:
-    whole_scale = max(1, int(scale))
-    return whole_scale
 
 
 def scale_up(pixels: np.ndarray, scale: int) -> np.ndarray:
@@ -173,6 +166,10 @@ def scale_up(pixels: np.ndarray, scale: int) -> np.ndarray:
 def scale_bitmap(bitmap: Bitmap, scale: int) -> Bitmap:
     scaled = Bitmap(pixels=scale_up(bitmap.pixels, scale), mask=scale_up(bitmap.mask, scale))
     return scaled
+
+
+# Icons only ever draw at BIG_ICON_SCALE, so they're scaled once here instead of every frame.
+ICON_BITMAPS = {name: scale_bitmap(build_bitmap(rows), BIG_ICON_SCALE) for name, rows in glyphs.ICONS.items()}
 
 
 def find_glyph(char: str) -> np.ndarray:
@@ -202,7 +199,7 @@ def build_text_mask(text: str) -> np.ndarray:
 def measure_text(text: str, scale: int = 1) -> int:
     """Pixel width of text drawn at this scale, with no gap after the last letter."""
     advance = glyphs.GLYPH_WIDTH + LETTER_GAP
-    width = max(0, len(text) * advance - LETTER_GAP) * sanitize_scale(scale)
+    width = max(0, len(text) * advance - LETTER_GAP) * scale
     return width
 
 
@@ -234,26 +231,19 @@ def draw_text(
     clip: Region = FULL_FRAME,
 ) -> None:
     """Draws text with its top-left corner at (left, top); anything outside clip or the frame is cut off."""
-    safe_scale = sanitize_scale(scale)
-    advance = (glyphs.GLYPH_WIDTH + LETTER_GAP) * safe_scale
+    advance = (glyphs.GLYPH_WIDTH + LETTER_GAP) * scale
     # Only letters that can land inside clip get built, so long scrolling text stays cheap.
     first = max(0, (clip.left - left) // advance)
     last = min(len(text), max(0, -(-(clip.right - left) // advance)))
     if first < last:
-        mask = scale_up(build_text_mask(text[first:last]), safe_scale)
+        mask = scale_up(build_text_mask(text[first:last]), scale)
         pixels = np.broadcast_to(np.asarray(color, dtype=np.uint8), mask.shape + (3,))
         paste_bitmap(frame, Bitmap(pixels=pixels, mask=mask), left + first * advance, top, clip)
 
 
-def draw_icon(
-    frame: np.ndarray,
-    name: str,
-    left: int,
-    top: int,
-    scale: int = 1,
-    clip: Region = FULL_FRAME,
-) -> None:
-    paste_bitmap(frame, scale_bitmap(find_icon(name), sanitize_scale(scale)), left, top, clip)
+def draw_icon(frame: np.ndarray, name: str) -> None:
+    """A big icon in the top-left corner, where every page that has one puts it."""
+    paste_bitmap(frame, find_icon(name), 0, 0, FULL_FRAME)
 
 
 def find_badge_left(icon_name: str, text: str) -> int:
@@ -310,7 +300,7 @@ def format_count(count: float) -> str:
 def draw_now_page(frame: np.ndarray, page: NowPage) -> None:
     """Big state icon, state label, time in this state, and today's pickups top right."""
     style = STATE_STYLES.get(page.state, STATE_STYLES["unknown"])
-    draw_icon(frame, style.icon, 0, 0, scale=BIG_ICON_SCALE)
+    draw_icon(frame, style.icon)
     draw_text(frame, style.label, NOW_TEXT_LEFT, NOW_LABEL_TOP, style.color)
     draw_text(
         frame,
@@ -378,7 +368,7 @@ def draw_callout_page(frame: np.ndarray, page: CalloutPage) -> None:
     text_area = Region(left=CALLOUT_TEXT_LEFT, top=0, right=SIGN_WIDTH, bottom=SIGN_HEIGHT)
     # Past either end nothing shows, so clamping changes no pixels but keeps inf and NaN out of int().
     scroll = int(clamp(page.scroll_px, -SIGN_WIDTH, measure_callout(page.text)))
-    draw_icon(frame, page.icon, 0, 0, scale=BIG_ICON_SCALE)
+    draw_icon(frame, page.icon)
     draw_text(
         frame,
         page.text,
@@ -392,7 +382,7 @@ def draw_callout_page(frame: np.ndarray, page: CalloutPage) -> None:
 
 def draw_summary_page(frame: np.ndarray, page: SummaryPage) -> None:
     """End of day: a big check, DAY DONE with the day's pickups, then three totals."""
-    draw_icon(frame, "check", 0, 0, scale=BIG_ICON_SCALE)
+    draw_icon(frame, "check")
     draw_text(frame, "DAY DONE", SUMMARY_LABEL_LEFT, 0, GREEN)
     draw_badge(frame, "phone", format_count(page.pickups), 0)
     lines = [
@@ -436,17 +426,16 @@ def build_dot_alpha(scale: int) -> np.ndarray:
 def render_preview_png(frame: np.ndarray, scale: int = PREVIEW_SCALE) -> bytes:
     """A PNG that looks like the panels: round dots on a dark board, unlit dots faintly visible.
 
-    scale is pixels per LED, kept between 1 and PREVIEW_MAX_SCALE.
+    scale is pixels per LED.
     """
-    safe_scale = min(sanitize_scale(scale), PREVIEW_MAX_SCALE)
     height, width = frame.shape[:2]
     lit = frame.astype(np.float32)
     # A lit LED shows its own colour; the faint unlit gray fades out as it brightens.
     unlit_share = 1.0 - lit.max(axis=2, keepdims=True) / 255.0
     dots = lit + np.asarray(PREVIEW_UNLIT_DOT, dtype=np.float32) * unlit_share
-    alpha = np.tile(build_dot_alpha(safe_scale), (height, width))[..., None]
+    alpha = np.tile(build_dot_alpha(scale), (height, width))[..., None]
     board = np.asarray(PREVIEW_BOARD, dtype=np.float32)
-    image = board + (scale_up(dots, safe_scale) - board) * alpha
+    image = board + (scale_up(dots, scale) - board) * alpha
     rgb = np.clip(np.rint(image), 0, 255).astype(np.uint8)
     # Without an explicit level OpenCV uses its RLE strategy, which makes these dotted PNGs ~20x bigger.
     encoded = cv2.imencode(

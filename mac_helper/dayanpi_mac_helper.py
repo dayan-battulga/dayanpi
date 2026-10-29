@@ -68,13 +68,6 @@ class SetupError(Exception):
 
 
 @dataclass
-class CommandOutput:
-    exit_code: int
-    stdout: str
-    stderr: str
-
-
-@dataclass
 class AppDetection:
     app_name: str | None = None
     problem: str = ""
@@ -86,29 +79,27 @@ class SendResult:
     problem: str = ""
 
 
-CommandRunner = Callable[[list[str]], CommandOutput]
+CommandRunner = Callable[[list[str]], subprocess.CompletedProcess]
 RequestSender = Callable[[urllib.request.Request, float], int]
 
 
-def run_command(args: list[str]) -> CommandOutput:
+def run_command(args: list[str]) -> subprocess.CompletedProcess:
     """Runs a macOS tool. A missing tool or a hang comes back as exit code -1, never an exception."""
     try:
-        completed = subprocess.run(
+        # UTF-8 spelled out: under launchd the locale may not be, and app names like "Café" must survive.
+        output = subprocess.run(
             args,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=COMMAND_TIMEOUT_S,
             check=False,
-        )
-        output = CommandOutput(
-            exit_code=completed.returncode,
-            stdout=completed.stdout.decode("utf-8", errors="replace"),
-            stderr=completed.stderr.decode("utf-8", errors="replace"),
+            encoding="utf-8",
+            errors="replace",
         )
     except subprocess.TimeoutExpired:
-        output = CommandOutput(exit_code=-1, stdout="", stderr=f"no answer after {COMMAND_TIMEOUT_S:.0f} s")
+        output = subprocess.CompletedProcess(args, -1, "", f"no answer after {COMMAND_TIMEOUT_S:.0f} s")
     except OSError as error:
-        output = CommandOutput(exit_code=-1, stdout="", stderr=str(error))
+        output = subprocess.CompletedProcess(args, -1, "", str(error))
     return output
 
 
@@ -157,10 +148,10 @@ def normalize_app_name(raw_name: str) -> str | None:
     return app_name
 
 
-def summarize_output(output: CommandOutput) -> str:
+def summarize_output(output: subprocess.CompletedProcess) -> str:
     """One short line on what a command printed, for explaining why detection failed."""
     printed = " ".join((output.stderr.strip() or output.stdout.strip() or "nothing").split())
-    summary = f"exit {output.exit_code}, {printed[:MAX_PROBLEM_LENGTH]}"
+    summary = f"exit {output.returncode}, {printed[:MAX_PROBLEM_LENGTH]}"
     return summary
 
 
@@ -173,18 +164,18 @@ def build_detection(raw_name: str | None, problem: str) -> AppDetection:
 
 def read_app_with_lsappinfo(run: CommandRunner) -> AppDetection:
     front = run([LSAPPINFO, "front"])
-    asn = parse_front_asn(front.stdout) if front.exit_code == 0 else None
+    asn = parse_front_asn(front.stdout) if front.returncode == 0 else None
     detection = AppDetection(problem=f"lsappinfo front: {summarize_output(front)}")
     if asn is not None:
         info = run([LSAPPINFO, "info", "-only", "name", asn])
-        raw_name = parse_lsappinfo_name(info.stdout) if info.exit_code == 0 else None
+        raw_name = parse_lsappinfo_name(info.stdout) if info.returncode == 0 else None
         detection = build_detection(raw_name, f"lsappinfo info: {summarize_output(info)}")
     return detection
 
 
 def read_app_with_osascript(run: CommandRunner) -> AppDetection:
     output = run([OSASCRIPT, "-e", FRONT_APP_SCRIPT])
-    raw_name = output.stdout if output.exit_code == 0 else None
+    raw_name = output.stdout if output.returncode == 0 else None
     detection = build_detection(raw_name, f"osascript: {summarize_output(output)}")
     return detection
 
@@ -205,7 +196,7 @@ def read_keychain_password(run: CommandRunner, user: str) -> str:
     output = run([SECURITY, "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", user, "-w"])
     # `security -w` prints a password with any non-ASCII character as hex, so such a password can't log in.
     password = output.stdout.removesuffix("\n")
-    if output.exit_code != 0 or not password:
+    if output.returncode != 0 or not password:
         raise SetupError(
             f"No dashboard password in the Keychain for account {user!r} "
             f"({output.stderr.strip() or 'security found nothing'}). "
@@ -300,18 +291,6 @@ class PiClient:
         return result
 
 
-class DryRunClient:
-    """Stands in for PiClient under --dry-run: logs what it would send and never opens a connection."""
-
-    def __init__(self, app_url: str) -> None:
-        self.app_url = app_url
-
-    def send_app(self, app_name: str) -> SendResult:
-        logger.info("dry run, would POST %s to %s", encode_app(app_name).decode("utf-8"), self.app_url)
-        result = SendResult(delivered=True)
-        return result
-
-
 class AppReporter:
     """Sends the front app whenever it changes, plus a heartbeat. Failed sends back off, and only the
     newest app is ever retried, so nothing piles up while the Pi is out of reach."""
@@ -390,7 +369,13 @@ def show_front_app(run: CommandRunner) -> int:
 def run_dry_run(tools: HelperTools) -> None:
     app_url = read_app_url()
     logger.info("dry run: nothing gets sent. Switch apps to see what would go to the Pi (Ctrl+C stops).")
-    watch_front_app(tools, AppReporter(DryRunClient(app_url).send_app, tools.clock))
+
+    def pretend_to_send(app_name: str) -> SendResult:
+        logger.info("dry run, would POST %s to %s", encode_app(app_name).decode("utf-8"), app_url)
+        result = SendResult(delivered=True)
+        return result
+
+    watch_front_app(tools, AppReporter(pretend_to_send, tools.clock))
 
 
 def run_for_real(tools: HelperTools) -> None:

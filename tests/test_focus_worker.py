@@ -80,10 +80,10 @@ def test_each_check_leaves_boxes_for_the_feed():
     worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(phone=0.6), tracker)
     worker.run_once(NOON + 1)
     overlay = worker.last_overlay
-    assert (overlay.frame_width, overlay.frame_height, overlay.at) == (640, 480, NOON + 1)
-    assert [box.kind for box in overlay.boxes] == ["person", "phone"]
-    person = overlay.boxes[0]
-    assert (person.x, person.y, person.width, person.height) == pytest.approx((100 / 640, 100 / 480, 200 / 640, 300 / 480), abs=1e-4)
+    assert (overlay["frame_width"], overlay["frame_height"], overlay["at"]) == (640, 480, NOON + 1)
+    assert [box["kind"] for box in overlay["boxes"]] == ["person", "phone"]
+    person = overlay["boxes"][0]
+    assert (person["x"], person["y"], person["width"], person["height"]) == pytest.approx((100 / 640, 100 / 480, 200 / 640, 300 / 480), abs=1e-4)
 
 
 def test_boxes_stay_from_the_last_good_check_when_the_camera_freezes():
@@ -93,7 +93,7 @@ def test_boxes_stay_from_the_last_good_check_when_the_camera_freezes():
     worker.run_once(NOON + 1)
     stream.frozen = True
     worker.run_once(NOON + 2)
-    assert worker.last_overlay.at == NOON + 1
+    assert worker.last_overlay["at"] == NOON + 1
 
 
 def test_scanner_errors_are_logged_and_survived(caplog):

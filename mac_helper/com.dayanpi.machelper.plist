@@ -18,8 +18,6 @@
 	<dict>
 		<key>DAYANPI_USER</key>
 		<string>__DAYANPI_USER__</string>
-		<key>DAYANPI_URL</key>
-		<string>__DAYANPI_URL__</string>
 	</dict>
 	<key>RunAtLoad</key>
 	<true/>

@@ -75,7 +75,7 @@ Switch apps a few times. A `front app: ...` line per switch and no warnings mean
 Plists don't understand `~` or `$HOME`, so the plist in this folder is a template with placeholders. This line fills them in and drops the result into `~/Library/LaunchAgents`:
 
 ```bash
-sed -e "s|__HOME__|$HOME|g" -e "s|__DAYANPI_USER__|yourname|g" -e "s|__DAYANPI_URL__|https://dayoon.tail279594.ts.net|g" ~/dayanpi-mac-helper/com.dayanpi.machelper.plist > ~/Library/LaunchAgents/com.dayanpi.machelper.plist
+sed -e "s|__HOME__|$HOME|g" -e "s|__DAYANPI_USER__|yourname|g" ~/dayanpi-mac-helper/com.dayanpi.machelper.plist > ~/Library/LaunchAgents/com.dayanpi.machelper.plist
 ```
 
 Then check it and start it:

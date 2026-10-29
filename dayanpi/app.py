@@ -14,7 +14,6 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from dataclasses import asdict
 from typing import Literal
 
 from dayanpi.hardware import collector
@@ -98,7 +97,7 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     status["enabled"] = worker is not None and worker.running
     overlay = None if worker is None else worker.last_overlay
     # The page hides boxes older than a few seconds, so it needs their age, not the Pi's clock.
-    status["overlay"] = None if overlay is None else {**asdict(overlay), "age_s": round(now - overlay.at, 1)}
+    status["overlay"] = None if overlay is None else {**overlay, "age_s": round(now - overlay["at"], 1)}
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}

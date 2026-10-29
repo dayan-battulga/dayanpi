@@ -13,7 +13,7 @@ from pathlib import Path
 from dayanpi.vision import detector
 from dayanpi.vision import pose
 from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
-from dayanpi.focus.overlay import FrameSize, Overlay, build_overlay
+from dayanpi.focus.overlay import FrameSize, build_overlay
 from dayanpi.focus.tracker import FocusTracker, FocusUpdate
 from dayanpi.vision.gestures import GestureTracker
 from dayanpi.utils.threads import LoopThread
@@ -97,7 +97,7 @@ class FocusWorker(LoopThread):
         self.failures = 0
         self.last_update: FocusUpdate | None = None
         self.last_gesture: str | None = None
-        self.last_overlay: Overlay | None = None
+        self.last_overlay: dict | None = None
 
     def read_frame(self) -> FrameReading | None:
         """One detector pass on a frame newer than the last one, or None when the camera gave nothing new.

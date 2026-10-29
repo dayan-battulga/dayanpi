@@ -6,6 +6,7 @@ import logging
 import plistlib
 import socket
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -43,6 +44,11 @@ OSASCRIPT_DENIED = "0:91: execution error: Not authorized to send Apple events t
 KEYCHAIN_MISSING = "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.\n"
 
 
+
+def make_output(returncode, stdout, stderr):
+    output = subprocess.CompletedProcess([], returncode, stdout, stderr)
+    return output
+
 class LoopStopped(Exception):
     """Raised by FakeClock to end the helper's endless loop."""
 
@@ -68,26 +74,26 @@ class FakeMac:
         elif args[1] == "front":
             output = self.answer_front()
         else:
-            output = helper.CommandOutput(0, f'"LSDisplayName"="{self.current_app}"\n', "")
+            output = make_output(0, f'"LSDisplayName"="{self.current_app}"\n', "")
         return output
 
     def answer_front(self):
         self.current_app = self.front_apps.pop(0) if len(self.front_apps) > 1 else self.front_apps[0]
-        output = helper.CommandOutput(0, NULL_OUTPUT if self.current_app is None else FRONT_ASN, "")
+        output = make_output(0, NULL_OUTPUT if self.current_app is None else FRONT_ASN, "")
         if not self.lsappinfo_works:
-            output = helper.CommandOutput(-1, "", "[Errno 2] No such file or directory: '/usr/bin/lsappinfo'")
+            output = make_output(-1, "", "[Errno 2] No such file or directory: '/usr/bin/lsappinfo'")
         return output
 
     def answer_osascript(self):
-        output = helper.CommandOutput(1, "", OSASCRIPT_DENIED)
+        output = make_output(1, "", OSASCRIPT_DENIED)
         if self.osascript_app is not None:
-            output = helper.CommandOutput(0, f"{self.osascript_app}\n", "")
+            output = make_output(0, f"{self.osascript_app}\n", "")
         return output
 
     def answer_security(self):
-        output = helper.CommandOutput(44, "", KEYCHAIN_MISSING)
+        output = make_output(44, "", KEYCHAIN_MISSING)
         if self.password is not None:
-            output = helper.CommandOutput(0, f"{self.password}\n", "")
+            output = make_output(0, f"{self.password}\n", "")
         return output
 
     def count_runs(self, tool):
@@ -508,7 +514,7 @@ def test_run_command_turns_a_missing_tool_into_a_failed_exit(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", refuse)
     output = helper.run_command(["/usr/bin/lsappinfo", "front"])
-    assert output.exit_code == -1
+    assert output.returncode == -1
     assert "No such file or directory" in output.stderr
 
 
@@ -518,17 +524,13 @@ def test_run_command_gives_up_on_a_hung_tool(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", hang)
     output = helper.run_command(["/usr/bin/osascript", "-e", helper.FRONT_APP_SCRIPT])
-    assert output.exit_code == -1
+    assert output.returncode == -1
     assert output.stderr == "no answer after 5 s"
 
 
-def test_run_command_decodes_what_the_tool_printed(monkeypatch):
-    def answer(args, **kwargs):
-        completed = subprocess.CompletedProcess(args, 0, stdout="Café\n".encode(), stderr=b"")
-        return completed
-
-    monkeypatch.setattr(subprocess, "run", answer)
-    assert helper.run_command(["/usr/bin/osascript"]) == helper.CommandOutput(0, "Café\n", "")
+def test_run_command_decodes_utf8_and_replaces_bad_bytes():
+    output = helper.run_command([sys.executable, "-c", r"import sys; sys.stdout.buffer.write(b'Caf\xc3\xa9 \xff\n')"])
+    assert (output.returncode, output.stdout, output.stderr) == (0, "Café \ufffd\n", "")
 
 
 def test_send_request_returns_the_status_and_closes_the_response(monkeypatch):
@@ -555,6 +557,6 @@ def test_launch_agent_template_runs_this_script():
     assert Path(helper.__file__).name == "dayanpi_mac_helper.py"
     assert agent["RunAtLoad"] is True
     assert agent["KeepAlive"] is True
-    assert agent["EnvironmentVariables"] == {"DAYANPI_USER": "__DAYANPI_USER__", "DAYANPI_URL": "__DAYANPI_URL__"}
+    assert agent["EnvironmentVariables"] == {"DAYANPI_USER": "__DAYANPI_USER__"}
     assert agent["StandardOutPath"] == "__HOME__/Library/Logs/dayanpi-mac-helper.log"
     assert agent["StandardErrorPath"] == agent["StandardOutPath"]
