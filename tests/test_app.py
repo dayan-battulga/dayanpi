@@ -266,5 +266,24 @@ def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
     with TestClient(app.app) as client:
         assert app.worker is not None
         assert app.worker.running
-        assert client.get("/api/focus", auth=AUTH).json()["enabled"] is True
+        status = client.get("/api/focus", auth=AUTH).json()
+        assert status["enabled"] is True
+        assert status["overlay"] is None
+
+
+def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
+    from dayanpi.focus.overlay import Overlay, OverlayBox
+
+    class FakeScanner:
+        def scan(self, image):
+            raise AssertionError("no frames here")
+
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
+    with TestClient(app.app) as client:
+        box = OverlayBox(kind="phone", label="phone", confidence=0.81, x=0.4, y=0.5, width=0.1, height=0.2)
+        app.worker.last_overlay = Overlay(at=time.time() - 2.0, frame_width=640, frame_height=480, boxes=[box])
+        overlay = client.get("/api/focus", auth=AUTH).json()["overlay"]
+        assert overlay["boxes"] == [{"kind": "phone", "label": "phone", "confidence": 0.81, "x": 0.4, "y": 0.5, "width": 0.1, "height": 0.2}]
+        assert (overlay["frame_width"], overlay["frame_height"]) == (640, 480)
+        assert 1.5 <= overlay["age_s"] <= 3.0
     assert app.worker is None

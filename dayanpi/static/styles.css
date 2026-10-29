@@ -332,21 +332,28 @@ ol {
 
 /* ---------- focus card ---------- */
 
-.focus {
+.focus,
+.camera {
   --state: var(--muted);
-  padding: clamp(24px, 4vw, 44px);
 }
 
-.focus[data-state="working"] {
+.focus[data-state="working"],
+.camera[data-state="working"] {
   --state: var(--work);
 }
 
-.focus[data-state="phone"] {
+.focus[data-state="phone"],
+.camera[data-state="phone"] {
   --state: var(--phone);
 }
 
-.focus[data-state="away"] {
+.focus[data-state="away"],
+.camera[data-state="away"] {
   --state: var(--away);
+}
+
+.focus {
+  padding: clamp(24px, 4vw, 44px);
 }
 
 .focus-top {
@@ -624,6 +631,72 @@ ol {
 .camera.is-live #feed {
   opacity: 1;
   transform: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s var(--ease);
+}
+
+.camera.is-live .overlay {
+  opacity: 1;
+}
+
+.box {
+  --box: #ededef;
+  position: absolute;
+  border: 1.5px solid var(--box);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
+  transition:
+    left 0.6s var(--ease),
+    top 0.6s var(--ease),
+    width 0.6s var(--ease),
+    height 0.6s var(--ease),
+    border-color 0.6s var(--ease),
+    opacity 0.4s var(--ease);
+  animation: box-in 0.7s var(--ease) both;
+}
+
+.box.is-person {
+  --box: var(--state);
+}
+
+.box.is-phone {
+  --box: var(--phone);
+}
+
+.box.is-leaving {
+  opacity: 0;
+}
+
+.box-label {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: -1.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--box);
+  color: var(--bg);
+  font: 600 11px var(--font-mono);
+  white-space: nowrap;
+  transition: background-color 0.6s var(--ease);
+}
+
+/* Food and drink boxes are always light, so their labels need dark text in both themes. */
+.box.is-food .box-label,
+.box.is-drink .box-label {
+  color: #111113;
+}
+
+/* A box touching the top edge would push its label off the frame, so it goes inside. */
+.box.label-inside .box-label {
+  top: 6px;
+  bottom: auto;
+  left: 6px;
 }
 
 .scan {
@@ -1363,6 +1436,13 @@ ol {
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes box-in {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
   }
 }
 

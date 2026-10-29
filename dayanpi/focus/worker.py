@@ -13,6 +13,7 @@ from pathlib import Path
 from dayanpi.vision import detector
 from dayanpi.vision import pose
 from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
+from dayanpi.focus.overlay import FrameSize, Overlay, build_overlay
 from dayanpi.focus.tracker import FocusTracker, FocusUpdate
 from dayanpi.vision.gestures import GestureTracker
 from dayanpi.utils.threads import LoopThread
@@ -90,11 +91,13 @@ class FocusWorker(LoopThread):
         self._on_gesture = on_gesture
         self._wait_for_clock_first = wait_for_clock_first
         self._last_frame_id = -1
+        self._frame_size: FrameSize | None = None
         self.gestures = GestureTracker()
         self.checks = 0
         self.failures = 0
         self.last_update: FocusUpdate | None = None
         self.last_gesture: str | None = None
+        self.last_overlay: Overlay | None = None
 
     def read_frame(self) -> FrameReading | None:
         """One detector pass on a frame newer than the last one, or None when the camera gave nothing new.
@@ -108,6 +111,7 @@ class FocusWorker(LoopThread):
             jpeg, self._last_frame_id = arrived
             image = decode_jpeg(jpeg)
             if image is not None:
+                self._frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
                 reading = self._scanner.scan(image)
         return reading
 
@@ -123,6 +127,9 @@ class FocusWorker(LoopThread):
         update = self._tracker.update(reading, now)
         self.checks += 1
         self.last_update = update
+        if reading is not None and self._frame_size is not None:
+            # Swapped in whole, so the stream thread never sees a half-built overlay.
+            self.last_overlay = build_overlay(reading, self._frame_size, now)
         if self._on_update is not None:
             try:
                 self._on_update(update, now)

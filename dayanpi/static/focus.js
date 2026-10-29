@@ -11,6 +11,9 @@ const TODAY_LIST_LENGTH = 5;
 const SEGMENT_STAGGER_MS = 60;
 const MIN_SEGMENT_SHARE = 0.4; // % of the bar, so a one-minute pickup still shows
 const MERGE_GAP_S = 60;
+const OVERLAY_STALE_S = 3; // older boxes would trail behind the live video
+const LABEL_INSIDE_BELOW = 0.08; // a box this close to the top keeps its label inside
+const BOX_FADE_MS = 400;
 const STATE_COPY = {
   working: { chip: "Working", label: "Focused" },
   phone: { chip: "On phone", label: "Phone up" },
@@ -47,6 +50,12 @@ const focusEls = {
   todayList: document.getElementById("today-list"),
 };
 
+const overlayEls = {
+  camera: document.getElementById("camera"),
+  frame: document.querySelector(".feed-frame"),
+  layer: document.getElementById("overlay"),
+};
+
 const readingRows = Array.from(document.querySelectorAll(".reading")).map((row) => ({
   key: row.dataset.key,
   value: row.querySelector(".reading-value"),
@@ -65,6 +74,8 @@ let nowCursor = null;
 let todaySignature = "";
 let todayMetas = [];
 let blockBusy = false;
+let frameAspect = "";
+const shownBoxes = new Map();
 
 function readLocalMidnight() {
   const midnight = new Date();
@@ -329,6 +340,63 @@ function renderReadings(focus) {
   focusEls.checkMs.textContent = speed;
 }
 
+// ---------- boxes over the camera feed ----------
+
+function createBox(kind) {
+  const box = document.createElement("div");
+  const label = document.createElement("span");
+  box.className = `box is-${kind}`;
+  label.className = "box-label";
+  box.append(label);
+  return box;
+}
+
+function placeBox(el, box) {
+  el.style.left = `${box.x * 100}%`;
+  el.style.top = `${box.y * 100}%`;
+  el.style.width = `${box.width * 100}%`;
+  el.style.height = `${box.height * 100}%`;
+  el.classList.toggle("label-inside", box.y < LABEL_INSIDE_BELOW);
+  el.firstElementChild.textContent = `${box.label} ${box.confidence.toFixed(2)}`;
+}
+
+// Boxes are matched by kind and rank, so the strongest person box glides to its new
+// spot each second instead of blinking out and back in.
+function renderOverlay(focus) {
+  const overlay = focus.overlay;
+  const fresh = overlay != null && focus.camera_ok && overlay.age_s <= OVERLAY_STALE_S;
+  overlayEls.camera.dataset.state = focus.state;
+  if (fresh) {
+    // The feed is drawn with object-fit: cover, so the frame must match the camera's shape
+    // or the boxes would sit over a cropped picture.
+    const aspect = `${overlay.frame_width} / ${overlay.frame_height}`;
+    if (aspect !== frameAspect) {
+      frameAspect = aspect;
+      overlayEls.frame.style.aspectRatio = aspect;
+    }
+  }
+  const ranks = {};
+  const current = new Set();
+  for (const box of fresh ? overlay.boxes : []) {
+    ranks[box.kind] = (ranks[box.kind] ?? 0) + 1;
+    const key = `${box.kind}-${ranks[box.kind]}`;
+    current.add(key);
+    if (!shownBoxes.has(key)) {
+      const el = createBox(box.kind);
+      shownBoxes.set(key, el);
+      overlayEls.layer.append(el);
+    }
+    placeBox(shownBoxes.get(key), box);
+  }
+  for (const [key, el] of shownBoxes) {
+    if (!current.has(key)) {
+      shownBoxes.delete(key);
+      el.classList.add("is-leaving");
+      setTimeout(() => el.remove(), BOX_FADE_MS);
+    }
+  }
+}
+
 function renderSign(focus) {
   const sign = focus.sign ?? { mode: "off", page: null };
   focusEls.signMode.textContent = sign.mode;
@@ -373,6 +441,7 @@ function renderFocus(focus) {
   focusEls.voice.textContent = describeVoice(focus.voice);
   focusEls.mac.textContent = focus.app || "—";
   renderReadings(focus);
+  renderOverlay(focus);
   renderSign(focus);
 }
 

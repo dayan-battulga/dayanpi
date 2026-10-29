@@ -3,6 +3,7 @@ import time
 
 import cv2
 import numpy as np
+import pytest
 
 from dayanpi.vision import detector
 from dayanpi.focus import worker as focus_worker
@@ -71,6 +72,28 @@ def test_no_frame_counts_as_no_reading():
     worker.run_once(NOON + 1)
     assert scanner.scans == 0
     assert tracker.status(NOON + 1)["camera_ok"] is False
+    assert worker.last_overlay is None
+
+
+def test_each_check_leaves_boxes_for_the_feed():
+    tracker = FocusTracker(started_at=NOON)
+    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(phone=0.6), tracker)
+    worker.run_once(NOON + 1)
+    overlay = worker.last_overlay
+    assert (overlay.frame_width, overlay.frame_height, overlay.at) == (640, 480, NOON + 1)
+    assert [box.kind for box in overlay.boxes] == ["person", "phone"]
+    person = overlay.boxes[0]
+    assert (person.x, person.y, person.width, person.height) == pytest.approx((100 / 640, 100 / 480, 200 / 640, 300 / 480), abs=1e-4)
+
+
+def test_boxes_stay_from_the_last_good_check_when_the_camera_freezes():
+    tracker = FocusTracker(started_at=NOON)
+    stream = FakeStream(fake_jpeg())
+    worker = FocusWorker(stream, FakeScanner(), tracker)
+    worker.run_once(NOON + 1)
+    stream.frozen = True
+    worker.run_once(NOON + 2)
+    assert worker.last_overlay.at == NOON + 1
 
 
 def test_scanner_errors_are_logged_and_survived(caplog):

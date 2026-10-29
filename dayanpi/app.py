@@ -100,8 +100,12 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     The sign preview PNG (about 8 KB) rides along only when the picture changed since
     sign_since_version; None means always include it.
     """
-    status = tracker.status(time.time())
+    now = time.time()
+    status = tracker.status(now)
     status["enabled"] = worker is not None and worker.running
+    overlay = None if worker is None else worker.last_overlay
+    # The page hides boxes older than a few seconds, so it needs their age, not the Pi's clock.
+    status["overlay"] = None if overlay is None else {**asdict(overlay), "age_s": round(now - overlay.at, 1)}
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
