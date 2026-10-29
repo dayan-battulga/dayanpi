@@ -321,6 +321,80 @@ journalctl -u dayanpi -n 20 --no-pager     # look for "focus tracker running"
 
 Then open the site: the Focus card should flip to **focused** within a couple of seconds of you sitting down.
 
+### Gestures
+
+You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `pose.py` (runs the model) and `gestures.py` (turns arm positions into gestures).
+
+#### Getting the pose model
+
+Same story as the object model: the weights are a PyTorch file, so the conversion happens on the Mac. If `/tmp/yolo-export` is still around from last time, reuse it:
+
+```bash
+cd /tmp
+/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
+mv /tmp/yolo11n-pose.onnx ~/Desktop/code/projects/site-page/models/yolo11n-pose_480x640.onnx
+```
+
+`/tmp` gets wiped when the Mac restarts. If `/tmp/yolo-export` is gone, make it again first, then run the commands above:
+
+```bash
+python3 -m venv /tmp/yolo-export && /tmp/yolo-export/bin/pip install ultralytics onnx onnxslim onnxruntime
+```
+
+Quick check before you push. This should print `(1, 56, 6300)`:
+
+```bash
+cd ~/Desktop/code/projects/site-page
+/tmp/yolo-export/bin/python -c "import cv2, numpy as np; net = cv2.dnn.readNetFromONNX('models/yolo11n-pose_480x640.onnx'); net.setInput(np.zeros((1, 3, 480, 640), np.float32)); print(net.forward().shape)"
+```
+
+That's 56 numbers (a box, a person score, then x, y and confidence for each of the 17 points) for each of the 6300 spots the model checks. Anything else means the export went sideways. Then push it like any other change:
+
+```bash
+cd ~/Desktop/code/projects/site-page
+git pull origin main
+git add models/yolo11n-pose_480x640.onnx
+git commit -m "Add the YOLO11 nano pose model"
+git push origin main
+```
+
+Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' model (AGPL-3.0).
+
+#### The gestures
+
+| Gesture | What it does | Hold it for |
+| --- | --- | --- |
+| Right hand up | Next page on the sign | 1 s |
+| Left hand up | Previous page | 1 s |
+| Both hands up | Start or stop a work block | 2 s |
+
+- Right and left are **your** right and left. On the camera picture, your right hand is on the left side.
+- "Up" means your wrist is clearly above your shoulder, by about a third of your shoulder width. Head height is plenty.
+- Each hold fires once. To do it again, drop your hands for a second or two, then raise them again.
+- After anything fires, nothing else fires until your hands come down. No chaining gestures with your hands still up.
+- Going for both hands? Raise them together. One hand that's up alone for a full second counts as a page flip. Getting the second hand up before then cancels the flip.
+- If the camera loses your wrist for one check, the hold keeps going. Two bad checks in a row and it starts over.
+- Stretching with both arms up for 2 seconds counts as both hands up. If that keeps toggling your blocks, make the both-hands hold longer (see Tuning).
+
+#### Tips
+
+- Face the camera and sit like you normally do.
+- Keep both shoulders in the shot. No shoulders, no gestures.
+- Keep the raised hand in the shot too. The camera looks down at your desk, so a hand straight up can go off the top of the picture. Head height works better.
+- Hold still. The tracker only checks 1-3 times a second, so quick waves and swipes won't register.
+
+#### Tuning
+
+All of these are at the top of `gestures.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
+
+| Knob | Default | What it does |
+| --- | --- | --- |
+| `HOLD_SECONDS` | 1 s for pages, 2 s for blocks | How long you hold before it fires |
+| `RAISE_MARGIN` | `0.3` | How far above your shoulder the wrist has to be, in shoulder widths. Raise it if gestures fire by accident; lower it if they're hard to trigger. |
+| `MIN_KEYPOINT_CONFIDENCE` | `0.5` | How sure the model has to be about a shoulder or wrist before it counts |
+| `MIN_PERSON_CONFIDENCE` | `0.5` | How sure it has to be that there's a person there at all |
+| `ALLOWED_MISSES` | `1` | How many bad checks in a row a hold survives |
+
 ---
 
 ## Driving the rover

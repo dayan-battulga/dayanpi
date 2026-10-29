@@ -11,8 +11,10 @@ import time
 from collections.abc import Callable
 
 import detector
+import pose
 from detector import DeskScanner, FrameReading, decode_jpeg
 from focus import FocusTracker, FocusUpdate
+from gestures import GestureTracker
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +23,27 @@ STOP_JOIN_TIMEOUT_S = 3.0
 ERROR_LOG_EVERY = 30  # consecutive failures between log lines, so a dead camera doesn't flood the journal
 
 UpdateHook = Callable[[FocusUpdate, float], None]
+GestureHook = Callable[[str, float], None]
 
 
 def build_scanner() -> DeskScanner | None:
-    """Loads the models, or returns None (focus disabled) when the files aren't there."""
+    """Loads the models, or returns None (focus disabled) when the files aren't there.
+
+    With the pose model in models/ the full-frame pass is the pose model, which is what
+    makes gestures possible; without it, the plain object model runs and gestures are off.
+    """
     scanner = None
     missing = [path.name for path in (detector.OBJECT_MODEL_PATH, detector.FACE_MODEL_PATH) if not path.exists()]
     if missing:
         logger.warning("focus tracker disabled: missing model files %s", ", ".join(missing))
     else:
         try:
-            scanner = DeskScanner()
+            if pose.POSE_MODEL_PATH.exists():
+                scanner = pose.PoseDeskScanner()
+                logger.info("pose model found: gestures are on")
+            else:
+                scanner = DeskScanner()
+                logger.info("no pose model (%s): gestures are off", pose.POSE_MODEL_PATH.name)
         except Exception:
             logger.exception("focus tracker disabled: the models failed to load")
     return scanner
@@ -46,18 +58,22 @@ class FocusWorker:
         clock: Callable[[], float] = time.time,
         on_update: UpdateHook | None = None,
         interval_s: float = CHECK_INTERVAL_S,
+        on_gesture: GestureHook | None = None,
     ) -> None:
         self._stream = stream
         self._scanner = scanner
         self._tracker = tracker
         self._clock = clock
         self._on_update = on_update
+        self._on_gesture = on_gesture
         self._interval_s = interval_s
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self.gestures = GestureTracker()
         self.checks = 0
         self.failures = 0
         self.last_update: FocusUpdate | None = None
+        self.last_gesture: str | None = None
 
     @property
     def running(self) -> bool:
@@ -102,7 +118,20 @@ class FocusWorker:
                 self._on_update(update, now)
             except Exception:
                 logger.exception("focus update hook failed")
+        self.track_gestures(reading, now)
         return update
+
+    def track_gestures(self, reading: FrameReading | None, now: float) -> None:
+        main_pose = None if reading is None else pose.pick_main_pose(reading)
+        gesture = self.gestures.update(main_pose, now)
+        if gesture is not None:
+            self.last_gesture = gesture
+            logger.info("gesture: %s", gesture)
+            if self._on_gesture is not None:
+                try:
+                    self._on_gesture(gesture, now)
+                except Exception:
+                    logger.exception("gesture hook failed")
 
     def _loop(self) -> None:
         while not self._stop.is_set():

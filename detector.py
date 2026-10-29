@@ -91,6 +91,7 @@ class FrameReading:
     elapsed_ms: float
     food: list[Detection] = field(default_factory=list)
     drinks: list[Detection] = field(default_factory=list)
+    poses: list = field(default_factory=list)  # pose.PoseDetection, only when the pose model runs
 
 
 @dataclass
@@ -157,6 +158,35 @@ def map_to_frame(center_x: float, center_y: float, box_width: float, box_height:
     return frame_box
 
 
+def make_blob(letterbox: Letterbox) -> np.ndarray:
+    """The model input: 0-1 floats, RGB, NCHW. Shared by every YOLO model here."""
+    blob = cv2.dnn.blobFromImage(
+        letterbox.image,
+        scalefactor=1 / 255,
+        size=(INPUT_WIDTH, INPUT_HEIGHT),
+        swapRB=True,
+        crop=False,
+    )
+    return blob
+
+
+def pick_boxes(boxes: np.ndarray, scores: np.ndarray) -> list[int]:
+    """Non-max suppression over center-format boxes. Returns the kept row indices, strongest first."""
+    top_left_boxes = [
+        [float(cx - w / 2), float(cy - h / 2), float(w), float(h)]
+        for cx, cy, w, h in boxes
+    ]
+    kept = cv2.dnn.NMSBoxes(top_left_boxes, scores.tolist(), MIN_CONFIDENCE, NMS_IOU)
+    indices = [int(index) for index in np.array(kept, dtype=int).flatten()]
+    return indices
+
+
+def map_row_to_frame(box_row: np.ndarray, letterbox: Letterbox) -> Box:
+    cx, cy, w, h = box_row
+    frame_box = map_to_frame(float(cx), float(cy), float(w), float(h), letterbox)
+    return frame_box
+
+
 def decode_objects(output: np.ndarray, letterbox: Letterbox) -> list[Detection]:
     """output is the raw YOLO tensor, shape (1, 4 + classes, anchors).
 
@@ -173,18 +203,12 @@ def decode_objects(output: np.ndarray, letterbox: Letterbox) -> list[Detection]:
         keep = (best_class == class_id) & (best_score >= MIN_CONFIDENCE)
         boxes = predictions[keep, :BOX_VALUES]
         scores = best_score[keep]
-        top_left_boxes = [
-            [float(cx - w / 2), float(cy - h / 2), float(w), float(h)]
-            for cx, cy, w, h in boxes
-        ]
-        kept = cv2.dnn.NMSBoxes(top_left_boxes, scores.tolist(), MIN_CONFIDENCE, NMS_IOU)
-        for index in np.array(kept, dtype=int).flatten():
-            cx, cy, w, h = boxes[index]
+        for index in pick_boxes(boxes, scores):
             detections.append(
                 Detection(
                     label=label,
                     confidence=float(scores[index]),
-                    box=map_to_frame(float(cx), float(cy), float(w), float(h), letterbox),
+                    box=map_row_to_frame(boxes[index], letterbox),
                 )
             )
 
@@ -249,14 +273,7 @@ class ObjectDetector:
 
     def detect(self, image: np.ndarray) -> list[Detection]:
         letterbox = fit_to_input(image)
-        blob = cv2.dnn.blobFromImage(
-            letterbox.image,
-            scalefactor=1 / 255,
-            size=(INPUT_WIDTH, INPUT_HEIGHT),
-            swapRB=True,
-            crop=False,
-        )
-        self._net.setInput(blob)
+        self._net.setInput(make_blob(letterbox))
         detections = decode_objects(self._net.forward(), letterbox)
         return detections
 

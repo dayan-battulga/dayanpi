@@ -102,6 +102,66 @@ def test_start_and_stop_run_the_loop():
     assert worker.last_update.state == "working"
 
 
+def raised_pose(left_up: bool, right_up: bool):
+    from pose import Keypoint, PoseDetection
+
+    points = [Keypoint(x=300.0, y=300.0, confidence=0.9) for _ in range(17)]
+    points[5] = Keypoint(x=260.0, y=200.0, confidence=0.9)  # left shoulder
+    points[6] = Keypoint(x=340.0, y=200.0, confidence=0.9)  # right shoulder
+    points[9] = Keypoint(x=250.0, y=100.0 if left_up else 300.0, confidence=0.9)  # left wrist
+    points[10] = Keypoint(x=350.0, y=100.0 if right_up else 300.0, confidence=0.9)  # right wrist
+    detection = PoseDetection(confidence=0.9, box=Box(200, 100, 400, 450), keypoints=points)
+    return detection
+
+
+class PoseScanner(FakeScanner):
+    def __init__(self, right_up: bool) -> None:
+        super().__init__()
+        self.right_up = right_up
+
+    def scan(self, image: np.ndarray) -> FrameReading:
+        reading = super().scan(image)
+        reading.poses = [raised_pose(left_up=False, right_up=self.right_up)]
+        return reading
+
+
+def test_a_held_gesture_reaches_the_hook_once():
+    tracker = FocusTracker(started_at=NOON)
+    fired = []
+    worker = FocusWorker(FakeStream(fake_jpeg()), PoseScanner(right_up=True), tracker, on_gesture=lambda name, now: fired.append((name, now)))
+    for second in range(1, 5):
+        worker.run_once(NOON + second)
+    assert fired == [("next_page", NOON + 2)]
+    assert worker.last_gesture == "next_page"
+
+
+def test_hands_down_means_no_gesture():
+    tracker = FocusTracker(started_at=NOON)
+    fired = []
+    worker = FocusWorker(FakeStream(fake_jpeg()), PoseScanner(right_up=False), tracker, on_gesture=lambda name, now: fired.append(name))
+    for second in range(1, 5):
+        worker.run_once(NOON + second)
+    assert fired == []
+    assert worker.gestures.progress is None
+
+
+def test_build_scanner_uses_the_pose_model_when_present(monkeypatch, tmp_path, caplog):
+    import pose as pose_module
+
+    built = []
+    monkeypatch.setattr(pose_module, "POSE_MODEL_PATH", tmp_path / "pose.onnx")
+    monkeypatch.setattr(pose_module, "PoseDeskScanner", lambda: built.append("pose") or "pose-scanner")
+    monkeypatch.setattr(focus_worker, "DeskScanner", lambda: built.append("plain") or "plain-scanner")
+    monkeypatch.setattr(detector, "OBJECT_MODEL_PATH", tmp_path / "yolo.onnx")
+    monkeypatch.setattr(detector, "FACE_MODEL_PATH", tmp_path / "face.onnx")
+    (tmp_path / "yolo.onnx").write_bytes(b"x")
+    (tmp_path / "face.onnx").write_bytes(b"x")
+    assert focus_worker.build_scanner() == "plain-scanner"
+    (tmp_path / "pose.onnx").write_bytes(b"x")
+    assert focus_worker.build_scanner() == "pose-scanner"
+    assert built == ["plain", "pose"]
+
+
 def test_build_scanner_is_none_without_model_files(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(detector, "OBJECT_MODEL_PATH", tmp_path / "missing.onnx")
     with caplog.at_level(logging.WARNING):
