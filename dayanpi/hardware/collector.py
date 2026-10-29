@@ -31,24 +31,38 @@ class RateSample(NamedTuple):
     cpu_percent: float
     rx_kbps: float
     tx_kbps: float
+    core_percents: list[float]
+
+
+class CpuTimes(NamedTuple):
+    total: int
+    idle: int
 
 
 class RateSampler:
-    def __init__(self, interface: str) -> None:
+    def __init__(
+        self,
+        interface: str,
+        stat_path: Path = Path("/proc/stat"),
+        net_root: Path = Path("/sys/class/net"),
+    ) -> None:
         self.interface = interface
+        self.stat_path = stat_path
+        self.net_root = net_root
         self._prev_total: int | None = None
         self._prev_idle: int | None = None
+        self._prev_cores: dict[str, CpuTimes] = {}
         self._prev_rx: int | None = None
         self._prev_tx: int | None = None
         self._prev_time: float | None = None
 
     def sample(self) -> RateSample | None:
-        fields = Path("/proc/stat").read_text().splitlines()[0].split()
-        values = [int(x) for x in fields[1:]]
-        total = sum(values)
-        idle_total = values[3] + values[4]  # idle + iowait
+        times = read_cpu_times(self.stat_path.read_text())
+        total = times["cpu"].total
+        idle_total = times["cpu"].idle
+        cores = {name: core for name, core in times.items() if name != "cpu"}
 
-        base = Path(f"/sys/class/net/{self.interface}/statistics")
+        base = self.net_root / self.interface / "statistics"
         rx = int((base / "rx_bytes").read_text().strip())
         tx = int((base / "tx_bytes").read_text().strip())
         now = time.monotonic()
@@ -56,6 +70,7 @@ class RateSampler:
         if self._prev_total is None:
             self._prev_total = total
             self._prev_idle = idle_total
+            self._prev_cores = cores
             self._prev_rx = rx
             self._prev_tx = tx
             self._prev_time = now
@@ -70,12 +85,19 @@ class RateSampler:
             return None
 
         cpu_percent = 100 * (total_delta - idle_delta) / total_delta
+        # A core that went offline since the last sample has no delta to report.
+        core_percents = [
+            round(compute_busy_percent(self._prev_cores[name], core), 2)
+            for name, core in cores.items()
+            if name in self._prev_cores
+        ]
         # bytes → kilobits/sec
         rx_kbps = (rx - self._prev_rx) * 8 / 1000 / elapsed
         tx_kbps = (tx - self._prev_tx) * 8 / 1000 / elapsed
 
         self._prev_total = total
         self._prev_idle = idle_total
+        self._prev_cores = cores
         self._prev_rx = rx
         self._prev_tx = tx
         self._prev_time = now
@@ -84,10 +106,30 @@ class RateSampler:
             cpu_percent=round(cpu_percent, 2),
             rx_kbps=round(rx_kbps, 2),
             tx_kbps=round(tx_kbps, 2),
+            core_percents=core_percents,
         )
 
 
 # ======== Functions ===========
+
+
+def read_cpu_times(stat_text: str) -> dict[str, CpuTimes]:
+    """Every cpu line of /proc/stat, in file order: "cpu" for the whole chip, then "cpu0", "cpu1"..."""
+    times: dict[str, CpuTimes] = {}
+    for line in stat_text.splitlines():
+        if line.startswith("cpu"):
+            name, *fields = line.split()
+            values = [int(field) for field in fields]
+            times[name] = CpuTimes(total=sum(values), idle=values[3] + values[4])  # idle + iowait
+    return times
+
+
+def compute_busy_percent(previous: CpuTimes, current: CpuTimes) -> float:
+    """How busy a CPU was between two readings; 0 when no time passed for it."""
+    total_delta = current.total - previous.total
+    idle_delta = current.idle - previous.idle
+    busy = 100 * (total_delta - idle_delta) / total_delta if total_delta > 0 else 0.0
+    return busy
 
 
 def temperature_celcius() -> float:

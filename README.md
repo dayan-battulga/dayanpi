@@ -8,7 +8,7 @@ Want the step-by-step commands? That's all in **[docs/MANUAL.md](docs/MANUAL.md)
 
 ## What it's for
 
-- **Keeping an eye on the Pi.** Temperature (as a gauge), CPU, memory and disk, updated live every second, plus a status bar with network speed, uptime, power, the voice, the Mac's front app and the sign mode. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
+- **Keeping an eye on the Pi.** Temperature (as a gauge), CPU (with a live bar per core), memory and disk, updated live every second, plus a status bar with network speed, uptime, power, the voice, the Mac's front app and the sign mode. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
 - **Seeing what the rover sees.** A live camera feed right on the page.
 - **Driving the rover.** Hold `W A S D` on the Mac or the arrow pad on the phone and the wheels move. Let go and they stop. (Paused right now; the Drive card is hidden.)
 - **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup, snacks and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**. Every change gets logged on the Pi. It all runs on the Pi, with no video saved.

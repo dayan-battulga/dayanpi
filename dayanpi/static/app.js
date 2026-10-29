@@ -8,6 +8,7 @@ const GAUGE_MAX_C = 85;
 const LOAD_ELEVATED_PCT = 70;
 const LOAD_CRITICAL_PCT = 90;
 const BLOCK_COUNT = 20;
+const MIN_CORE_SHARE = 4; // % of the bar, so an idle core still shows a sliver
 const THEME_FADE_MS = 700;
 const FEED_RETRY_BASE_MS = 2000; // 2, 4, 8, 16 s...
 const FEED_RETRY_MAX_MS = 30000; // ...then every 30 s
@@ -28,7 +29,8 @@ const els = {
   temp: document.getElementById("temp"),
   tempArc: document.getElementById("temp-arc"),
   cpu: document.getElementById("cpu"),
-  cpuBlocks: document.getElementById("cpu-blocks"),
+  cpuCores: document.getElementById("cpu-cores"),
+  cpuCoresLabel: document.getElementById("cpu-cores-label"),
   memPercent: document.getElementById("mem-percent"),
   memDetail: document.getElementById("mem-detail"),
   memBlocks: document.getElementById("mem-blocks"),
@@ -113,6 +115,28 @@ function setBlocks(container, percent, level) {
   });
 }
 
+function setCoreBars(percents) {
+  if (els.cpuCores.children.length !== percents.length) {
+    const bars = percents.map(() => {
+      const core = document.createElement("span");
+      const fill = document.createElement("span");
+      core.className = "core";
+      fill.className = "core-fill";
+      core.append(fill);
+      return core;
+    });
+    els.cpuCores.replaceChildren(...bars);
+  }
+  percents.forEach((percent, index) => {
+    const fill = els.cpuCores.children[index].firstElementChild;
+    fill.style.height = `${Math.max(MIN_CORE_SHARE, Math.min(100, percent))}%`;
+    fill.dataset.level = readLevel(percent, LOAD_ELEVATED_PCT, LOAD_CRITICAL_PCT);
+  });
+  const described = percents.map((percent) => `${Math.round(percent)}%`).join(", ");
+  els.cpuCores.setAttribute("aria-label", percents.length > 0 ? `Per core: ${described}` : "Per-core load not available yet");
+  els.cpuCoresLabel.textContent = percents.length > 0 ? `${percents.length} cores` : "all cores";
+}
+
 function formatUptime(seconds) {
   const total = Math.floor(seconds);
   const days = Math.floor(total / 86400);
@@ -187,14 +211,13 @@ function renderStats(stats) {
   if (stats.rates == null) {
     setText(els.cpu, "--");
     els.cpu.dataset.level = "nominal";
-    setBlocks(els.cpuBlocks, 0, "nominal");
+    setCoreBars([]);
     setText(els.net, "--");
   } else {
     const cpu = stats.rates.cpu_percent;
-    const cpuLevel = readLevel(cpu, LOAD_ELEVATED_PCT, LOAD_CRITICAL_PCT);
     setText(els.cpu, Math.round(cpu));
-    els.cpu.dataset.level = cpuLevel;
-    setBlocks(els.cpuBlocks, cpu, cpuLevel);
+    els.cpu.dataset.level = readLevel(cpu, LOAD_ELEVATED_PCT, LOAD_CRITICAL_PCT);
+    setCoreBars(stats.rates.core_percents ?? []);
     setText(els.net, `↓ ${formatBits(stats.rates.rx_kbps)} · ↑ ${formatBits(stats.rates.tx_kbps)}`);
   }
 
@@ -309,7 +332,6 @@ function handleFeedLoad() {
 
 // ---------- start ----------
 
-buildBlocks(els.cpuBlocks);
 buildBlocks(els.memBlocks);
 buildBlocks(els.diskBlocks);
 applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light", false);

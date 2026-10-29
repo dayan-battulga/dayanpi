@@ -1043,6 +1043,56 @@ ol {
   font-size: 15px;
 }
 
+.cpu-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.cpu-row .tile-number {
+  margin-top: 0;
+}
+
+.cores {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 64px;
+}
+
+.core {
+  position: relative;
+  width: 14px;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.core-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0;
+  border-radius: 5px;
+  background: var(--ink-2);
+  transition:
+    height 0.8s var(--ease),
+    background-color 0.5s var(--ease);
+}
+
+.core-fill[data-level="elevated"],
+.core-fill[data-level="critical"] {
+  background: var(--level);
+}
+
+.tile-note {
+  margin-top: 14px;
+}
+
 [data-level="elevated"] {
   --level: var(--warm);
 }

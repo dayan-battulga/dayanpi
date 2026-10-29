@@ -230,9 +230,12 @@
           </div>
 
           <div class="card tile">
-            <div class="tile-head"><span class="label">CPU</span><span class="mono muted small">all cores</span></div>
-            <p class="mono tile-number"><span id="cpu" data-level="nominal">--</span><span class="unit"> %</span></p>
-            <div id="cpu-blocks" class="blocks" role="progressbar" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+            <div class="tile-head"><span class="label">CPU</span><span id="cpu-cores-label" class="mono muted small">all cores</span></div>
+            <div class="cpu-row">
+              <p class="mono tile-number"><span id="cpu" data-level="nominal">--</span><span class="unit"> %</span></p>
+              <div id="cpu-cores" class="cores" role="img" aria-label="Per-core load not available yet"></div>
+            </div>
+            <p class="muted small tile-note">one bar per core, live</p>
           </div>
 
           <div class="card tile">

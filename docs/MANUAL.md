@@ -1177,7 +1177,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, snacks, best streak.
 - **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview and a list of today's last few changes.
-- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU, memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
+- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**, which also saves on the shared `/video` rate limit. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
 - **Animations** turn themselves off if your device is set to reduce motion.
