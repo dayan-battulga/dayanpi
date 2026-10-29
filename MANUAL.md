@@ -26,6 +26,9 @@ Always use the **`main`** branch on both machines.
 | `/api/health` | Health check |
 | `/video` | MJPEG camera |
 | `/api/drive` | Motor commands (POST, used by the Drive card) |
+| `/api/focus` | Focus state, today's totals and timeline |
+| `/api/focus/block` | Start/stop a work block (POST) |
+| `/api/mac/app` | The Mac helper reports the front app (POST) |
 | `/docs` | Disabled (404 on purpose) |
 
 ### How you open it
@@ -188,7 +191,7 @@ When finished: `Ctrl+C`, then `sudo systemctl start dayanpi`.
 
 ## Focus tracker
 
-The webcam sits at your desk, pointed down at your face, hands and desk. The plan is for the site to show whether you're **working**, **on your phone**, or **away**, plus today's totals. It's being built one step at a time.
+The webcam sits at your desk, pointed down at your face, hands and desk. The site works out whether you're **focused**, **on your phone**, or **away**, keeps today's totals, and logs every change. It's being built one step at a time; steps 1 to 4 are in.
 
 It runs two small models on the Pi itself (nothing goes to the cloud), and they're in `models/`. They run through OpenCV, which is already installed, so there's nothing new to `pip install`.
 
@@ -256,6 +259,65 @@ mv /tmp/yolo11n.onnx ~/Desktop/code/projects/site-page/models/yolo11n_480x640.on
 ```
 
 `opset=12` keeps it loadable by OpenCV's DNN module, and `imgsz=(480, 640)` means the camera frame goes in as-is, with no padding.
+
+### Steps 2 to 4: the tracker runs inside the site
+
+Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the Focus card says "models not loaded on the Pi".
+
+**The states**
+
+| State | Means | Rule |
+| --- | --- | --- |
+| **focused** | At the desk, no phone in sight | You're seen in 2 checks in a row |
+| **on phone** | Phone in hand | Phone spotted in 3 of the last 5 checks. Back to focused after 5 checks without it |
+| **away** | Nobody at the desk | 10 seconds without you |
+| **unknown** | Just started, or no camera frames for 30 s | |
+
+The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `focus.py` if they need tuning.
+
+**What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), snacks (food spotted in 3 of 5 checks; one snack per sitting), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
+
+**The Focus card** on the dashboard shows the state, a live timer, today's totals, a 24-hour timeline (teal = focused, red = phone, grey = away) and a **Start block** button. A work block is just a flag for now: while it's on, a break longer than 15 minutes gets flagged as "break over". Gestures will flip it later.
+
+**Callouts** are the things it says (out loud once the speaker's in; always logged):
+
+- *instant pickup*: on the phone within 60 s of sitting back down
+- *late night phone*: on the phone between 1 and 5 am
+- *long break*: you come back after 15+ minutes away
+- *break over*: 15 minutes away during a work block
+- *day done*: you leave after 10 pm (once a day, with the day's totals)
+
+**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, snacks, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone / food confidence, face turn and tilt). **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+
+Check it's filling up:
+
+```bash
+cd ~/Desktop/site-page/dayanpi
+.venv/bin/python focus_stats.py            # today
+.venv/bin/python focus_stats.py --days 7   # the week, plus focus by hour of day
+tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
+```
+
+**Routes** (all behind the login):
+
+| Route | What |
+| --- | --- |
+| `GET /api/focus` | Current state, today's totals, the block, the last check's numbers, and today's timeline segments |
+| `POST /api/focus/block` | `{"action": "start" \| "stop" \| "toggle"}` |
+| `POST /api/mac/app` | `{"app": "Code"}`, sent by the Mac helper when the front app changes |
+
+The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
+
+**Deploy it:**
+
+```bash
+cd ~/Desktop/site-page/dayanpi
+git pull origin main
+sudo systemctl restart dayanpi
+journalctl -u dayanpi -n 20 --no-pager     # look for "focus tracker running"
+```
+
+Then open the site: the Focus card should flip to **focused** within a couple of seconds of you sitting down.
 
 ---
 

@@ -11,7 +11,7 @@ Want the step-by-step commands? That's all in **[MANUAL.md](MANUAL.md)**. This p
 - **Keeping an eye on the Pi.** CPU, temperature, memory, disk, network speed and uptime, updated live every second, plus 2-minute charts for CPU, temp and memory. There's also a Power card that turns red if the Pi is undervolted or throttling.
 - **Seeing what the rover sees.** A live camera feed right on the page.
 - **Driving the rover.** Hold `W A S D` on the Mac or the arrow pad on the phone and the wheels move. Let go and they stop. (Paused right now; the Drive card is hidden.)
-- **Tracking focus (in progress).** The webcam watches my desk and works out whether I'm working, on my phone, or away. It all runs on the Pi, with no video saved.
+- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, today's focus and phone time, pickups, snacks, my best streak and a timeline of the day, and every change gets logged on the Pi. It all runs on the Pi, with no video saved.
 
 It's a personal project, so it's built for one person (me) on my own devices, not for a crowd.
 
@@ -120,10 +120,13 @@ They cover the motor logic (speed scaling, clamping, reversal pause, pin order),
 | `collector.py` | Reads the Pi's stats |
 | `camera.py` | Camera capture thread (one opener, many viewers) |
 | `drivetrain.py` | Motor control: speed scaling, reversal pause, and the watchdog's timer |
-| `detector.py` | Finds people, phones and faces in a camera frame (focus tracker) |
+| `detector.py` | Finds people, phones, faces, food and drinks in a camera frame (focus tracker) |
+| `focus.py` | Turns the readings into focused / phone / away, keeps today's totals, writes the log |
+| `focus_worker.py` | The thread that runs the detector inside the site about once a second |
+| `focus_stats.py` | Prints day totals and focus-by-hour from the log |
 | `focus_check.py` | Focus tracker step 1: a guided check you run on the Pi |
 | `models/` | The two ONNX models the detector uses (YOLO11 nano, YuNet) |
-| `static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `drive.js` (driving) |
+| `static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
 | `tests/` | Mac tests (pytest with gpiozero's mock pins) |
 | `dayanpi.service` | The systemd unit for the Pi |
 | `dayanpi.env.example` | Template for the login file |
