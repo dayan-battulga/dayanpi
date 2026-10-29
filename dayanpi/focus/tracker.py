@@ -2,7 +2,7 @@
 
 States: "working" (at the desk, no phone), "phone" (phone in hand), "away" (nobody
 there) and "unknown" (just started, or no camera frames). The rules and their numbers
-come from Dayan's real desk frames; see docs/MANUAL.md for the reasoning.
+come from Dayan's real desk frames; see docs/focus-tracker.md for the reasoning.
 
 Everything time-based takes `now` from the caller, so tests can drive it with fake
 clocks. Local-time rules (late night, day done, day rollover) use the Pi's time zone.

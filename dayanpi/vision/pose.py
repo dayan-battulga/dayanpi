@@ -95,7 +95,7 @@ def decode_poses(output: np.ndarray, letterbox: Letterbox) -> list[PoseDetection
     if output.shape[1] != OUTPUT_ROWS:
         raise ValueError(
             f"Expected a YOLO pose output with {OUTPUT_ROWS} rows, got shape {output.shape}. "
-            "Re-export the pose model with the command in docs/MANUAL.md."
+            "Re-export the pose model with the command in docs/focus-tracker.md."
         )
 
     predictions = output[0].T

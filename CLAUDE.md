@@ -1,11 +1,11 @@
 # dayanpi: notes for Claude Code
 
 ## What this repo is
-A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can also drive my 4WD rover, but the rover is paused: the motors are unplugged from the Pi and the Drive card is hidden. Right now I'm building a focus tracker: the webcam sits at my desk and the site shows whether I'm working, on my phone, or away. docs/MANUAL.md explains how the app runs. If anything in this file disagrees with the code or docs/MANUAL.md, trust those and tell me.
+A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can also drive my 4WD rover, but the rover is paused: the motors are unplugged from the Pi and the Drive card is hidden. Right now I'm building a focus tracker: the webcam sits at my desk and the site shows whether I'm working, on my phone, or away. docs/MANUAL.md explains how the app runs, and docs/ has a guide per add-on. If anything in this file disagrees with the code or the docs, trust those and tell me.
 
 ## Where things are
 - All the Python lives in one package, dayanpi/, split by what it talks to: app.py (FastAPI), paths.py (STATIC_DIR, MODELS_DIR, DEFAULT_DATA_DIR, FOCUS_CHECK_DIR), hardware/ (camera, collector, voice, drivetrain), vision/ (detector, pose, gestures), focus/ (tracker, worker, stats, check), sign/ (renderer, glyphs, controller), utils/ (threads), static/ (the dashboard). Import with the full path (`from dayanpi.focus.tracker import FocusTracker`), never a bare module name.
-- Outside the package: scripts/ (focus_check.py and focus_stats.py, thin launchers that put the repo root on sys.path and call the module's main()), models/ (ONNX files), tests/, mac_helper/, deploy/ (dayanpi.service, dayanpi.env.example), docs/MANUAL.md, and the gitignored data/ and focus_check/ written on the Pi. pyproject.toml sets pytest's testpaths and pythonpath, so plain `pytest` from the repo root works.
+- Outside the package: scripts/ (focus_check.py and focus_stats.py, thin launchers that put the repo root on sys.path and call the module's main()), models/ (ONNX files), tests/, mac_helper/, deploy/ (dayanpi.service, dayanpi.env.example), docs/ (MANUAL.md for setup and running, plus one guide per add-on: focus-tracker.md, pi-camera.md, led-sign.md, voice.md, rover.md), and the gitignored data/ and focus_check/ written on the Pi. pyproject.toml sets pytest's testpaths and pythonpath, so plain `pytest` from the repo root works.
 - A new module goes in the package folder that matches what it talks to; a new thing you run by hand gets a launcher in scripts/. Nothing that imports the package goes at the repo root.
 
 ## How it runs

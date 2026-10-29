@@ -118,7 +118,7 @@ def start_sign() -> SignController | None:
                 outputs.append(PanelOutput())
                 logger.info("sign: driving the panels")
             except Exception:
-                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see docs/MANUAL.md)")
+                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see docs/led-sign.md)")
         started = SignController(tracker, outputs)
         started.start()
     return started

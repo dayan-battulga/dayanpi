@@ -258,7 +258,7 @@ def main() -> int:
     missing = [path.name for path in (OBJECT_MODEL_PATH, FACE_MODEL_PATH) if not path.exists()]
     exit_code = 1
     if missing:
-        print(f"Missing model files in models/: {', '.join(missing)}. See 'Where the models come from' in docs/MANUAL.md.")
+        print(f"Missing model files in models/: {', '.join(missing)}. See 'Where the models come from' in docs/focus-tracker.md.")
     else:
         exit_code = run_check(args.seconds)
     return exit_code

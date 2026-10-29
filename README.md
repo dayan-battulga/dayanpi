@@ -2,7 +2,7 @@
 
 A little web dashboard that runs on my Raspberry Pi 5. It shows how the Pi is doing, streams its camera, and lets me drive my 4WD rover from a browser, on my Mac with the keyboard or on my iPhone with on-screen buttons.
 
-Want the step-by-step commands? That's all in **[docs/MANUAL.md](docs/MANUAL.md)**. This page is the big picture.
+Want the step-by-step commands? Setup and running are in **[docs/MANUAL.md](docs/MANUAL.md)**, and each add-on (focus tracker, Pi camera, LED sign, voice, rover) has its own guide next to it in [docs/](docs/). This page is the big picture.
 
 ---
 
@@ -51,7 +51,7 @@ The step-by-step versions live in the manual, with a check after each step:
 
 - [First-time setup](docs/MANUAL.md#first-time-setup-pi): the venv, groups, password file and systemd service. Then [Tailscale Serve](docs/MANUAL.md#tailscale-serve) puts it on your devices.
 - [Unplugging and powering back on](docs/MANUAL.md#unplugging-and-powering-back-on): what has to stay enabled, and the safe shutdown order.
-- [Driving the rover](docs/MANUAL.md#driving-the-rover): the watchdog, speed cap, reversal pause and tuning. Read it before driving.
+- [Driving the rover](docs/rover.md): the watchdog, speed cap, reversal pause and tuning. Read it before driving.
 
 ---
 
@@ -99,5 +99,5 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest, with gpiozero's mock pins for the motors) |
 | `deploy/` | `dayanpi.service` (the systemd unit) and `dayanpi.env.example` (template for the login file) |
-| `docs/MANUAL.md` | How to set up, run, drive, tune and fix it |
+| `docs/` | `MANUAL.md` (set up, run, fix) plus a guide per add-on: `focus-tracker.md`, `pi-camera.md`, `led-sign.md`, `voice.md`, `rover.md` |
 | `data/`, `focus_check/` | Written on the Pi at runtime (the focus log, the check's snapshots); both gitignored |

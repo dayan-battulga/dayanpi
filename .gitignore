@@ -1,6 +1,4 @@
-.env
 *.env
-!dayanpi.env.example
 __pycache__/
 *.py[cod]
 .venv/
