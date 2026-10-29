@@ -1,0 +1,9 @@
+[project]
+name = "dayanpi"
+version = "0.1.0"
+description = "Raspberry Pi 5 dashboard: host stats, camera, focus tracker, LED sign, and a paused rover."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

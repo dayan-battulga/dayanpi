@@ -3,10 +3,10 @@ from datetime import datetime
 
 import numpy as np
 
-import sign
-import sign_controller
-from focus import Callout, FocusTracker
-from sign_controller import SignController
+from dayanpi.sign import renderer as sign
+from dayanpi.sign import controller as sign_controller
+from dayanpi.focus.tracker import Callout, FocusTracker
+from dayanpi.sign.controller import SignController
 
 NOON = datetime(2026, 10, 29, 12, 0).timestamp()
 LATE = datetime(2026, 10, 29, 23, 30).timestamp()

@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 import pytest
 
-import focus_check
-from detector import Box, Detection, FaceReading, FrameReading, Point
+from dayanpi.focus import check as focus_check
+from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
 
 BOX = Box(x1=10, y1=10, x2=50, y2=50)
 

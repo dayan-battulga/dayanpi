@@ -2,7 +2,7 @@
 
 The dayanpi service owns the camera, so stop it first:
     sudo systemctl stop dayanpi
-    .venv/bin/python focus_check.py
+    .venv/bin/python scripts/focus_check.py
     sudo systemctl start dayanpi
 
 It walks you through three phases (working, on your phone, away), prints what
@@ -17,15 +17,15 @@ import statistics
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 import cv2
 import numpy as np
 
-from camera import CameraStream, create_stream
-from detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg, find_best_confidence
+from dayanpi.hardware.camera import CameraStream, create_stream
+from dayanpi.paths import FOCUS_CHECK_DIR
+from dayanpi.vision.detector import FACE_MODEL_PATH, OBJECT_MODEL_PATH, DeskScanner, Detection, FrameReading, decode_jpeg, find_best_confidence
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "focus_check"
+OUTPUT_DIR = FOCUS_CHECK_DIR
 FRAMES_FOLDER = "frames"
 FRAME_SAVE_INTERVAL_S = 2.0
 PHASE_SECONDS = 20
@@ -268,7 +268,7 @@ def main() -> int:
     missing = [path.name for path in (OBJECT_MODEL_PATH, FACE_MODEL_PATH) if not path.exists()]
     exit_code = 1
     if missing:
-        print(f"Missing model files in models/: {', '.join(missing)}. See 'Where the models come from' in MANUAL.md.")
+        print(f"Missing model files in models/: {', '.join(missing)}. See 'Where the models come from' in docs/MANUAL.md.")
     else:
         exit_code = run_check(args.seconds)
     return exit_code

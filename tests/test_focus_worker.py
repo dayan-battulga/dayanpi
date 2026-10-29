@@ -4,11 +4,11 @@ import time
 import cv2
 import numpy as np
 
-import detector
-import focus_worker
-from detector import Box, Detection, FrameReading
-from focus import FocusTracker
-from focus_worker import FocusWorker
+from dayanpi.vision import detector
+from dayanpi.focus import worker as focus_worker
+from dayanpi.vision.detector import Box, Detection, FrameReading
+from dayanpi.focus.tracker import FocusTracker
+from dayanpi.focus.worker import FocusWorker
 
 NOON = 1_800_000_000.0
 
@@ -113,7 +113,7 @@ def test_start_and_stop_run_the_loop():
 
 
 def raised_pose(left_up: bool, right_up: bool):
-    from pose import Keypoint, PoseDetection
+    from dayanpi.vision.pose import Keypoint, PoseDetection
 
     points = [Keypoint(x=300.0, y=300.0, confidence=0.9) for _ in range(17)]
     points[5] = Keypoint(x=260.0, y=200.0, confidence=0.9)  # left shoulder
@@ -202,7 +202,7 @@ def test_wait_for_clock_skips_machines_without_timesyncd(tmp_path):
 
 
 def test_build_scanner_uses_the_pose_model_when_present(monkeypatch, tmp_path, caplog):
-    import pose as pose_module
+    from dayanpi.vision import pose as pose_module
 
     built = []
     monkeypatch.setattr(pose_module, "POSE_MODEL_PATH", tmp_path / "pose.onnx")

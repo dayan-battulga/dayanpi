@@ -7,9 +7,9 @@ import cv2
 import numpy as np
 import pytest
 
-import sign
-import sign_glyphs
-from sign import (
+from dayanpi.sign import renderer as sign
+from dayanpi.sign import glyphs as sign_glyphs
+from dayanpi.sign.renderer import (
     CalloutPage,
     NowPage,
     PanelOutput,

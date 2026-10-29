@@ -8,7 +8,6 @@ import threading
 import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -21,22 +20,21 @@ from slowapi.util import get_remote_address
 from dataclasses import asdict
 from typing import Literal
 
-import collector
-import focus_worker
-from camera import create_stream
-from drivetrain import CommandTimer, DriveTrain
-from focus import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
-from focus_worker import FocusWorker
-from sign import PanelOutput, PreviewOutput
-from sign_controller import SignController
-from voice import VoiceAnnouncer
+from dayanpi.hardware import collector
+from dayanpi.focus import worker as focus_worker
+from dayanpi.hardware.camera import create_stream
+from dayanpi.hardware.drivetrain import CommandTimer, DriveTrain
+from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
+from dayanpi.focus.worker import FocusWorker
+from dayanpi.hardware.voice import VoiceAnnouncer
+from dayanpi.paths import STATIC_DIR
+from dayanpi.sign.controller import SignController
+from dayanpi.sign.renderer import PanelOutput, PreviewOutput
 
 # uvicorn only configures its own loggers; without this the app's INFO lines
 # ("focus tracker running", "voice off, would say ...") never reach journalctl.
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
 FOCUS_LOG_DIR = find_focus_log_dir()
 
 FRAME_BOUNDARY = "frame"
@@ -125,7 +123,7 @@ def start_sign() -> SignController | None:
                 outputs.append(PanelOutput())
                 logger.info("sign: driving the panels")
             except Exception:
-                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see MANUAL.md)")
+                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see docs/MANUAL.md)")
         started = SignController(tracker, outputs)
         started.start()
     return started

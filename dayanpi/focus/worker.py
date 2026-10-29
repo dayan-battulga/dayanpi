@@ -10,12 +10,12 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-import detector
-import pose
-from detector import DeskScanner, FrameReading, decode_jpeg
-from focus import FocusTracker, FocusUpdate
-from gestures import GestureTracker
-from threads import LoopThread
+from dayanpi.vision import detector
+from dayanpi.vision import pose
+from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
+from dayanpi.focus.tracker import FocusTracker, FocusUpdate
+from dayanpi.vision.gestures import GestureTracker
+from dayanpi.utils.threads import LoopThread
 
 logger = logging.getLogger(__name__)
 

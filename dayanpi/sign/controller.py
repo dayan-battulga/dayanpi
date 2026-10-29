@@ -16,10 +16,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-import sign
-from focus import Callout, FocusTracker, is_in_night_window
-from sign import CalloutPage, NowPage, SummaryPage, TodayPage
-from threads import LoopThread
+from dayanpi.sign import renderer
+from dayanpi.focus.tracker import Callout, FocusTracker, is_in_night_window
+from dayanpi.sign.renderer import CalloutPage, NowPage, SummaryPage, TodayPage
+from dayanpi.utils.threads import LoopThread
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +104,13 @@ class SignController(LoopThread):
             self._advance(now)
             page = self._build_page(now)
             brightness = self._brightness(now)
-        frame = sign.render_page(page, brightness=brightness)
+        frame = renderer.render_page(page, brightness=brightness)
         return frame
 
     def _advance(self, now: float) -> None:
         if self._active is not None:
             scrolled = (now - self._active.started_at) * SCROLL_PX_PER_S
-            if scrolled > sign.measure_callout(self._active.callout.text):
+            if scrolled > renderer.measure_callout(self._active.callout.text):
                 self._active = None
         if self._active is None and self._queue:
             self._active = ActiveCallout(callout=self._queue.popleft(), started_at=now)

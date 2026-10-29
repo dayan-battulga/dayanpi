@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-import voice
-from voice import SpeechError, SpeechJob, VoiceAnnouncer, VoiceSettings
+from dayanpi.hardware import voice
+from dayanpi.hardware.voice import SpeechError, SpeechJob, VoiceAnnouncer, VoiceSettings
 
 DEVICE = "plughw:CARD=Device,DEV=0"
 WAIT_S = 5.0
@@ -132,7 +132,7 @@ def test_settings_tidy_up_the_env_values(monkeypatch, tmp_path):
 
 
 def test_off_only_logs_and_runs_nothing(make_voice, caplog):
-    caplog.set_level(logging.INFO, logger="voice")
+    caplog.set_level(logging.INFO, logger="dayanpi.hardware.voice")
     rig = make_voice(backend=voice.OFF)
     rig.announcer.start()
 
@@ -234,7 +234,7 @@ def test_stop_returns_quickly_and_skips_queued_phrases(make_voice, monkeypatch):
 
 
 def test_failures_are_logged_and_the_worker_keeps_going(make_voice, caplog):
-    caplog.set_level(logging.INFO, logger="voice")
+    caplog.set_level(logging.INFO, logger="dayanpi.hardware.voice")
     runner = FakeRunner(
         failures={
             "busy": SpeechError("aplay failed (exit code 1): aplay: main:850: audio open error: Device or resource busy"),
@@ -258,7 +258,7 @@ def test_failures_are_logged_and_the_worker_keeps_going(make_voice, caplog):
 
 
 def test_missing_piper_voice_falls_back_to_off_with_one_error(make_voice, caplog, tmp_path):
-    caplog.set_level(logging.INFO, logger="voice")
+    caplog.set_level(logging.INFO, logger="dayanpi.hardware.voice")
     missing = tmp_path / "nowhere.onnx"
     rig = make_voice(backend=voice.PIPER, model=missing)
     rig.announcer.start()

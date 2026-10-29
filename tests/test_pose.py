@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import pose
-from detector import PAD_VALUE, Box, Detection, fit_to_input
-from pose import (
+from dayanpi.vision import pose
+from dayanpi.vision.detector import PAD_VALUE, Box, Detection, fit_to_input
+from dayanpi.vision.pose import (
     KEYPOINT_NAMES,
     LEFT_WRIST,
     RIGHT_WRIST,

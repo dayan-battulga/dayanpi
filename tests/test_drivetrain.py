@@ -4,8 +4,8 @@ import pytest
 from gpiozero.exc import GPIODeviceClosed
 from gpiozero.pins.mock import MockFactory, MockPin, MockPWMPin
 
-import drivetrain
-from drivetrain import CommandTimer, DriveTrain
+from dayanpi.hardware import drivetrain
+from dayanpi.hardware.drivetrain import CommandTimer, DriveTrain
 
 
 class FakeClock:

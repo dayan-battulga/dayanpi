@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import detector
-from focus import FocusTracker
+from dayanpi.vision import detector
+from dayanpi.focus.tracker import FocusTracker
 
 FRAMES_DIR = Path(__file__).resolve().parent.parent / "focus_check" / "frames"
 PHASES = ("working", "phone", "away")

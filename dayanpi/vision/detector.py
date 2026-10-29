@@ -21,7 +21,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-MODELS_DIR = Path(__file__).resolve().parent / "models"
+from dayanpi.paths import MODELS_DIR
+
 OBJECT_MODEL_PATH = MODELS_DIR / "yolo11n_480x640.onnx"
 FACE_MODEL_PATH = MODELS_DIR / "face_detection_yunet_2023mar.onnx"
 

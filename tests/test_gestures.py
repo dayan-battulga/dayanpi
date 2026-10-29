@@ -2,10 +2,10 @@ from dataclasses import replace
 
 import pytest
 
-import gestures
-from detector import Box
-from gestures import GestureProgress, GestureTracker, read_gesture
-from pose import KEYPOINT_NAMES, LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
+from dayanpi.vision import gestures
+from dayanpi.vision.detector import Box
+from dayanpi.vision.gestures import GestureProgress, GestureTracker, read_gesture
+from dayanpi.vision.pose import KEYPOINT_NAMES, LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
 
 CHECK_INTERVAL_S = 0.5
 SHOULDER_Y = 300.0

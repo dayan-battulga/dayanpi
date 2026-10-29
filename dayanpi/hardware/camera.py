@@ -376,7 +376,7 @@ def create_stream() -> CameraStream:
 if __name__ == "__main__":
     import json
 
-    import collector
+    from dayanpi.hardware import collector
 
     logging.basicConfig(level=logging.INFO)
 

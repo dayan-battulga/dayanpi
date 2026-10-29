@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-import sign_glyphs
+from dayanpi.sign import glyphs
 
 SIGN_WIDTH = 128
 SIGN_HEIGHT = 32
@@ -135,28 +135,28 @@ STATE_STYLES = {
 
 
 def build_glyph_mask(rows: tuple[str, ...]) -> np.ndarray:
-    mask = np.array([[cell == sign_glyphs.LIT for cell in row] for row in rows], dtype=bool)
+    mask = np.array([[cell == glyphs.LIT for cell in row] for row in rows], dtype=bool)
     return mask
 
 
 def build_bitmap(rows: tuple[str, ...]) -> Bitmap:
-    """rows is palette art: one sign_glyphs.PALETTE key per pixel, '.' for dark."""
+    """rows is palette art: one glyphs.PALETTE key per pixel, '.' for dark."""
     height = len(rows)
     width = len(rows[0])
     pixels = np.zeros((height, width, 3), dtype=np.uint8)
     mask = np.zeros((height, width), dtype=bool)
     for y, row in enumerate(rows):
         for x, cell in enumerate(row):
-            if cell != sign_glyphs.DARK:
-                pixels[y, x] = sign_glyphs.PALETTE[cell]
+            if cell != glyphs.DARK:
+                pixels[y, x] = glyphs.PALETTE[cell]
                 mask[y, x] = True
     bitmap = Bitmap(pixels=pixels, mask=mask)
     return bitmap
 
 
-GLYPH_MASKS = {char: build_glyph_mask(rows) for char, rows in sign_glyphs.FONT.items()}
-ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in sign_glyphs.ICONS.items()}
-MINI_ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in sign_glyphs.MINI_ICONS.items()}
+GLYPH_MASKS = {char: build_glyph_mask(rows) for char, rows in glyphs.FONT.items()}
+ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in glyphs.ICONS.items()}
+MINI_ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in glyphs.MINI_ICONS.items()}
 
 
 def sanitize_scale(scale: int) -> int:
@@ -189,11 +189,11 @@ def find_icon(name: str) -> Bitmap:
 
 def build_text_mask(text: str) -> np.ndarray:
     """The text as one (7, width) bool array, with LETTER_GAP dark columns between letters."""
-    gap = np.zeros((sign_glyphs.GLYPH_HEIGHT, LETTER_GAP), dtype=bool)
+    gap = np.zeros((glyphs.GLYPH_HEIGHT, LETTER_GAP), dtype=bool)
     pieces = []
     for char in text:
         pieces.extend([find_glyph(char), gap])
-    mask = np.zeros((sign_glyphs.GLYPH_HEIGHT, 0), dtype=bool)
+    mask = np.zeros((glyphs.GLYPH_HEIGHT, 0), dtype=bool)
     if pieces:
         mask = np.hstack(pieces[:-1])
     return mask
@@ -201,7 +201,7 @@ def build_text_mask(text: str) -> np.ndarray:
 
 def measure_text(text: str, scale: int = 1) -> int:
     """Pixel width of text drawn at this scale, with no gap after the last letter."""
-    advance = sign_glyphs.GLYPH_WIDTH + LETTER_GAP
+    advance = glyphs.GLYPH_WIDTH + LETTER_GAP
     width = max(0, len(text) * advance - LETTER_GAP) * sanitize_scale(scale)
     return width
 
@@ -235,7 +235,7 @@ def draw_text(
 ) -> None:
     """Draws text with its top-left corner at (left, top); anything outside clip or the frame is cut off."""
     safe_scale = sanitize_scale(scale)
-    advance = (sign_glyphs.GLYPH_WIDTH + LETTER_GAP) * safe_scale
+    advance = (glyphs.GLYPH_WIDTH + LETTER_GAP) * safe_scale
     # Only letters that can land inside clip get built, so long scrolling text stays cheap.
     first = max(0, (clip.left - left) // advance)
     last = min(len(text), max(0, -(-(clip.right - left) // advance)))

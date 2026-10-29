@@ -2,7 +2,7 @@
 
 A little web dashboard that runs on my Raspberry Pi 5. It shows how the Pi is doing, streams its camera, and lets me drive my 4WD rover from a browser, on my Mac with the keyboard or on my iPhone with on-screen buttons.
 
-Want the step-by-step commands? That's all in **[MANUAL.md](MANUAL.md)**. This page is the big picture.
+Want the step-by-step commands? That's all in **[docs/MANUAL.md](docs/MANUAL.md)**. This page is the big picture.
 
 ---
 
@@ -27,10 +27,13 @@ It's a personal project, so it's built for one person (me) on my own devices, no
         │
         ▼
  Raspberry Pi 5 ── uvicorn on 127.0.0.1:8000 (systemd service "dayanpi")
-        ├─ collector.py   → reads /proc, /sys and vcgencmd for the stats
-        ├─ camera.py      → one thread owns /dev/video0, serves MJPEG at /video
-        ├─ drivetrain.py  → drives the L298N motor driver through gpiozero
-        └─ static/        → the dashboard page (app.js for stats, drive.js for driving)
+        └─ dayanpi/ (the Python package)
+             ├─ app.py      → login, routes, rate limits, startup and shutdown
+             ├─ hardware/   → collector (stats), camera (one thread owns the webcam), voice, drivetrain
+             ├─ vision/     → detector (people, phones, faces, food), pose, gestures
+             ├─ focus/      → the focus state machine, its worker thread, the log tools
+             ├─ sign/       → the LED sign renderer, font and icons, page controller
+             └─ static/     → the dashboard page (app.js for stats, focus.js for the Focus card)
 ```
 
 - **The app only listens on localhost.** Your home network can't reach it directly. Tailscale is the only way in, and it handles HTTPS for you.
@@ -52,13 +55,13 @@ On the Pi:
    .venv/bin/pip install -r requirements.txt
    ```
 3. Make sure your user is in the `video` and `gpio` groups (`groups`).
-4. Copy `dayanpi.env.example` to `/etc/dayanpi.env`, pick a username and strong password, and lock the file down (`chmod 600`, owned by root).
-5. Install and start the systemd service from `dayanpi.service`.
+4. Copy `deploy/dayanpi.env.example` to `/etc/dayanpi.env`, pick a username and strong password, and lock the file down (`chmod 600`, owned by root).
+5. Install and start the systemd service from `deploy/dayanpi.service`.
 6. Expose it with Tailscale: `sudo tailscale serve --bg 8000`.
 
 Then open **https://dayoon.tail279594.ts.net/** and log in.
 
-The full commands, with checks after each one, are in [MANUAL.md → First-time setup](MANUAL.md#first-time-setup-pi).
+The full commands, with checks after each one, are in [MANUAL.md → First-time setup](docs/MANUAL.md#first-time-setup-pi).
 
 ---
 
@@ -81,7 +84,7 @@ Everything comes back by itself after a reboot or power cut, as long as the `day
 - **On:** plug in the Pi, wait about a minute, and open the site. Then put the rover on a box and turn the motor battery on.
 - **Only the motor battery unplugged:** if it only powers the motors, the site keeps running and the wheels just won't move until it's back.
 
-Details and a "missing something after boot?" checklist: [MANUAL.md → Unplugging and powering back on](MANUAL.md#unplugging-and-powering-back-on).
+Details and a "missing something after boot?" checklist: [MANUAL.md → Unplugging and powering back on](docs/MANUAL.md#unplugging-and-powering-back-on).
 
 ---
 
@@ -94,7 +97,7 @@ Details and a "missing something after boot?" checklist: [MANUAL.md → Unpluggi
 - **Test new code with the wheels up on a box.**
 - **Use Serve, not Funnel.** Serve plus the Tailscale app on your phone keeps the site private to your own devices. Funnel puts the login page on the public internet, and now that the site can move a robot, that's not worth it.
 
-Speeds and timings (`SPEED_FLOOR`, `MAX_SPEED`, the watchdog timeout, and so on) are tunable. See [MANUAL.md → Tuning](MANUAL.md#tuning).
+Speeds and timings (`SPEED_FLOOR`, `MAX_SPEED`, the watchdog timeout, and so on) are tunable. See [MANUAL.md → Tuning](docs/MANUAL.md#tuning).
 
 ---
 
@@ -108,30 +111,28 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests -q
 ```
 
-They cover the motor logic (speed scaling, clamping, reversal pause, pin order), the watchdog timing, the `/api/drive` route (login, validation, 503 without motors), and startup without a camera or motors.
+They cover the focus state machine (driven with fake clocks), the detector decoding, the sign renderer, the worker thread, the motor logic and watchdog, the API routes (login, validation, 503 without motors), and startup without a camera or motors. `pyproject.toml` tells pytest where the tests and the package are, so plain `pytest` from the repo root works too.
 
 ---
 
 ## What's in the repo
 
-| File | What it is |
+The Python code is one package, `dayanpi/`, split by what it talks to. Everything that isn't code sits next to it at the top level.
+
+| Path | What it is |
 | --- | --- |
-| `app.py` | The FastAPI app: login, routes, rate limits, startup and shutdown, drive watchdog |
-| `collector.py` | Reads the Pi's stats |
-| `camera.py` | Camera capture thread (one opener, many viewers) |
-| `drivetrain.py` | Motor control: speed scaling, reversal pause, and the watchdog's timer |
-| `detector.py` | Finds people, phones, faces, food and drinks in a camera frame (focus tracker) |
-| `focus.py` | Turns the readings into focused / phone / away, keeps today's totals, writes the log |
-| `focus_worker.py` | The thread that runs the detector inside the site about once a second |
-| `focus_stats.py` | Prints day totals and focus-by-hour from the log |
-| `focus_check.py` | Focus tracker step 1: a guided check you run on the Pi |
-| `pose.py`, `gestures.py` | The pose model and the arm gestures that flip the sign's pages and toggle work blocks |
-| `sign.py`, `sign_glyphs.py`, `sign_controller.py` | The LED sign: the renderer, the font and icons, and what shows when |
-| `voice.py` | Says callouts out loud through a USB speaker (off until you turn it on) |
+| `dayanpi/app.py` | The FastAPI app: login, routes, rate limits, startup and shutdown, drive watchdog |
+| `dayanpi/paths.py` | Where `static/`, `models/`, `data/` and `focus_check/` live, so no module counts parent folders |
+| `dayanpi/hardware/` | Things attached to the Pi: `collector.py` (stats), `camera.py` (one thread owns the webcam, many viewers), `voice.py` (the USB speaker), `drivetrain.py` (the L298N motors, paused) |
+| `dayanpi/vision/` | The models: `detector.py` (people, phones, faces, food and drinks), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
+| `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check) |
+| `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
+| `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
+| `dayanpi/static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
+| `scripts/` | What you run by hand on the Pi: `focus_check.py` and `focus_stats.py` |
 | `models/` | The ONNX models: YOLO11 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
-| `static/` | The dashboard: `index.html`, `styles.css`, `app.js` (stats and camera), `focus.js` (the Focus card), `drive.js` (driving, not loaded while the rover is paused) |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
-| `tests/` | Mac tests (pytest with gpiozero's mock pins) |
-| `dayanpi.service` | The systemd unit for the Pi |
-| `dayanpi.env.example` | Template for the login file |
-| `MANUAL.md` | How to set up, run, drive, tune and fix it |
+| `tests/` | Mac tests (pytest, with gpiozero's mock pins for the motors) |
+| `deploy/` | `dayanpi.service` (the systemd unit) and `dayanpi.env.example` (template for the login file) |
+| `docs/MANUAL.md` | How to set up, run, drive, tune and fix it |
+| `data/`, `focus_check/` | Written on the Pi at runtime (the focus log, the check's snapshots); both gitignored |

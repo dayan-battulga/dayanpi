@@ -1,5 +1,5 @@
-import camera
-from camera import CameraStream
+from dayanpi.hardware import camera
+from dayanpi.hardware.camera import CameraStream
 
 
 class FakeFrame:

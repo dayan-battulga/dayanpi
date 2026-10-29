@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-import detector
-from detector import (
+from dayanpi.vision import detector
+from dayanpi.vision.detector import (
     Box,
     DeskScanner,
     Detection,

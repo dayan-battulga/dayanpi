@@ -12,16 +12,16 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from detector import (
-    DeskScanner,
-    FrameReading,
+from dayanpi.vision.detector import (
     BOX_VALUES,
     LABELS,
     MIN_CONFIDENCE,
     MODELS_DIR,
     PERSON_CLASS_ID,
     Box,
+    DeskScanner,
     Detection,
+    FrameReading,
     Letterbox,
     Point,
     fit_to_input,
@@ -95,7 +95,7 @@ def decode_poses(output: np.ndarray, letterbox: Letterbox) -> list[PoseDetection
     if output.shape[1] != OUTPUT_ROWS:
         raise ValueError(
             f"Expected a YOLO pose output with {OUTPUT_ROWS} rows, got shape {output.shape}. "
-            "Re-export the pose model with the command in MANUAL.md."
+            "Re-export the pose model with the command in docs/MANUAL.md."
         )
 
     predictions = output[0].T

@@ -14,7 +14,7 @@ Right and left are the person's own sides, not the image's.
 import math
 from dataclasses import dataclass
 
-from pose import LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
+from dayanpi.vision.pose import LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
 
 NEXT_PAGE = "next_page"
 PREVIOUS_PAGE = "previous_page"

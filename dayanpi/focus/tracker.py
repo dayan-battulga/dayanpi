@@ -2,7 +2,7 @@
 
 States: "working" (at the desk, no phone), "phone" (phone in hand), "away" (nobody
 there) and "unknown" (just started, or no camera frames). The rules and their numbers
-come from Dayan's real desk frames; see MANUAL.md for the reasoning.
+come from Dayan's real desk frames; see docs/MANUAL.md for the reasoning.
 
 Everything time-based takes `now` from the caller, so tests can drive it with fake
 clocks. Local-time rules (late night, day done, day rollover) use the Pi's time zone.
@@ -17,7 +17,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from detector import FrameReading, find_best_confidence
+from dayanpi.paths import DEFAULT_DATA_DIR
+from dayanpi.vision.detector import FrameReading, find_best_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,10 @@ MAX_SEGMENTS = 2000
 STATES = ("working", "phone", "away", "unknown")
 DAY_FORMAT = "%Y-%m-%d"
 DATA_DIR_ENV = "DAYANPI_DATA_DIR"
-DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 def find_data_dir() -> Path:
-    """Where the app keeps what it writes: DAYANPI_DATA_DIR, or data/ next to the code."""
+    """Where the app keeps what it writes: DAYANPI_DATA_DIR, or data/ at the repo root."""
     data_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR)
     return data_dir
 

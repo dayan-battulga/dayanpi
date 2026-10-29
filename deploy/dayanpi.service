@@ -8,7 +8,7 @@ User=dayoon
 WorkingDirectory=/home/dayoon/Desktop/site-page/dayanpi
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/etc/dayanpi.env
-ExecStart=/home/dayoon/Desktop/site-page/dayanpi/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
+ExecStart=/home/dayoon/Desktop/site-page/dayanpi/.venv/bin/uvicorn dayanpi.app:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

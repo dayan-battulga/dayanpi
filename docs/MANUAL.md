@@ -83,7 +83,7 @@ Then log out and back in.
 ### Password file
 
 ```bash
-sudo cp dayanpi.env.example /etc/dayanpi.env
+sudo cp deploy/dayanpi.env.example /etc/dayanpi.env
 sudo nano /etc/dayanpi.env
 ```
 
@@ -104,7 +104,7 @@ sudo chown root:root /etc/dayanpi.env
 ### Install systemd service
 
 ```bash
-sudo cp dayanpi.service /etc/systemd/system/
+sudo cp deploy/dayanpi.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now dayanpi
 sudo systemctl status dayanpi
@@ -118,7 +118,7 @@ You want `Active: active (running)`.
 ls /sys/class/net/
 ```
 
-Skip `lo`. If you use Ethernet, change `wlan0` to `eth0` in `app.py` (`RateSampler`) and redeploy.
+Skip `lo`. If you use Ethernet, change `wlan0` to `eth0` in `dayanpi/app.py` (`RateSampler`) and redeploy.
 
 ---
 
@@ -146,10 +146,10 @@ pip install -r requirements.txt
 sudo systemctl restart dayanpi
 ```
 
-If `dayanpi.service` changed:
+If `deploy/dayanpi.service` changed:
 
 ```bash
-sudo cp dayanpi.service /etc/systemd/system/
+sudo cp deploy/dayanpi.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl restart dayanpi
 ```
@@ -182,7 +182,7 @@ cd ~/Desktop/site-page/dayanpi
 source .venv/bin/activate
 export DAYANPI_USER=yourname
 export DAYANPI_PASSWORD=yourpass
-uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn dayanpi.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 When finished: `Ctrl+C`, then `sudo systemctl start dayanpi`.
@@ -205,7 +205,7 @@ This shows what the camera can actually pick up at your desk. The site owns the 
 cd ~/Desktop/site-page/dayanpi
 git pull origin main
 sudo systemctl stop dayanpi
-.venv/bin/python focus_check.py
+.venv/bin/python scripts/focus_check.py
 sudo systemctl start dayanpi
 ```
 
@@ -273,7 +273,7 @@ Once the models are in `models/`, the site runs the detector by itself, about on
 | **away** | Nobody at the desk | 10 seconds without you |
 | **unknown** | Just started, or no camera frames for 30 s | |
 
-The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `focus.py` if they need tuning.
+The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `dayanpi/focus/tracker.py` if they need tuning.
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), snacks (food spotted in 3 of 5 checks; one snack per sitting), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
@@ -296,12 +296,12 @@ Check it's filling up:
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
-.venv/bin/python focus_stats.py            # today
-.venv/bin/python focus_stats.py --days 7   # the week, plus focus by hour of day
+.venv/bin/python scripts/focus_stats.py            # today
+.venv/bin/python scripts/focus_stats.py --days 7   # the week, plus focus by hour of day
 tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
 ```
 
-If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point the script at it: `focus_stats.py --log-dir /your/folder/focus_log`.
+If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point the script at it: `scripts/focus_stats.py --log-dir /your/folder/focus_log`.
 
 **Routes** (all behind the login):
 
@@ -328,7 +328,7 @@ Then open the site: the Focus card should flip to **focused** within a couple of
 
 ### Gestures
 
-You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `pose.py` (runs the model) and `gestures.py` (turns arm positions into gestures).
+You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
 
 #### Getting the pose model
 
@@ -390,7 +390,7 @@ Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' mod
 
 #### Tuning
 
-All of these are at the top of `gestures.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
+All of these are at the top of `dayanpi/vision/gestures.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
 
 | Knob | Default | What it does |
 | --- | --- | --- |
@@ -494,7 +494,7 @@ Pick the one ending in `-video-index0` and put `/dev/v4l/by-id/` plus that name 
 The app is still stopped from step 2. This prints which camera `auto` picks and why, without opening the camera:
 
 ```bash
-.venv/bin/python -c "import logging, camera; logging.basicConfig(level=logging.INFO); camera.create_stream()"
+.venv/bin/python -c "import logging; from dayanpi.hardware import camera; logging.basicConfig(level=logging.INFO); camera.create_stream()"
 ```
 
 You want something like `camera: Pi camera through picamera2 (auto, found imx708_wide)`. This uses your shell's settings, not `/etc/dayanpi.env`, so it shows what `auto` does.
@@ -507,16 +507,16 @@ sudo systemctl start dayanpi
 
 Open the site. The camera card should show the new, wider view. If it doesn't, run `journalctl -u dayanpi -n 50 --no-pager` and look for camera warnings.
 
-### 6. Compare it to the webcam with focus_check.py
+### 6. Compare it to the webcam with the detector check
 
 Run the same desk check on both cameras and compare the two summary tables. The script doesn't read `/etc/dayanpi.env`, so put the setting in front of the command:
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
 sudo systemctl stop dayanpi
-DAYANPI_CAMERA=usb DAYANPI_USB_DEVICE=/dev/v4l/by-id/usb-YOUR_WEBCAM-video-index0 .venv/bin/python focus_check.py
+DAYANPI_CAMERA=usb DAYANPI_USB_DEVICE=/dev/v4l/by-id/usb-YOUR_WEBCAM-video-index0 .venv/bin/python scripts/focus_check.py
 cp focus_check/summary.txt focus_check/summary_usb.txt
-DAYANPI_CAMERA=picamera .venv/bin/python focus_check.py
+DAYANPI_CAMERA=picamera .venv/bin/python scripts/focus_check.py
 sudo systemctl start dayanpi
 ```
 
@@ -527,11 +527,11 @@ Each run clears out `focus_check/frames/`, so if you want to keep the webcam's f
 - **Wider view.** The Wide sees about 102° across and 67° top to bottom. The app reads the whole sensor and trims the sides to make the 4:3 picture, which comes out to roughly 85° across. Left to its default, Picamera2 would only read the middle of the sensor at this size (roughly 63° by 48°).
 - **Autofocus** runs the whole time, so it stays sharp whether you lean in or sit back. It can focus as close as about 5 cm.
 - **15 frames a second.** The webcam hands over ready-made JPEGs, but the Pi camera's frames get turned into JPEGs on the Pi, so it runs a bit slower to leave CPU for the detector.
-- **Picture upside down?** That's a small change in `camera.py` (flip it in the camera setup). Ask Claude.
+- **Picture upside down?** That's a small change in `dayanpi/hardware/camera.py` (flip it in the camera setup). Ask Claude.
 
 ### Tuning
 
-These live at the top of `camera.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
+These live at the top of `dayanpi/hardware/camera.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
 
 | Knob | Default | What it does |
 | --- | --- | --- |
@@ -547,7 +547,7 @@ These live at the top of `camera.py`. Change them on the Mac, push, pull on the 
 | `rpicam-hello` says the camera is busy or in use | The app has it: `sudo systemctl stop dayanpi` first |
 | Site still shows the webcam | Run the check in step 5. Is `DAYANPI_CAMERA=usb` in `/etc/dayanpi.env`? |
 | Webcam stopped working after adding the Pi camera | `/dev/video0` moved. Set `DAYANPI_USB_DEVICE` (step 4) |
-| Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or `focus_check.py` still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |
+| Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or `scripts/focus_check.py` still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |
 
 ---
 
@@ -555,10 +555,11 @@ These live at the top of `camera.py`. Change them on the Mac, push, pull on the 
 
 Two 64x32 LED panels side by side make one 128x32 sign on the wall (about 12.6" x 3.1"). It shows what the focus tracker sees, in a way you can read from across the room.
 
-The code is in two files:
+The code is in `dayanpi/sign/`:
 
-- `sign.py` draws the pages and sends them to the panels.
-- `sign_glyphs.py` has the font and the icons, drawn as ASCII art you can edit by eye.
+- `renderer.py` draws the pages and sends them to the panels.
+- `glyphs.py` has the font and the icons, drawn as ASCII art you can edit by eye.
+- `controller.py` decides which page shows when.
 
 ### What it shows
 
@@ -577,7 +578,7 @@ Nothing ever goes above 200 out of 255 on any color, even at full brightness. Fu
 
 ### Changing the font or an icon
 
-Open `sign_glyphs.py`. Each letter is 7 lines of 5 characters (`#` on, `.` off). Each icon is 16 lines of 16 characters, where each letter is a color from `PALETTE` and `.` is off. Edit, then run the tests. They catch a line that's the wrong length or a color letter that isn't in the palette:
+Open `dayanpi/sign/glyphs.py`. Each letter is 7 lines of 5 characters (`#` on, `.` off). Each icon is 16 lines of 16 characters, where each letter is a color from `PALETTE` and `.` is off. Edit, then run the tests. They catch a line that's the wrong length or a color letter that isn't in the palette:
 
 ```bash
 python -m pytest tests/test_sign.py -q
@@ -586,7 +587,7 @@ python -m pytest tests/test_sign.py -q
 To see a page without the panels, render it to a PNG that looks like the real thing. Run this on your Mac from the repo folder:
 
 ```bash
-python3 -c "import sign; open('/tmp/sign.png', 'wb').write(sign.render_preview_png(sign.render_page(sign.NowPage('working', 3900, 3))))"
+python3 -c "from dayanpi.sign import renderer as sign; open('/tmp/sign.png', 'wb').write(sign.render_preview_png(sign.render_page(sign.NowPage('working', 3900, 3))))"
 open /tmp/sign.png
 ```
 
@@ -661,7 +662,7 @@ cd ~/Desktop/site-page/dayanpi
 .venv/bin/python -c "import adafruit_blinka_raspberry_pi5_piomatter"   # no output = good
 ```
 
-It's not in `requirements.txt` on purpose. It only works on a Pi 5, and `sign.py` only imports it once you actually turn on the panels, so the app and the tests still run on the Mac. If pip ends up building it from source and complains about a missing compiler, run `sudo apt install -y build-essential python3-dev` and try again.
+It's not in `requirements.txt` on purpose. It only works on a Pi 5, and `dayanpi/sign/renderer.py` only imports it once you actually turn on the panels, so the app and the tests still run on the Mac. If pip ends up building it from source and complains about a missing compiler, run `sudo apt install -y build-essential python3-dev` and try again.
 
 #### Smoke test
 
@@ -674,7 +675,7 @@ sudo systemctl stop dayanpi
 .venv/bin/python - <<'EOF'
 import time
 
-import sign
+from dayanpi.sign import renderer as sign
 
 panel = sign.PanelOutput()
 pages = [
@@ -704,8 +705,8 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 | `Failed to open PIO device` | Adafruit says this is almost always the Pi's power supply, so try the official 27W one. Also check `ls -l /dev/pio*` shows `gpio` and that you rebooted after adding the udev rule. Adafruit's guide also mentions `sudo rpi-update` for older Pi 5 boards. That installs pre-release firmware, so only try it if nothing else works. |
 | `No module named 'adafruit_blinka_raspberry_pi5_piomatter'` | The install went into the wrong Python. Use `.venv/bin/pip`, not plain `pip`. |
 | The two halves are swapped (time on the left, icon on the right) | Swap the two panels' spots on the wall. |
-| Upside down | Set `PANEL_ORIENTATION = "R180"` in `sign.py`. |
-| Red and blue are swapped | Set `PANEL_PINOUT = "AdafruitMatrixBonnetBGR"` in `sign.py`. |
+| Upside down | Set `PANEL_ORIENTATION = "R180"` in `dayanpi/sign/renderer.py`. |
+| Red and blue are swapped | Set `PANEL_PINOUT = "AdafruitMatrixBonnetBGR"` in `dayanpi/sign/renderer.py`. |
 | Garbage, flicker, or one panel copies the other | Check the ribbons go bonnet → IN, OUT → IN (follow the arrows) and are pushed all the way in. Make sure nothing else is using the pins (stop the `dayanpi` service). |
 | Panels flicker or the Pi reboots on bright pages | The supply is too weak or a screw terminal is loose. |
 
@@ -719,7 +720,7 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 | `panel` | Website preview **and** the real panels through the Matrix Bonnet |
 | `off` | Nothing, not even the preview |
 
-What it shows is decided in `sign_controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
+What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
 
 **The motors and the sign can't both be on.** The Matrix Bonnet uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 24, 26 and 27, which includes all six motor pins. With `DAYANPI_SIGN=panel` the app doesn't touch the motor pins at all (the Drive card is hidden anyway while the rover's paused, and `/api/drive` answers 503).
 
@@ -907,7 +908,7 @@ Check the log first: `journalctl -u dayanpi -n 50 --no-pager | grep -i voice`
 
 ## Driving the rover
 
-**Paused right now.** The motors are unplugged and the Drive card is hidden. To bring it back, plug the motor wires back in (the pin table is in `CLAUDE.md`), remove `hidden` from the `drive-card` div in `static/index.html`, and add `<script type="module" src="/drive.js"></script>` back after the `app.js` line.
+**Paused right now.** The motors are unplugged and the Drive card is hidden. To bring it back, plug the motor wires back in (the pin table is in `CLAUDE.md`), remove `hidden` from the `drive-card` div in `dayanpi/static/index.html`, and add `<script type="module" src="/drive.js"></script>` back after the `app.js` line.
 
 The **Drive** card sits right under the camera. Whatever you press gets sent to the Pi about 7 times a second, and the card shows what's going out (`L` / `R`, from -1 to +1) plus whether you're driving.
 
@@ -946,14 +947,14 @@ Change the numbers on the Mac, push, pull on the Pi, and restart the service.
 
 | Knob | File | Default | What it does |
 | --- | --- | --- | --- |
-| `SPEED_FLOOR` | `drivetrain.py` | `0.4` | Slowest power that still turns the wheels. If gentle presses just make the motors hum, raise it. |
-| `MAX_SPEED` | `drivetrain.py` | `0.6` | Top power. Raise it slowly, around 0.1 at a time. |
-| `DEADZONE` | `drivetrain.py` | `0.05` | Anything smaller than this counts as zero. |
-| `DRIVE_TIMEOUT_S` | `app.py` | `0.5` | How long the watchdog waits before stopping the wheels. |
+| `SPEED_FLOOR` | `dayanpi/hardware/drivetrain.py` | `0.4` | Slowest power that still turns the wheels. If gentle presses just make the motors hum, raise it. |
+| `MAX_SPEED` | `dayanpi/hardware/drivetrain.py` | `0.6` | Top power. Raise it slowly, around 0.1 at a time. |
+| `DEADZONE` | `dayanpi/hardware/drivetrain.py` | `0.05` | Anything smaller than this counts as zero. |
+| `DRIVE_TIMEOUT_S` | `dayanpi/app.py` | `0.5` | How long the watchdog waits before stopping the wheels. |
 
 About the watchdog timeout: the browser sends every 0.15 s, so the timeout has to stay well above that. If driving over Funnel or cellular feels jerky (keeps stopping and starting), the network is laggy; try `0.8`. Going lower than 0.5 makes it stop faster but stutter more.
 
-The arc turns come from the table at the top of `static/drive.js`. `0.4` there is the inner wheel's input *before* scaling, so it ends up a bit faster than `SPEED_FLOOR`.
+The arc turns come from the table at the top of `dayanpi/static/drive.js`. `0.4` there is the inner wheel's input *before* scaling, so it ends up a bit faster than `SPEED_FLOOR`.
 
 ### "GPIO busy"
 
@@ -1178,7 +1179,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 - Three cards: CPU · 2 min, Temp · 2 min, Memory · 2 min
 - Need live SSE data — wait 10–30+ seconds for lines; ~2 minutes to fill the window
 - Hard-refresh if the page was cached: `Cmd+Shift+R`
-- Vendor file must exist: `ls static/vendor/uPlot.min.js`
+- Vendor file must exist: `ls dayanpi/static/vendor/uPlot.min.js`
 
 ---
 
@@ -1186,7 +1187,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 | Symptom | What to do |
 | --- | --- |
-| `Unit dayanpi.service not found` | `sudo cp dayanpi.service /etc/systemd/system/` then `daemon-reload` and `enable --now` |
+| `Unit dayanpi.service not found` | `sudo cp deploy/dayanpi.service /etc/systemd/system/` then `daemon-reload` and `enable --now` |
 | `activating (auto-restart)` / crash loop | `journalctl -u dayanpi -n 50 --no-pager` |
 | `No module named 'slowapi'` | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
 | Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` |
@@ -1194,11 +1195,11 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | 401 everywhere | Use credentials from `/etc/dayanpi.env` |
 | Port in use | `sudo lsof -i :8000` — stop leftover uvicorn or the service |
 | Camera busy / black | Only one opener; restart service; confirm `video` in `groups` |
-| Empty charts | Wait for SSE; hard refresh; check `static/vendor/` |
+| Empty charts | Wait for SSE; hard refresh; check `dayanpi/static/vendor/` |
 | "GPIO busy" in a REPL or script | The service owns the motor pins, so `sudo systemctl stop dayanpi` first |
 | Service won't start, GPIO permission error | `groups` must include `gpio`, then restart |
 | Drive card says `drive failed` | Check the service is running and you're logged in; `journalctl -u dayanpi -n 50 --no-pager` |
-| Driving feels jerky (stops and starts) | Laggy network; raise `DRIVE_TIMEOUT_S` in `app.py` (see Tuning) |
+| Driving feels jerky (stops and starts) | Laggy network; raise `DRIVE_TIMEOUT_S` in `dayanpi/app.py` (see Tuning) |
 | `No serve config` after Ctrl+C | Use `sudo tailscale serve --bg 8000` |
 | Serve access denied | Approve in Tailscale admin; try `sudo` |
 | `listener already exists for port 443` | `sudo tailscale serve reset` then `sudo tailscale funnel --bg 8000` |

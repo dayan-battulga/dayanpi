@@ -1,7 +1,7 @@
 """Reads the focus log and prints what the days looked like.
 
-    .venv/bin/python focus_stats.py            # today
-    .venv/bin/python focus_stats.py --days 7   # the last week, plus focus by hour of day
+    .venv/bin/python scripts/focus_stats.py            # today
+    .venv/bin/python scripts/focus_stats.py --days 7   # the last week, plus focus by hour of day
 
 Reads data/focus_log/ (or DAYANPI_DATA_DIR/focus_log). It only looks at the log, so it
 can run while the service is up.
@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from focus import DAY_FORMAT, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
-from sign import format_duration
+from dayanpi.focus.tracker import DAY_FORMAT, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
+from dayanpi.sign.renderer import format_duration
 
 HOURS = 24
 

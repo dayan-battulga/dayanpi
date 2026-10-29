@@ -12,11 +12,11 @@ os.environ.setdefault("DAYANPI_USER", "tester")
 os.environ.setdefault("DAYANPI_PASSWORD", "secret")
 os.environ.setdefault("DAYANPI_DATA_DIR", tempfile.mkdtemp(prefix="dayanpi-test-"))
 
-import app  # noqa: E402  (auth env must be set before import)
-import camera  # noqa: E402
-import collector  # noqa: E402
-import drivetrain  # noqa: E402
-import focus_worker  # noqa: E402
+from dayanpi import app  # noqa: E402  (auth env must be set before import)
+from dayanpi.hardware import camera  # noqa: E402
+from dayanpi.hardware import collector  # noqa: E402
+from dayanpi.hardware import drivetrain  # noqa: E402
+from dayanpi.focus import worker as focus_worker  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
 FORWARD = {"left": 1, "right": 1}
@@ -57,8 +57,8 @@ def test_dashboard_runs_without_motors(monkeypatch, caplog):
 
 def test_drivetrain_imports_without_gpiozero(monkeypatch):
     monkeypatch.setitem(sys.modules, "gpiozero", None)
-    monkeypatch.delitem(sys.modules, "drivetrain")
-    fresh_drivetrain = importlib.import_module("drivetrain")
+    monkeypatch.delitem(sys.modules, "dayanpi.hardware.drivetrain")
+    fresh_drivetrain = importlib.import_module("dayanpi.hardware.drivetrain")
     with pytest.raises(ImportError):
         fresh_drivetrain.DriveTrain()
 
@@ -150,7 +150,7 @@ def test_block_route_starts_stops_and_toggles(factory):
 def test_voice_say_route_logs_when_the_voice_is_off(factory, caplog):
     import logging
 
-    caplog.set_level(logging.INFO, logger="voice")
+    caplog.set_level(logging.INFO, logger="dayanpi.hardware.voice")
     with TestClient(app.app) as client:
         assert client.post("/api/voice/say", json={"text": "Phone down."}).status_code == 401
         response = client.post("/api/voice/say", json={"text": "Phone down."}, auth=AUTH)
@@ -163,7 +163,7 @@ def test_voice_say_route_logs_when_the_voice_is_off(factory, caplog):
 
 
 def test_callouts_reach_the_voice(monkeypatch):
-    import focus
+    from dayanpi.focus import tracker as focus
 
     said = []
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
@@ -211,7 +211,7 @@ def test_sign_preview_renders_and_rides_the_status(factory):
 
 
 def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
-    import focus
+    from dayanpi.focus import tracker as focus
 
     monkeypatch.setattr(app.voice, "say", lambda text: True)
     with TestClient(app.app):
@@ -231,9 +231,9 @@ def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
 
 def test_panel_mode_keeps_the_motors_off(monkeypatch, factory, caplog):
     import logging
-    import sign
+    from dayanpi.sign import renderer as sign
 
-    caplog.set_level(logging.INFO, logger="app")
+    caplog.set_level(logging.INFO, logger="dayanpi.app")
     monkeypatch.setattr(app, "SIGN_MODE", "panel")
     monkeypatch.setattr(sign, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
     monkeypatch.setattr(app, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))

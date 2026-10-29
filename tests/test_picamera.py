@@ -7,9 +7,9 @@ from contextlib import contextmanager
 import numpy as np
 import pytest
 
-import camera
-from camera import CameraStream, PiCameraStream
-from detector import decode_jpeg
+from dayanpi.hardware import camera
+from dayanpi.hardware.camera import CameraStream, PiCameraStream
+from dayanpi.vision.detector import decode_jpeg
 
 PI_CAMERA_INFO = {
     "Model": "imx708_wide",

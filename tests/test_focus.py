@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import focus
-from detector import Box, Detection, FaceReading, FrameReading, Point
-from focus import FocusLog, FocusTracker
+from dayanpi.focus import tracker as focus
+from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
+from dayanpi.focus.tracker import FocusLog, FocusTracker
 
 BOX = Box(x1=10, y1=10, x2=50, y2=50)
 NOON = datetime(2026, 10, 29, 12, 0).timestamp()

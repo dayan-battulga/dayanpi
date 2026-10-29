@@ -1,8 +1,8 @@
 from datetime import datetime
 
-import focus_stats
-from focus import FocusLog, Segment
-from focus_stats import HourTotals, add_segment_hours, build_report, list_recent_days
+from dayanpi.focus import stats as focus_stats
+from dayanpi.focus.tracker import FocusLog, Segment
+from dayanpi.focus.stats import HourTotals, add_segment_hours, build_report, list_recent_days
 
 
 def test_recent_days_counts_back_from_the_last_day():
