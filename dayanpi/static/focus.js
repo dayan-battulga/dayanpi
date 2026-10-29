@@ -79,10 +79,10 @@ let timelineDrawn = false;
 let timelineStartHour = null;
 let liveSegment = null;
 let nowCursor = null;
+let timelineWindow = null;
 let todaySignature = "";
 let todayMetas = [];
 let blockBusy = false;
-let frameAspect = "";
 const shownBoxes = new Map();
 
 function readLocalMidnight() {
@@ -118,7 +118,7 @@ function renderDigits(container, text) {
       } else {
         span.classList.remove("digit-sep");
         span.classList.add("digit");
-        replayAnimation(span, "roll-a", "roll-b");
+        replayAnimation(span, "roll");
       }
     }
   });
@@ -187,13 +187,12 @@ function renderHours(startHour) {
   );
 }
 
-function renderTimeline(now) {
-  const midnight = readLocalMidnight();
-  const known = mergeKnownSegments(todaySegments, midnight);
+function renderTimeline(now, midnight, known) {
   const firstHour = known.length > 0 ? Math.floor((known[0].start - midnight) / 3600) : DAY_START_HOUR;
   const startHour = Math.max(0, Math.min(DAY_START_HOUR, firstHour));
   const windowStart = midnight + startHour * 3600;
   const windowSpan = DAY_SECONDS - startHour * 3600;
+  timelineWindow = { start: windowStart, span: windowSpan };
   if (startHour !== timelineStartHour) {
     timelineStartHour = startHour;
     renderHours(startHour);
@@ -214,29 +213,25 @@ function renderTimeline(now) {
       piece.style.animationDelay = `${200 + index * SEGMENT_STAGGER_MS}ms`;
     }
     if (segment.end == null) {
-      liveSegment = { el: piece, start: segment.start, windowStart, windowSpan };
+      liveSegment = { el: piece, start: segment.start };
     }
     return piece;
   });
 
   nowCursor = document.createElement("div");
   nowCursor.className = timelineDrawn ? "now-cursor" : "now-cursor glide";
-  nowCursor.dataset.windowStart = String(windowStart);
-  nowCursor.dataset.windowSpan = String(windowSpan);
-  nowCursor.style.left = `${Math.min(100, ((now - windowStart) / windowSpan) * 100)}%`;
   focusEls.timeline.replaceChildren(...pieces, nowCursor);
+  moveTimelineNow(now);
   timelineDrawn = true;
 }
 
 function moveTimelineNow(now) {
   if (liveSegment != null) {
-    const share = ((now - liveSegment.start) / liveSegment.windowSpan) * 100;
+    const share = ((now - liveSegment.start) / timelineWindow.span) * 100;
     liveSegment.el.style.width = `${Math.max(share, MIN_SEGMENT_SHARE)}%`;
   }
   if (nowCursor != null) {
-    const windowStart = Number(nowCursor.dataset.windowStart);
-    const windowSpan = Number(nowCursor.dataset.windowSpan);
-    nowCursor.style.left = `${Math.min(100, ((now - windowStart) / windowSpan) * 100)}%`;
+    nowCursor.style.left = `${Math.min(100, ((now - timelineWindow.start) / timelineWindow.span) * 100)}%`;
   }
 }
 
@@ -278,9 +273,7 @@ function buildTodayItems(known, snacks) {
   return recent;
 }
 
-function renderToday(now) {
-  const midnight = readLocalMidnight();
-  const known = mergeKnownSegments(todaySegments, midnight);
+function renderToday(now, midnight, known) {
   const recent = buildTodayItems(known, todaySnacks.filter((at) => at >= midnight));
   const signature = recent.map((item) => `${item.kind}@${item.at}:${item.segment?.end == null}`).join("|");
   if (signature !== todaySignature) {
@@ -342,8 +335,10 @@ async function refreshTimeline() {
       todaySegments = body.segments ?? [];
       todaySnacks = body.snack_times ?? [];
       const now = Date.now() / 1000;
-      renderTimeline(now);
-      renderToday(now);
+      const midnight = readLocalMidnight();
+      const known = mergeKnownSegments(todaySegments, midnight);
+      renderTimeline(now, midnight, known);
+      renderToday(now, midnight, known);
     }
   } catch (error) {
     // The next state change or the minute timer tries again.
@@ -397,11 +392,7 @@ function renderOverlay(focus) {
   if (fresh) {
     // The feed is drawn with object-fit: cover, so the frame must match the camera's shape
     // or the boxes would sit over a cropped picture.
-    const aspect = `${overlay.frame_width} / ${overlay.frame_height}`;
-    if (aspect !== frameAspect) {
-      frameAspect = aspect;
-      overlayEls.frame.style.aspectRatio = aspect;
-    }
+    overlayEls.frame.style.aspectRatio = `${overlay.frame_width} / ${overlay.frame_height}`;
   }
   const ranks = {};
   const current = new Set();
@@ -428,7 +419,7 @@ function renderOverlay(focus) {
 function setSignPage(page) {
   if (page !== lastSignPage) {
     if (lastSignPage != null && !focusEls.signImage.hidden) {
-      replayAnimation(focusEls.signImage, "slide-a", "slide-b");
+      replayAnimation(focusEls.signImage, "slide");
     }
     lastSignPage = page;
     const index = SIGN_PAGE_ORDER.indexOf(page);
@@ -463,7 +454,7 @@ function renderFocus(focus) {
   focusEls.state.textContent = copy.chip;
   if (focusEls.label.textContent !== copy.label) {
     focusEls.label.textContent = copy.label;
-    replayAnimation(focusEls.label, "swap-a", "swap-b");
+    replayAnimation(focusEls.label, "swap");
   }
   focusEls.caption.textContent = describeCaption(focus);
   focusEls.blockChip.hidden = !focus.block.active;
@@ -478,7 +469,7 @@ function renderFocus(focus) {
   setText(focusEls.snacks, today.snacks);
   setText(focusEls.best, formatDuration(today.longest_streak_seconds));
   if (lastPickups != null && today.pickups > lastPickups) {
-    replayAnimation(focusEls.ripple, "rip-a", "rip-b");
+    replayAnimation(focusEls.ripple, "rip");
   }
   lastPickups = today.pickups;
 
@@ -501,22 +492,21 @@ function tick() {
   moveTimelineNow(now);
 }
 
+// A disabled button fires no clicks, so these can't overlap; the busy flags keep renderFocus from re-enabling it mid-request.
 async function toggleBlock() {
-  if (!blockBusy) {
-    blockBusy = true;
-    focusEls.block.disabled = true;
-    try {
-      await fetch("/api/focus/block", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "toggle" }),
-      });
-    } catch (error) {
-      // The next snapshot shows the real state either way.
-    } finally {
-      blockBusy = false;
-      focusEls.block.disabled = latestFocus == null || !latestFocus.enabled;
-    }
+  blockBusy = true;
+  focusEls.block.disabled = true;
+  try {
+    await fetch("/api/focus/block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggle" }),
+    });
+  } catch (error) {
+    // The next snapshot shows the real state either way.
+  } finally {
+    blockBusy = false;
+    focusEls.block.disabled = latestFocus == null || !latestFocus.enabled;
   }
 }
 
@@ -549,26 +539,24 @@ function loadSignPicture() {
 }
 
 async function flipSignPage() {
-  if (!signBusy) {
-    signBusy = true;
-    focusEls.signFlip.disabled = true;
-    try {
-      const response = await fetch("/api/sign/page", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step: 1 }),
-      });
-      if (response.ok) {
-        const body = await response.json();
-        setSignPage(body.page);
-        setTimeout(loadSignPicture, SIGN_SETTLE_MS);
-      }
-    } catch (error) {
-      // The next snapshot shows the real page either way.
-    } finally {
-      signBusy = false;
-      focusEls.signFlip.disabled = latestFocus == null || latestFocus.sign?.mode === "off";
+  signBusy = true;
+  focusEls.signFlip.disabled = true;
+  try {
+    const response = await fetch("/api/sign/page", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: 1 }),
+    });
+    if (response.ok) {
+      const body = await response.json();
+      setSignPage(body.page);
+      setTimeout(loadSignPicture, SIGN_SETTLE_MS);
     }
+  } catch (error) {
+    // The next snapshot shows the real page either way.
+  } finally {
+    signBusy = false;
+    focusEls.signFlip.disabled = latestFocus == null || latestFocus.sign?.mode === "off";
   }
 }
 

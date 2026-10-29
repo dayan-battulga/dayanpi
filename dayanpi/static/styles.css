@@ -38,25 +38,6 @@
   --shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 18px 40px -18px rgb(0 0 0 / 75%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-    --bg: #0a0a0c;
-    --surface: #131316;
-    --sunken: #0d0d10;
-    --line: rgb(255 255 255 / 7%);
-    --line-strong: rgb(255 255 255 / 15%);
-    --ink: #ededef;
-    --ink-2: #c4c4ca;
-    --muted: #8e8e96;
-    --work: #34d3b9;
-    --phone: #ff8a4c;
-    --away: #a99bff;
-    --warm: #f5b83d;
-    --hot: #ff5c7a;
-  }
-}
-
 :root {
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --radius: 24px;
@@ -867,14 +848,6 @@ ol {
   font-size: 12px;
 }
 
-.led img.slide-a {
-  animation: slide-a 0.6s var(--ease);
-}
-
-.led img.slide-b {
-  animation: slide-b 0.6s var(--ease);
-}
-
 .sign-dots {
   display: flex;
   gap: 6px;
@@ -1331,38 +1304,6 @@ ol {
   animation-delay: calc(var(--d, 0) * 70ms);
 }
 
-.tick-a {
-  animation: tick-a 0.45s var(--ease);
-}
-
-.tick-b {
-  animation: tick-b 0.45s var(--ease);
-}
-
-.roll-a {
-  animation: roll-a 0.55s var(--ease);
-}
-
-.roll-b {
-  animation: roll-b 0.55s var(--ease);
-}
-
-.swap-a {
-  animation: swap-a 0.7s var(--ease);
-}
-
-.swap-b {
-  animation: swap-b 0.7s var(--ease);
-}
-
-.rip-a {
-  animation: rip-a 1s var(--ease);
-}
-
-.rip-b {
-  animation: rip-b 1s var(--ease);
-}
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -1373,75 +1314,6 @@ ol {
     opacity: 1;
     transform: none;
     filter: none;
-  }
-}
-
-/* Each animation has an identical twin so replayAnimation() can restart it. */
-@keyframes tick-a {
-  from {
-    opacity: 0.35;
-    transform: translateY(0.15em);
-  }
-}
-
-@keyframes tick-b {
-  from {
-    opacity: 0.35;
-    transform: translateY(0.15em);
-  }
-}
-
-@keyframes roll-a {
-  from {
-    opacity: 0;
-    transform: translateY(0.5em);
-    filter: blur(3px);
-  }
-}
-
-@keyframes roll-b {
-  from {
-    opacity: 0;
-    transform: translateY(0.5em);
-    filter: blur(3px);
-  }
-}
-
-@keyframes swap-a {
-  from {
-    opacity: 0;
-    transform: translateY(0.3em);
-    filter: blur(4px);
-  }
-}
-
-@keyframes swap-b {
-  from {
-    opacity: 0;
-    transform: translateY(0.3em);
-    filter: blur(4px);
-  }
-}
-
-@keyframes rip-a {
-  from {
-    opacity: 0.6;
-    transform: scale(0.6);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.8);
-  }
-}
-
-@keyframes rip-b {
-  from {
-    opacity: 0.6;
-    transform: scale(0.6);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.8);
   }
 }
 
@@ -1470,22 +1342,6 @@ ol {
 @keyframes fade-in {
   from {
     opacity: 0;
-  }
-}
-
-@keyframes slide-a {
-  from {
-    opacity: 0;
-    transform: translateX(8%);
-    filter: blur(4px);
-  }
-}
-
-@keyframes slide-b {
-  from {
-    opacity: 0;
-    transform: translateX(8%);
-    filter: blur(4px);
   }
 }
 

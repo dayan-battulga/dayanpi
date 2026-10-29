@@ -93,7 +93,7 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
-| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and all the motion), `ui.js` (helpers the scripts share), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, sign, Today list), `drive.js` (driving, not loaded while the rover is paused) |
+| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and the page's motion), `ui.js` (helpers the scripts share, including the small replayable text animations), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, sign, Today list), `drive.js` (driving, not loaded while the rover is paused) |
 | `scripts/` | What you run by hand on the Pi: `focus_check.py` and `focus_stats.py` |
 | `models/` | The ONNX models: YOLO11 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
