@@ -13,9 +13,6 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from dataclasses import asdict
 from typing import Literal
@@ -66,8 +63,6 @@ sign_controller: SignController | None = None
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _stream_slots = threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _authorized(request: Request) -> bool:
@@ -245,8 +240,6 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -304,14 +297,12 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 
 
 @app.get("/api/stats")
-@limiter.limit("60/minute")
-def stats(request: Request):
+def stats():
     return latest_snapshot if latest_snapshot is not None else {}
 
 
 @app.get("/api/health")
-@limiter.limit("60/minute")
-def health(request: Request):
+def health():
     return {"status": "ok"}
 
 
@@ -321,8 +312,7 @@ class DriveCommand(BaseModel):
 
 
 @app.post("/api/drive")
-@limiter.limit("600/minute")
-def drive(request: Request, command: DriveCommand):
+def drive(command: DriveCommand):
     if drive_train is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -334,8 +324,7 @@ def drive(request: Request, command: DriveCommand):
 
 
 @app.get("/api/focus")
-@limiter.limit("60/minute")
-def focus_now(request: Request):
+def focus_now():
     status = build_focus_status()
     status["segments"] = tracker.segments()
     status["snack_times"] = tracker.snack_times()
@@ -347,8 +336,7 @@ class BlockCommand(BaseModel):
 
 
 @app.post("/api/focus/block")
-@limiter.limit("30/minute")
-def focus_block(request: Request, command: BlockCommand):
+def focus_block(command: BlockCommand):
     now = time.time()
     if command.action == "toggle":
         active = tracker.toggle_block(now, source="api")
@@ -364,8 +352,7 @@ class SignPageCommand(BaseModel):
 
 
 @app.post("/api/sign/page")
-@limiter.limit("30/minute")
-def flip_sign_page(request: Request, command: SignPageCommand):
+def flip_sign_page(command: SignPageCommand):
     """The website's version of the one-hand gestures: next or previous sign page."""
     if sign_controller is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Sign is off")
@@ -378,8 +365,7 @@ class AppReport(BaseModel):
 
 
 @app.post("/api/mac/app")
-@limiter.limit("120/minute")
-def mac_app(request: Request, report: AppReport):
+def mac_app(report: AppReport):
     changed = tracker.record_app(report.app.strip(), time.time())
     return {"status": "ok", "changed": changed}
 
@@ -389,16 +375,14 @@ class Phrase(BaseModel):
 
 
 @app.post("/api/voice/say")
-@limiter.limit("30/minute")
-def voice_say(request: Request, phrase: Phrase):
+def voice_say(phrase: Phrase):
     """For trying the speaker from the browser or curl. Off means it only lands in the log."""
     queued = voice.say(phrase.text)
     return {"status": "ok", "queued": queued, "backend": voice.backend}
 
 
 @app.get("/api/sign.png")
-@limiter.limit("60/minute")
-def sign_png(request: Request):
+def sign_png():
     """What the LED sign is showing right now, as the website preview image."""
     png = sign_preview.latest_png() if sign_controller is not None else None
     if png is None:
@@ -407,7 +391,6 @@ def sign_png(request: Request):
 
 
 @app.get("/api/stream")
-@limiter.limit("5/minute")
 async def api_stream(request: Request):
     if not _stream_slots.acquire(blocking=False):
         raise HTTPException(
@@ -427,8 +410,7 @@ async def api_stream(request: Request):
 
 
 @app.get("/video")
-@limiter.limit("30/minute")
-def video(request: Request):
+def video():
     if not _video_slots.acquire(blocking=False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

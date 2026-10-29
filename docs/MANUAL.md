@@ -1105,7 +1105,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, snacks, best streak.
 - **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview (the dots show which page it's on) and a list of today's last few changes and snacks.
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
-- **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**, which also saves on the shared `/video` rate limit. Press **Hide** to close it again. Your browser remembers which one you picked.
+- **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color, a phone in orange, food or drink in white, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
 - **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
 - **Animations** turn themselves off if your device is set to reduce motion.
@@ -1119,7 +1119,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | --- | --- |
 | `Unit dayanpi.service not found` | `sudo cp deploy/dayanpi.service /etc/systemd/system/` then `daemon-reload` and `enable --now` |
 | `activating (auto-restart)` / crash loop | `journalctl -u dayanpi -n 50 --no-pager` |
-| `No module named 'slowapi'` | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
+| `No module named ...` on start | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
 | Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` |
 | Connection refused on LAN IP:8000 | Expected — use Serve |
 | 401 everywhere | Use credentials from `/etc/dayanpi.env` |

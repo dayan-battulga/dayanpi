@@ -10,9 +10,7 @@ const LOAD_CRITICAL_PCT = 90;
 const BLOCK_COUNT = 20;
 const MIN_CORE_SHARE = 4; // % of the bar, so an idle core still shows a sliver
 const THEME_FADE_MS = 700;
-const FEED_RETRY_BASE_MS = 2000; // 2, 4, 8, 16 s...
-const FEED_RETRY_MAX_MS = 30000; // ...then every 30 s
-const FEED_STABLE_MS = 30000; // up this long = healthy again, back to 2 s
+const FEED_RETRY_MS = 2000;
 const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 const STATUS_LABELS = {
   connected: "Live",
@@ -50,9 +48,7 @@ const els = {
 let events = null;
 let themeFadeTimer = null;
 let feedWanted = false;
-let feedFailures = 0;
 let feedRetryTimer = null;
-let feedStableTimer = null;
 
 // ---------- connection ----------
 
@@ -278,8 +274,6 @@ function setCameraStatus(text) {
 // Swapping the src for a blank image is what actually closes the MJPEG connection.
 function stopFeed() {
   clearTimeout(feedRetryTimer);
-  clearTimeout(feedStableTimer);
-  feedStableTimer = null;
   els.camera.classList.remove("is-live");
   els.feed.src = BLANK_IMAGE;
 }
@@ -298,22 +292,16 @@ function setPeek(peeking) {
   }
 }
 
-// /video's rate limit is shared by every viewer, so back off instead of
-// burning through it with fixed 2 s retries.
 function handleFeedError() {
   if (feedWanted) {
     els.camera.classList.remove("is-live");
     setCameraStatus("reconnecting…");
-    clearTimeout(feedStableTimer);
-    feedStableTimer = null;
-    const retryDelay = Math.min(FEED_RETRY_BASE_MS * 2 ** feedFailures, FEED_RETRY_MAX_MS);
-    feedFailures += 1;
     clearTimeout(feedRetryTimer);
     feedRetryTimer = setTimeout(() => {
       if (feedWanted) {
         els.feed.src = `/video?t=${Date.now()}`;
       }
-    }, retryDelay);
+    }, FEED_RETRY_MS);
   }
 }
 
@@ -321,12 +309,6 @@ function handleFeedLoad() {
   if (feedWanted) {
     els.camera.classList.add("is-live");
     setCameraStatus("live · nothing saved");
-    // Some browsers fire load on every MJPEG frame; only arm the timer once.
-    if (feedStableTimer == null) {
-      feedStableTimer = setTimeout(() => {
-        feedFailures = 0;
-      }, FEED_STABLE_MS);
-    }
   }
 }
 

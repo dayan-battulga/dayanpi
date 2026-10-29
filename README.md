@@ -29,7 +29,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
         ▼
  Raspberry Pi 5 ── uvicorn on 127.0.0.1:8000 (systemd service "dayanpi")
         └─ dayanpi/ (the Python package)
-             ├─ app.py      → login, routes, rate limits, startup and shutdown
+             ├─ app.py      → login, routes, startup and shutdown
              ├─ hardware/   → collector (stats), camera (one thread owns the webcam), voice, drivetrain
              ├─ vision/     → detector (people, phones, faces, food), pose, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
@@ -86,7 +86,7 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 
 | Path | What it is |
 | --- | --- |
-| `dayanpi/app.py` | The FastAPI app: login, routes, rate limits, startup and shutdown, drive watchdog |
+| `dayanpi/app.py` | The FastAPI app: login, routes, startup and shutdown, drive watchdog |
 | `dayanpi/paths.py` | Where `static/`, `models/`, `data/` and `focus_check/` live, so no module counts parent folders |
 | `dayanpi/hardware/` | Things attached to the Pi: `collector.py` (stats), `camera.py` (one thread owns the webcam, many viewers), `voice.py` (the USB speaker), `drivetrain.py` (the L298N motors, paused) |
 | `dayanpi/vision/` | The models: `detector.py` (people, phones, faces, food and drinks), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
