@@ -167,7 +167,7 @@ class FocusWorker(LoopThread):
         return update
 
     def track_gestures(self, reading: FrameReading | None, now: float) -> None:
-        main_pose = None if reading is None else pose.pick_main_pose(reading)
+        main_pose = None if reading is None else max(reading.poses, key=lambda found: found.confidence, default=None)
         gesture = self.gestures.update(main_pose, now)
         if gesture is not None:
             self.last_gesture = gesture

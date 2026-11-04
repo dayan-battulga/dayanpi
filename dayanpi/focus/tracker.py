@@ -264,10 +264,7 @@ class FocusLog:
                 logger.exception("focus log write failed")
 
     def read_day(self, day: str) -> list[dict]:
-        events = self._read_file(self.day_path(day))
-        return events
-
-    def _read_file(self, path: Path) -> list[dict]:
+        path = self.day_path(day)
         events = []
         skipped = 0
         with self._lock:

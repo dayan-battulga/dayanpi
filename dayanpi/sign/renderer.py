@@ -133,11 +133,6 @@ STATE_STYLES = {
 }
 
 
-def build_glyph_mask(rows: tuple[str, ...]) -> np.ndarray:
-    mask = np.array([[cell == glyphs.LIT for cell in row] for row in rows], dtype=bool)
-    return mask
-
-
 def build_bitmap(rows: tuple[str, ...]) -> Bitmap:
     """rows is palette art: one glyphs.PALETTE key per pixel, '.' for dark."""
     height = len(rows)
@@ -153,7 +148,10 @@ def build_bitmap(rows: tuple[str, ...]) -> Bitmap:
     return bitmap
 
 
-GLYPH_MASKS = {char: build_glyph_mask(rows) for char, rows in glyphs.FONT.items()}
+GLYPH_MASKS = {
+    char: np.array([[cell == glyphs.LIT for cell in row] for row in rows], dtype=bool)
+    for char, rows in glyphs.FONT.items()
+}
 MINI_ICON_BITMAPS = {name: build_bitmap(rows) for name, rows in glyphs.MINI_ICONS.items()}
 
 
@@ -163,13 +161,11 @@ def scale_up(pixels: np.ndarray, scale: int) -> np.ndarray:
     return scaled
 
 
-def scale_bitmap(bitmap: Bitmap, scale: int) -> Bitmap:
-    scaled = Bitmap(pixels=scale_up(bitmap.pixels, scale), mask=scale_up(bitmap.mask, scale))
-    return scaled
-
-
 # Icons only ever draw at BIG_ICON_SCALE, so they're scaled once here instead of every frame.
-ICON_BITMAPS = {name: scale_bitmap(build_bitmap(rows), BIG_ICON_SCALE) for name, rows in glyphs.ICONS.items()}
+ICON_BITMAPS = {}
+for icon_name, icon_rows in glyphs.ICONS.items():
+    small_icon = build_bitmap(icon_rows)
+    ICON_BITMAPS[icon_name] = Bitmap(pixels=scale_up(small_icon.pixels, BIG_ICON_SCALE), mask=scale_up(small_icon.mask, BIG_ICON_SCALE))
 
 
 def find_glyph(char: str) -> np.ndarray:
@@ -177,11 +173,6 @@ def find_glyph(char: str) -> np.ndarray:
     fallback = " " if char.isspace() else FALLBACK_CHAR
     mask = GLYPH_MASKS.get(char, GLYPH_MASKS[fallback])
     return mask
-
-
-def find_icon(name: str) -> Bitmap:
-    bitmap = ICON_BITMAPS.get(name, ICON_BITMAPS[FALLBACK_ICON])
-    return bitmap
 
 
 def build_text_mask(text: str) -> np.ndarray:
@@ -243,7 +234,7 @@ def draw_text(
 
 def draw_icon(frame: np.ndarray, name: str) -> None:
     """A big icon in the top-left corner, where every page that has one puts it."""
-    paste_bitmap(frame, find_icon(name), 0, 0, FULL_FRAME)
+    paste_bitmap(frame, ICON_BITMAPS.get(name, ICON_BITMAPS[FALLBACK_ICON]), 0, 0, FULL_FRAME)
 
 
 def find_badge_left(icon_name: str, text: str) -> int:

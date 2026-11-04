@@ -155,8 +155,3 @@ class PoseDeskScanner(DeskScanner):
         reading = super().scan(image)
         reading.poses = self._last_poses
         return reading
-
-
-def pick_main_pose(reading: FrameReading) -> PoseDetection | None:
-    main_pose = max(reading.poses, key=lambda pose: pose.confidence, default=None)
-    return main_pose
