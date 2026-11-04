@@ -16,7 +16,6 @@ on the same frames and 0.00 on every frame of real work.
 import math
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -125,9 +124,9 @@ def decode_jpeg(jpeg: bytes) -> np.ndarray | None:
     return image
 
 
-def fit_to_input(image: np.ndarray, width: int = INPUT_WIDTH, height: int = INPUT_HEIGHT) -> Letterbox:
+def fit_to_input(image: np.ndarray) -> Letterbox:
     source_height, source_width = image.shape[:2]
-    scale = min(width / source_width, height / source_height)
+    scale = min(INPUT_WIDTH / source_width, INPUT_HEIGHT / source_height)
     resized_width = round(source_width * scale)
     resized_height = round(source_height * scale)
 
@@ -136,8 +135,8 @@ def fit_to_input(image: np.ndarray, width: int = INPUT_WIDTH, height: int = INPU
         resized = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
 
     # Same rounding as Ultralytics, so boxes line up with what the model was trained on.
-    pad_x = (width - resized_width) / 2
-    pad_y = (height - resized_height) / 2
+    pad_x = (INPUT_WIDTH - resized_width) / 2
+    pad_y = (INPUT_HEIGHT - resized_height) / 2
     pad_left = int(round(pad_x - 0.1))
     pad_right = int(round(pad_x + 0.1))
     pad_top = int(round(pad_y - 0.1))
@@ -275,8 +274,8 @@ def read_face(row: np.ndarray) -> FaceReading:
 
 
 class ObjectDetector:
-    def __init__(self, model_path: Path = OBJECT_MODEL_PATH) -> None:
-        self._net = cv2.dnn.readNetFromONNX(str(model_path))
+    def __init__(self) -> None:
+        self._net = cv2.dnn.readNetFromONNX(str(OBJECT_MODEL_PATH))
 
     def detect(self, image: np.ndarray) -> list[Detection]:
         letterbox = fit_to_input(image)
@@ -286,9 +285,9 @@ class ObjectDetector:
 
 
 class FaceDetector:
-    def __init__(self, model_path: Path = FACE_MODEL_PATH) -> None:
+    def __init__(self) -> None:
         self._detector = cv2.FaceDetectorYN.create(
-            str(model_path),
+            str(FACE_MODEL_PATH),
             "",
             (INPUT_WIDTH, INPUT_HEIGHT),
             FACE_MIN_CONFIDENCE,

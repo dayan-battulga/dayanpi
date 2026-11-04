@@ -61,8 +61,8 @@ class ActiveCallout:
 
 
 class SignController(LoopThread):
-    def __init__(self, tracker: FocusTracker, outputs: list, clock=time.time, fps: int = SIGN_FPS) -> None:
-        super().__init__(name="sign", interval_s=1.0 / fps)
+    def __init__(self, tracker: FocusTracker, outputs: list, clock=time.time) -> None:
+        super().__init__(name="sign", interval_s=1.0 / SIGN_FPS)
         self._tracker = tracker
         self._outputs = outputs
         self._clock = clock

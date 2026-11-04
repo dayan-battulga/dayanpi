@@ -122,8 +122,8 @@ def memory_usage() -> dict:
     }
 
 
-def disk_usage(path: str = "/") -> dict:
-    usage = shutil.disk_usage(path)
+def disk_usage() -> dict:
+    usage = shutil.disk_usage("/")
     total_gb = usage.total / (1024**3)
     free_gb = usage.free / (1024**3)
     percent_used = (1 - free_gb / total_gb) * 100

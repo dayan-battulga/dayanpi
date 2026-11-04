@@ -169,8 +169,8 @@ def find_piper_problem(model: Path | None, piper_installed: Callable[[], bool]) 
 
 def find_problem(
     settings: VoiceSettings,
-    find_program: Callable[[str], str | None] = shutil.which,
-    piper_installed: Callable[[], bool] = is_piper_installed,
+    find_program: Callable[[str], str | None],
+    piper_installed: Callable[[], bool],
 ) -> str | None:
     """Why the chosen voice can't run, or None when it can (or when it's off anyway)."""
     problem = None
@@ -196,7 +196,7 @@ def run_step(
     command: list[str],
     input_bytes: bytes,
     timeout_s: float,
-    run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    run: Callable[..., subprocess.CompletedProcess],
 ) -> bytes:
     """Runs one program to the end and returns its stdout. subprocess.run kills it if it passes timeout_s."""
     try:
