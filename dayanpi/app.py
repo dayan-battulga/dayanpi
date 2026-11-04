@@ -313,7 +313,6 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 
             await asyncio.sleep(SNAPSHOT_INTERVAL_S)
     finally:
-        _stream_slots.release()
         logger.info("SSE client disconnected")
 
 
@@ -411,6 +410,25 @@ def sign_png():
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
+class SlotResponse(StreamingResponse):
+    """A stream on a capped route, which gives its slot back the moment it ends, however it ends.
+
+    A finally inside the generator can't do this. When a viewer hangs up the generator just stops
+    being read, so its finally waits for the garbage collector, and until then the next viewer
+    gets a 503. If they hang up before it starts, the finally never runs at all.
+    """
+
+    def __init__(self, content, slots: threading.BoundedSemaphore, **options) -> None:
+        super().__init__(content, **options)
+        self._slots = slots
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._slots.release()
+
+
 @app.get("/api/stream")
 async def api_stream(request: Request):
     if not _stream_slots.acquire(blocking=False):
@@ -419,8 +437,9 @@ async def api_stream(request: Request):
             detail="Too many stream connections",
         )
 
-    return StreamingResponse(
+    return SlotResponse(
         event_stream(request),
+        _stream_slots,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -437,14 +456,9 @@ def stream_video(camera: CameraStream, slots: threading.BoundedSemaphore) -> Str
             detail="Too many video connections",
         )
 
-    def guarded() -> Iterator[bytes]:
-        try:
-            yield from frame_generator(camera)
-        finally:
-            slots.release()
-
-    response = StreamingResponse(
-        guarded(),
+    response = SlotResponse(
+        frame_generator(camera),
+        slots,
         media_type=f"multipart/x-mixed-replace; boundary={FRAME_BOUNDARY}",
     )
     return response

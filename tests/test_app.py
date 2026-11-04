@@ -1,11 +1,15 @@
+import gc
 import importlib
 import os
 import re
 import sys
 import tempfile
+import threading
 import time
 
+import httpx
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 from gpiozero.pins.mock import MockFactory, MockPWMPin
 
@@ -389,6 +393,58 @@ def test_the_dashboard_feeds_match_the_server(factory):
     assert len(feed_paths) == len(overlay_keys) == 2
     assert set(feed_paths) <= {route.path for route in app.app.routes}
     assert set(overlay_keys) <= set(status)
+
+
+class EndlessCamera:
+    """Always has a newer frame, like a healthy camera."""
+
+    def __init__(self) -> None:
+        self.frame_id = 0
+
+    def frame_after(self, last_id: int, timeout: float):
+        time.sleep(0.01)
+        self.frame_id += 1
+        result = (b"jpeg", self.frame_id)
+        return result
+
+
+@pytest.fixture
+def real_server(monkeypatch):
+    """A real uvicorn, because a viewer hanging up mid-stream is what TestClient can't do."""
+    camera = EndlessCamera()
+    monkeypatch.setattr(app, "stream", camera)
+    monkeypatch.setattr(app, "side_stream", camera)
+    server = uvicorn.Server(uvicorn.Config(app.app, host="127.0.0.1", port=0, lifespan="off", log_level="warning"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 5
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.01)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    # With the collector off, a slot that only comes back through garbage collection never comes back.
+    gc.disable()
+    yield f"http://127.0.0.1:{port}"
+    gc.enable()
+    server.should_exit = True
+    thread.join(5)
+
+
+@pytest.mark.parametrize(
+    "path, slots_name",
+    [("/video", "_video_slots"), ("/video/side", "_side_video_slots"), ("/api/stream", "_stream_slots")],
+)
+def test_a_viewer_who_leaves_gives_the_slot_back_right_away(real_server, path, slots_name):
+    slots = getattr(app, slots_name)
+    all_free = slots._value
+    for _ in range(all_free + 1):
+        with httpx.stream("GET", real_server + path, auth=AUTH, timeout=3) as response:
+            assert response.status_code == 200
+            next(response.iter_raw())
+            assert slots._value == all_free - 1
+        deadline = time.monotonic() + 2
+        while slots._value < all_free and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert slots._value == all_free
 
 
 def test_side_video_is_a_404_without_a_side_camera(factory):
