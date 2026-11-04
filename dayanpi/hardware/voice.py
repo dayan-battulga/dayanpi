@@ -6,8 +6,8 @@ through ALSA's aplay, on DAYANPI_AUDIO_DEVICE when it's set (for example
 plughw:CARD=Device,DEV=0), or on ALSA's default device when it isn't.
 
 Settings come from the environment (/etc/dayanpi.env on the Pi):
-- DAYANPI_VOICE: "off" (the default, which only logs what it would have said),
-  "espeak" (espeak-ng from apt) or "piper" (piper-tts from pip, in the venv)
+- DAYANPI_VOICE: "off" (the default, which only logs what it would have said)
+  or "piper" (piper-tts from pip, in the venv)
 - DAYANPI_PIPER_MODEL: path to a Piper voice .onnx, with its .onnx.json next to it
 - DAYANPI_AUDIO_DEVICE: the ALSA device aplay plays on
 
@@ -32,18 +32,14 @@ PIPER_MODEL_ENV = "DAYANPI_PIPER_MODEL"
 AUDIO_DEVICE_ENV = "DAYANPI_AUDIO_DEVICE"
 
 OFF = "off"
-ESPEAK = "espeak"
 PIPER = "piper"
-BACKENDS = (OFF, ESPEAK, PIPER)
+BACKENDS = (OFF, PIPER)
 
 QUEUE_SIZE = 3
 STEP_TIMEOUT_S = 20.0
 STOP_JOIN_TIMEOUT_S = 1.0
 
 PLAYER_PROGRAM = "aplay"
-ESPEAK_PROGRAM = "espeak-ng"
-ESPEAK_VOICE = "en-us"
-ESPEAK_WORDS_PER_MINUTE = 165
 PIPER_PACKAGE = "piper-tts"
 PIPER_DEFAULT_SAMPLE_RATE = 22050
 PIPER_SAMPLE_FORMAT = "S16_LE"
@@ -64,9 +60,8 @@ class VoiceSettings:
 
 @dataclass
 class SpeechJob:
-    """One phrase: the synth program turns text_input into audio, then aplay plays it."""
+    """One phrase: Piper turns text_input into audio, then aplay plays it."""
 
-    synth_name: str
     synth_command: list[str]
     player_command: list[str]
     text_input: bytes
@@ -90,12 +85,6 @@ def clean_text(text: str) -> str:
     return cleaned
 
 
-def encode_text(text: str) -> bytes:
-    """Both synths read the phrase from stdin, so it never ends up on a command line."""
-    text_input = (text + "\n").encode("utf-8")
-    return text_input
-
-
 def derive_config_path(model: Path) -> Path:
     config_path = model.with_name(model.name + ".json")
     return config_path
@@ -112,34 +101,23 @@ def read_sample_rate(model: Path) -> int:
     return sample_rate
 
 
-def build_player_command(device: str | None, raw_sample_rate: int | None = None) -> list[str]:
-    """aplay reads stdin: a WAV from espeak-ng, or headerless 16-bit mono audio from Piper."""
+def build_player_command(device: str | None, sample_rate: int) -> list[str]:
+    """aplay reads Piper's headerless 16-bit mono audio from stdin."""
     command = [PLAYER_PROGRAM, "-q"]
     if device:
         command += ["-D", device]
-    if raw_sample_rate is not None:
-        command += ["-r", str(raw_sample_rate), "-f", PIPER_SAMPLE_FORMAT, "-t", "raw", "-"]
+    command += ["-r", str(sample_rate), "-f", PIPER_SAMPLE_FORMAT, "-t", "raw", "-"]
     return command
-
-
-def build_espeak_job(text: str, device: str | None) -> SpeechJob:
-    job = SpeechJob(
-        synth_name=ESPEAK_PROGRAM,
-        synth_command=[ESPEAK_PROGRAM, "--stdout", "-v", ESPEAK_VOICE, "-s", str(ESPEAK_WORDS_PER_MINUTE), "--stdin"],
-        player_command=build_player_command(device),
-        text_input=encode_text(text),
-    )
-    return job
 
 
 def build_piper_job(text: str, model: Path, sample_rate: int, device: str | None) -> SpeechJob:
     job = SpeechJob(
-        synth_name=PIPER,
         # The venv's own Python, not a `piper` on PATH: the service's PATH doesn't include .venv/bin,
         # and Debian's apt package called "piper" is an unrelated gaming-mouse app.
         synth_command=[sys.executable, "-m", "piper", "--model", str(model), "--output-raw"],
-        player_command=build_player_command(device, raw_sample_rate=sample_rate),
-        text_input=encode_text(text),
+        player_command=build_player_command(device, sample_rate),
+        # Piper reads the phrase from stdin, so it never ends up on a command line.
+        text_input=(text + "\n").encode("utf-8"),
     )
     return job
 
@@ -178,8 +156,6 @@ def find_problem(
         problem = f"{VOICE_ENV}={settings.backend!r} isn't one of {', '.join(BACKENDS)}"
     elif settings.backend != OFF and find_program(PLAYER_PROGRAM) is None:
         problem = f"{PLAYER_PROGRAM} isn't installed (sudo apt install alsa-utils)"
-    elif settings.backend == ESPEAK and find_program(ESPEAK_PROGRAM) is None:
-        problem = f"{ESPEAK_PROGRAM} isn't installed (sudo apt install espeak-ng)"
     elif settings.backend == PIPER:
         problem = find_piper_problem(settings.piper_model, piper_installed)
     return problem
@@ -218,7 +194,7 @@ def run_speech_job(job: SpeechJob, run: Callable[..., subprocess.CompletedProces
     process to kill, and the timeout kills it. A phrase is a second or two of audio,
     so waiting for the whole clip costs next to nothing.
     """
-    audio = run_step(job.synth_name, job.synth_command, job.text_input, STEP_TIMEOUT_S, run)
+    audio = run_step(PIPER, job.synth_command, job.text_input, STEP_TIMEOUT_S, run)
     run_step(PLAYER_PROGRAM, job.player_command, audio, STEP_TIMEOUT_S, run)
 
 
@@ -321,16 +297,8 @@ class VoiceAnnouncer:
 
     def _speak(self, phrase: str) -> None:
         try:
-            self._runner(self._build_job(phrase))
+            self._runner(build_piper_job(phrase, self._settings.piper_model, self._sample_rate, self._settings.audio_device))
         except SpeechError as error:
             logger.error("voice couldn't say %r: %s", phrase, error)
         except Exception:
             logger.exception("voice broke while saying %r, carrying on", phrase)
-
-    def _build_job(self, phrase: str) -> SpeechJob:
-        device = self._settings.audio_device
-        if self.backend == PIPER:
-            job = build_piper_job(phrase, self._settings.piper_model, self._sample_rate, device)
-        else:
-            job = build_espeak_job(phrase, device)
-        return job

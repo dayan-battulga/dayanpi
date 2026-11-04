@@ -55,46 +55,9 @@ sudo usermod -aG audio dayoon
 
 The service picks that up the next time it restarts. Your own SSH session only sees it after you log out and back in.
 
-## 4. Quick start: espeak-ng
+## 4. Install Piper
 
-espeak-ng sounds pretty robotic, but it's tiny and instant. Install it and try it out:
-
-```bash
-sudo apt install espeak-ng
-echo "Phone down." | espeak-ng --stdout -v en-us -s 165 --stdin | aplay -q -D plughw:CARD=Device,DEV=0
-```
-
-That's exactly what the dashboard runs for each phrase. To test it the way the service will run it (as a system service, with no desktop session), try:
-
-```bash
-sudo systemd-run --uid=dayoon --wait --pipe /bin/sh -c 'echo "Testing from a system service." | espeak-ng --stdout -v en-us -s 165 --stdin | aplay -q -D plughw:CARD=Device,DEV=0'
-```
-
-If you hear that, the dashboard will work too. Now turn it on. Open the env file:
-
-```bash
-sudo nano /etc/dayanpi.env
-```
-
-Add these two lines (with your speaker's name):
-
-```
-DAYANPI_VOICE=espeak
-DAYANPI_AUDIO_DEVICE=plughw:CARD=Device,DEV=0
-```
-
-Restart and check the log:
-
-```bash
-sudo systemctl restart dayanpi
-journalctl -u dayanpi -n 30 --no-pager | grep -i voice
-```
-
-You want `voice on: espeak through aplay on plughw:CARD=Device,DEV=0`. If the voice can't run (say espeak-ng isn't installed), the log says why once and the voice stays off. The rest of the site keeps working either way.
-
-## 5. Nicer voice: Piper
-
-Piper sounds a lot more human. It's a pip package, and it goes into the dashboard's venv:
+Piper is the voice, and it sounds pretty human. It's a pip package, and it goes into the dashboard's venv:
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
@@ -128,7 +91,19 @@ echo "Break's over." | ~/Desktop/site-page/dayanpi/.venv/bin/python -m piper --m
 
 `22050` is the voice's sample rate. It lives in the `.onnx.json` under `audio` → `sample_rate`, and the dashboard reads it from there on its own. (A different voice might use another rate. If it sounds like a chipmunk or slow-mo here, that's why.)
 
-Then point the dashboard at it in `/etc/dayanpi.env`, using the full path:
+To test it the way the service will run it (as a system service, with no desktop session), try:
+
+```bash
+sudo systemd-run --uid=dayoon --wait --pipe /bin/sh -c 'echo "Testing from a system service." | /home/dayoon/Desktop/site-page/dayanpi/.venv/bin/python -m piper --model /home/dayoon/piper-voices/en_US-lessac-medium.onnx --output-raw | aplay -q -D plughw:CARD=Device,DEV=0 -r 22050 -f S16_LE -t raw -'
+```
+
+If you hear that, the dashboard will work too. Now turn it on. Open the env file:
+
+```bash
+sudo nano /etc/dayanpi.env
+```
+
+Add these three lines, with the full path to the voice and your speaker's name:
 
 ```
 DAYANPI_VOICE=piper
@@ -136,10 +111,14 @@ DAYANPI_PIPER_MODEL=/home/dayoon/piper-voices/en_US-lessac-medium.onnx
 DAYANPI_AUDIO_DEVICE=plughw:CARD=Device,DEV=0
 ```
 
+Restart and check the log:
+
 ```bash
 sudo systemctl restart dayanpi
 journalctl -u dayanpi -n 30 --no-pager | grep -i voice
 ```
+
+You want `voice on: piper through aplay on plughw:CARD=Device,DEV=0`. If the voice can't run (say the voice file is missing), the log says why once and the voice stays off. The rest of the site keeps working either way.
 
 Piper loads the voice fresh for every phrase, so expect a short pause before it talks.
 
@@ -169,7 +148,7 @@ Check the log first: `journalctl -u dayanpi -n 50 --no-pager | grep -i voice`
 
 | Log says | What to do |
 | --- | --- |
-| `espeak-ng isn't installed` | `sudo apt install espeak-ng`, then restart |
+| `DAYANPI_VOICE='espeak' isn't one of off, piper` | espeak-ng isn't supported anymore. Set up Piper (step 4), then set `DAYANPI_VOICE=piper` |
 | `piper-tts isn't installed in the dashboard's venv` | `.venv/bin/pip install piper-tts` in the dashboard folder, then restart |
 | `there's no Piper voice at ...` or `... .onnx.json is missing` | `DAYANPI_PIPER_MODEL` needs the full path, and both files need to be in that folder |
 | `Device or resource busy` | Something else has the speaker, usually the desktop's audio. `sudo fuser -v /dev/snd/*` shows who. Close that, or wait a few seconds and it'll let go |

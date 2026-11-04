@@ -14,8 +14,10 @@ from dayanpi.hardware import voice
 from dayanpi.hardware.voice import SpeechError, SpeechJob, VoiceAnnouncer, VoiceSettings
 
 DEVICE = "plughw:CARD=Device,DEV=0"
+FAKE_MODEL = Path("/home/dayoon/piper-voices/en_US-lessac-medium.onnx")
 WAIT_S = 5.0
 VOICE_CONFIG = json.dumps({"audio": {"sample_rate": 16000, "quality": "medium"}, "espeak": {"voice": "en-us"}})
+TEST_VOICE = object()  # make_voice's default: a working fake voice, since None means no voice is set
 
 
 def decode_phrase(job: SpeechJob) -> str:
@@ -84,21 +86,22 @@ def write_voice(folder: Path, config_text: str | None) -> Path:
 
 
 @pytest.fixture
-def make_voice():
-    """Builds announcers with a fake runner and fake program lookups, and stops them all afterwards."""
+def make_voice(tmp_path):
+    """Builds announcers with a fake runner, a fake voice and fake program lookups, and stops them all afterwards."""
     rigs: list[VoiceRig] = []
 
     def build(
-        backend: str = voice.ESPEAK,
+        backend: str = voice.PIPER,
         runner: FakeRunner | None = None,
-        model: Path | None = None,
+        model: Path | None | object = TEST_VOICE,
         device: str | None = DEVICE,
         missing_programs: tuple[str, ...] = (),
         piper_installed: bool = True,
     ) -> VoiceRig:
         rig_runner = runner or FakeRunner()
+        rig_model = write_voice(tmp_path, VOICE_CONFIG) if model is TEST_VOICE else model
         announcer = VoiceAnnouncer(
-            VoiceSettings(backend=backend, piper_model=model, audio_device=device),
+            VoiceSettings(backend=backend, piper_model=rig_model, audio_device=device),
             runner=rig_runner,
             find_program=make_finder(*missing_programs),
             piper_installed=lambda: piper_installed,
@@ -145,26 +148,10 @@ def test_off_only_logs_and_runs_nothing(make_voice, caplog):
     assert rig.runner.jobs == []
 
 
-@pytest.mark.parametrize(
-    ("device", "player_command"),
-    [
-        (None, ["aplay", "-q"]),
-        (DEVICE, ["aplay", "-q", "-D", DEVICE]),
-    ],
-)
-def test_espeak_job_pipes_a_wav_into_aplay(device, player_command):
-    job = voice.build_espeak_job("Phone down.", device)
-    assert job.synth_name == "espeak-ng"
-    assert job.synth_command == ["espeak-ng", "--stdout", "-v", "en-us", "-s", "165", "--stdin"]
-    assert job.player_command == player_command
-    assert job.text_input == b"Phone down.\n"
-
-
 @pytest.mark.parametrize(("device", "device_args"), [(None, []), (DEVICE, ["-D", DEVICE])])
 def test_piper_job_pipes_raw_audio_into_aplay(device, device_args):
     model = Path("/home/dayoon/piper-voices/en_US-lessac-medium.onnx")
     job = voice.build_piper_job("Break's over.", model, 22050, device)
-    assert job.synth_name == "piper"
     assert job.synth_command == [sys.executable, "-m", "piper", "--model", str(model), "--output-raw"]
     assert job.player_command == ["aplay", "-q", *device_args, "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"]
     assert job.text_input == "Break's over.\n".encode("utf-8")
@@ -283,11 +270,10 @@ def test_piper_voice_without_its_config_stays_off(make_voice, tmp_path):
 @pytest.mark.parametrize(
     ("backend", "missing_programs", "piper_installed", "has_model", "expected"),
     [
-        ("espeak", ("espeak-ng",), True, True, "sudo apt install espeak-ng"),
         ("piper", ("aplay",), True, True, "sudo apt install alsa-utils"),
         ("piper", (), False, True, "pip install piper-tts"),
         ("piper", (), True, False, "DAYANPI_PIPER_MODEL isn't set"),
-        ("espek", (), True, True, "DAYANPI_VOICE='espek'"),
+        ("espeak", (), True, True, "DAYANPI_VOICE='espeak' isn't one of off, piper"),
     ],
 )
 def test_voice_that_cannot_run_stays_off(
@@ -341,14 +327,14 @@ def make_result(returncode: int = 0, stdout: bytes = b"", stderr: bytes = b"") -
 
 
 def test_runner_feeds_stdin_through_and_never_uses_a_shell():
-    run = FakeRun([make_result(stdout=b"RIFF fake wav"), make_result()])
-    job = voice.build_espeak_job("a \"quoted\"; $(thing)", DEVICE)
+    run = FakeRun([make_result(stdout=b"fake raw audio"), make_result()])
+    job = voice.build_piper_job("a \"quoted\"; $(thing)", FAKE_MODEL, 22050, DEVICE)
 
     voice.run_speech_job(job, run=run)
 
     assert [call.command for call in run.calls] == [job.synth_command, job.player_command]
     assert run.calls[0].options["input"] == job.text_input
-    assert run.calls[1].options["input"] == b"RIFF fake wav"
+    assert run.calls[1].options["input"] == b"fake raw audio"
     for call in run.calls:
         assert "shell" not in call.options
         assert call.options["timeout"] == voice.STEP_TIMEOUT_S
@@ -360,7 +346,7 @@ def test_runner_feeds_stdin_through_and_never_uses_a_shell():
     [
         (
             [make_result(returncode=1, stderr=b"some warning\nerror: voice 'en-us' not found\n")],
-            "espeak-ng failed (exit code 1): error: voice 'en-us' not found",
+            "piper failed (exit code 1): error: voice 'en-us' not found",
             1,
         ),
         (
@@ -377,21 +363,21 @@ def test_runner_feeds_stdin_through_and_never_uses_a_shell():
             2,
         ),
         (
-            [subprocess.TimeoutExpired(cmd=["espeak-ng"], timeout=20)],
-            "espeak-ng took longer than 20 s and was killed",
+            [subprocess.TimeoutExpired(cmd=["piper"], timeout=20)],
+            "piper took longer than 20 s and was killed",
             1,
         ),
         (
-            [FileNotFoundError(2, "No such file or directory", "espeak-ng")],
-            "couldn't start espeak-ng: [Errno 2] No such file or directory: 'espeak-ng'",
+            [FileNotFoundError(2, "No such file or directory", "python")],
+            "couldn't start piper: [Errno 2] No such file or directory: 'python'",
             1,
         ),
-        ([make_result(returncode=-9)], "espeak-ng failed (exit code -9): no error output", 1),
+        ([make_result(returncode=-9)], "piper failed (exit code -9): no error output", 1),
     ],
 )
 def test_runner_turns_failures_into_speech_errors(outcomes, expected, call_count):
     run = FakeRun(outcomes)
     with pytest.raises(SpeechError) as caught:
-        voice.run_speech_job(voice.build_espeak_job("Phone down.", None), run=run)
+        voice.run_speech_job(voice.build_piper_job("Phone down.", FAKE_MODEL, 22050, None), run=run)
     assert str(caught.value) == expected
     assert len(run.calls) == call_count
