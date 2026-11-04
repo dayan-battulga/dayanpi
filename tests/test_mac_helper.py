@@ -381,7 +381,7 @@ def test_client_survives_the_keychain_entry_vanishing_mid_run():
     assert len(pi.requests) == 1
 
 
-@pytest.mark.parametrize("status, hint", [(422, "HTTP 422"), (429, "too many requests"), (500, "HTTP 500")])
+@pytest.mark.parametrize("status, hint", [(422, "HTTP 422"), (429, "HTTP 429"), (500, "HTTP 500")])
 def test_client_names_other_refusals(status, hint):
     result = helper.PiClient(APP_URL, USER, FakeMac().run, FakePi([status]).send).send_app("Code")
     assert not result.delivered

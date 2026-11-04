@@ -237,8 +237,6 @@ def describe_status(status: int, user: str) -> SendResult:
             f"the Pi said 401, wrong login for {user!r}. Check DAYANPI_USER and the Keychain password "
             f"(security add-generic-password -U -s {KEYCHAIN_SERVICE} -a {user} -w)"
         )
-    elif status == HTTPStatus.TOO_MANY_REQUESTS:
-        result.problem = "the Pi said 429, too many requests"
     elif not result.delivered:
         result.problem = f"the Pi answered HTTP {status}"
     return result
