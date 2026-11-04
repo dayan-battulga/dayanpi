@@ -2,7 +2,7 @@
 
 The dayanpi service owns the camera, so stop it first:
     sudo systemctl stop dayanpi
-    .venv/bin/python scripts/focus_check.py
+    .venv/bin/python -m dayanpi.focus.check
     sudo systemctl start dayanpi
 
 It walks you through three phases (working, on your phone, away), prints what

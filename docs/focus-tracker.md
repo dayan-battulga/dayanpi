@@ -16,7 +16,7 @@ This shows what the camera can actually pick up at your desk. The site owns the 
 cd ~/Desktop/site-page/dayanpi
 git pull origin main
 sudo systemctl stop dayanpi
-.venv/bin/python scripts/focus_check.py
+.venv/bin/python -m dayanpi.focus.check
 sudo systemctl start dayanpi
 ```
 
@@ -107,12 +107,12 @@ Check it's filling up:
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
-.venv/bin/python scripts/focus_stats.py            # today
-.venv/bin/python scripts/focus_stats.py --days 7   # the week, plus focus by hour of day
+.venv/bin/python -m dayanpi.focus.stats            # today
+.venv/bin/python -m dayanpi.focus.stats --days 7   # the week, plus focus by hour of day
 tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
 ```
 
-If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point the script at it: `scripts/focus_stats.py --log-dir /your/folder/focus_log`.
+If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point it at the folder: `.venv/bin/python -m dayanpi.focus.stats --log-dir /your/folder/focus_log`.
 
 **Routes** (all behind the login):
 

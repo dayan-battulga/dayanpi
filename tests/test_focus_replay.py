@@ -1,6 +1,6 @@
 """Replays the clean frames from a focus_check run through the real detector and the state machine.
 
-Skipped unless focus_check/frames/ exists (it's gitignored; focus_check.py writes it on the Pi).
+Skipped unless focus_check/frames/ exists (it's gitignored; dayanpi.focus.check writes it on the Pi).
 """
 
 from pathlib import Path

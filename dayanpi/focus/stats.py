@@ -1,7 +1,7 @@
 """Reads the focus log and prints what the days looked like.
 
-    .venv/bin/python scripts/focus_stats.py            # today
-    .venv/bin/python scripts/focus_stats.py --days 7   # the last week, plus focus by hour of day
+    .venv/bin/python -m dayanpi.focus.stats            # today
+    .venv/bin/python -m dayanpi.focus.stats --days 7   # the last week, plus focus by hour of day
 
 Reads data/focus_log/ (or DAYANPI_DATA_DIR/focus_log). It only looks at the log, so it
 can run while the service is up.

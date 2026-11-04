@@ -117,9 +117,9 @@ Run the same desk check on both cameras and compare the two summary tables. The 
 ```bash
 cd ~/Desktop/site-page/dayanpi
 sudo systemctl stop dayanpi
-DAYANPI_CAMERA=usb .venv/bin/python scripts/focus_check.py
+DAYANPI_CAMERA=usb .venv/bin/python -m dayanpi.focus.check
 cp focus_check/summary.txt focus_check/summary_usb.txt
-DAYANPI_CAMERA=picamera .venv/bin/python scripts/focus_check.py
+DAYANPI_CAMERA=picamera .venv/bin/python -m dayanpi.focus.check
 sudo systemctl start dayanpi
 ```
 
@@ -155,7 +155,7 @@ INFO dayanpi.hardware.camera: side camera: Pi camera through picamera2 (DAYANPI_
 - **The detector runs on both.** Every check scans a new frame from each camera, and the tracker gets one combined reading. Faces and gestures only use the front camera. [With both cameras](focus-tracker.md#with-both-cameras) in the focus tracker guide has what that means day to day and how to tell which camera caught a phone.
 - **The dashboard.** The Camera card shows both feeds, labeled Front and Side, each with its own boxes. See [The dashboard](MANUAL.md#the-dashboard).
 - **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the side camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
-- **The detector check.** `scripts/focus_check.py` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
+- **The detector check.** `dayanpi.focus.check` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
 
 ## What's different about the Pi camera
 
@@ -184,4 +184,4 @@ These live at the top of `dayanpi/hardware/camera.py`. Change them on the Mac, p
 | Webcam stopped working after adding the Pi camera | `ls /dev/v4l/by-id/` should list it. Nothing there? Check the USB cable. Two webcams? Set `DAYANPI_USB_DEVICE` (step 4) |
 | `/video/side` gives a 404 | `DAYANPI_CAMERA=both` isn't in `/etc/dayanpi.env`, or the service hasn't restarted since you added it |
 | `/video/side` never shows a picture | `journalctl -u dayanpi -n 50 --no-pager \| grep -i camera`. If it says `can't open Pi camera 0`, run the check in step 3 |
-| Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or `scripts/focus_check.py` still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |
+| Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or the detector check still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |
