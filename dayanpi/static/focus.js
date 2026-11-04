@@ -22,7 +22,6 @@ const STATE_COPY = {
 };
 const SIGN_PAGES = { now: "Now", today: "Today", summary: "Day done" };
 const SIGN_PAGE_ORDER = ["now", "today", "summary"];
-const SIGN_SETTLE_MS = 250; // the sign redraws 8 times a second; give it a frame before fetching the picture
 
 const focusEls = {
   card: document.getElementById("focus-card"),
@@ -74,6 +73,7 @@ let lastState = null;
 let lastPickups = null;
 let lastSnacks = null;
 let lastSignPage = null;
+let lastSignVersion = null;
 let signBusy = false;
 let todaySegments = [];
 let todaySnacks = [];
@@ -440,10 +440,9 @@ function renderSign(focus) {
     focusEls.signImage.hidden = true;
     focusEls.signEmpty.hidden = false;
     focusEls.signEmpty.textContent = "The sign is off";
-  } else if (focus.sign_png) {
-    focusEls.signImage.src = `data:image/png;base64,${focus.sign_png}`;
-    focusEls.signImage.hidden = false;
-    focusEls.signEmpty.hidden = true;
+  } else if (sign.version !== lastSignVersion) {
+    lastSignVersion = sign.version;
+    focusEls.signImage.src = `/api/sign.png?v=${sign.version}`;
   }
 }
 
@@ -526,19 +525,6 @@ window.addEventListener("dayanpi:snapshot", (event) => {
   }
 });
 
-// The stream only carries the sign picture when it changes, so a fresh page asks once.
-function loadSignPicture() {
-  focusEls.signImage.addEventListener(
-    "load",
-    () => {
-      focusEls.signImage.hidden = false;
-      focusEls.signEmpty.hidden = true;
-    },
-    { once: true },
-  );
-  focusEls.signImage.src = `/api/sign.png?t=${Date.now()}`;
-}
-
 async function flipSignPage() {
   signBusy = true;
   focusEls.signFlip.disabled = true;
@@ -551,7 +537,6 @@ async function flipSignPage() {
     if (response.ok) {
       const body = await response.json();
       setSignPage(body.page);
-      setTimeout(loadSignPicture, SIGN_SETTLE_MS);
     }
   } catch (error) {
     // The next snapshot shows the real page either way.
@@ -563,8 +548,11 @@ async function flipSignPage() {
 
 focusEls.block.addEventListener("click", toggleBlock);
 focusEls.signFlip.addEventListener("click", flipSignPage);
+focusEls.signImage.addEventListener("load", () => {
+  focusEls.signImage.hidden = false;
+  focusEls.signEmpty.hidden = true;
+});
 focusEls.timer.replaceChildren();
-loadSignPicture();
 
 tick();
 setInterval(tick, 1000);

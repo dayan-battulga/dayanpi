@@ -94,12 +94,8 @@ def stamp_overlay_age(overlay: dict | None, now: float) -> dict | None:
     return stamped
 
 
-def build_focus_status(sign_since_version: int | None = None) -> dict:
-    """The focus status for the API and the stats stream.
-
-    The sign preview PNG (about 8 KB) rides along only when the picture changed since
-    sign_since_version; None means always include it.
-    """
+def build_focus_status() -> dict:
+    """The focus status for the API and the stats stream."""
     now = time.time()
     status = tracker.status(now)
     status["enabled"] = worker is not None and worker.running
@@ -109,10 +105,6 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
-    include_png = sign_controller is not None and (sign_since_version is None or version != sign_since_version)
-    png = sign_preview.latest_png() if include_png else None
-    if png is not None:
-        status["sign_png"] = base64.b64encode(png).decode("ascii")
     return status
 
 
@@ -177,12 +169,10 @@ def start_focus_worker() -> FocusWorker | None:
 async def snapshot_producer() -> None:
     """One owner of the sampler; SSE clients only read latest_snapshot."""
     global latest_snapshot
-    sent_sign_version = None
     while True:
         try:
             snapshot = collector.snapshot(sampler)
-            snapshot["focus"] = build_focus_status(sign_since_version=sent_sign_version)
-            sent_sign_version = snapshot["focus"]["sign"]["version"]
+            snapshot["focus"] = build_focus_status()
             latest_snapshot = snapshot
         except Exception:
             logger.exception("snapshot producer failed")

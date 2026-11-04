@@ -203,23 +203,23 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch, factory):
     assert said == ["Block started.", "Block stopped."]
 
 
-def test_sign_preview_renders_and_rides_the_status(factory):
+def test_sign_preview_renders_and_the_status_says_when_it_changes(factory):
     with TestClient(app.app) as client:
         deadline = time.monotonic() + 3
-        body = {}
-        while not body.get("sign_png") and time.monotonic() < deadline:
+        body = {"sign": {"version": 0}}
+        while body["sign"]["version"] < 1 and time.monotonic() < deadline:
             body = client.get("/api/focus", auth=AUTH).json()
             time.sleep(0.05)
         assert body["sign"]["mode"] == "preview"
         assert body["sign"]["page"] == "now"
         assert body["sign"]["version"] >= 1
-        assert body["sign_png"], "the sign preview should be in the focus status"
-        # The stats stream only carries the PNG when the picture changed since the last snapshot.
-        stats = client.get("/api/stats", auth=AUTH).json()
-        assert "sign" in stats["focus"]
+        stats = read_stats_focus(client)
+        assert stats["sign"]["version"] >= 1
         response = client.get("/api/sign.png", auth=AUTH)
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"
+        # The version starts over when the service restarts, so an old picture must never come from cache.
+        assert response.headers["cache-control"] == "no-store"
         assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
         assert client.get("/api/sign.png").status_code == 401
 

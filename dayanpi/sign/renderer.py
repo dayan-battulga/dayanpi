@@ -459,7 +459,7 @@ class PreviewOutput:
 
     @property
     def version(self) -> int:
-        """Goes up only when the picture actually changes, so callers can skip re-sending it."""
+        """Goes up only when the picture actually changes, so the page only fetches it then."""
         with self._lock:
             version = self._version
         return version
