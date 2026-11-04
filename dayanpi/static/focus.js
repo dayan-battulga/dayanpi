@@ -74,6 +74,7 @@ let lastPickups = null;
 let lastSnacks = null;
 let lastSignPage = null;
 let lastSignVersion = null;
+let signPictureLoading = false;
 let signBusy = false;
 let todaySegments = [];
 let todaySnacks = [];
@@ -440,8 +441,10 @@ function renderSign(focus) {
     focusEls.signImage.hidden = true;
     focusEls.signEmpty.hidden = false;
     focusEls.signEmpty.textContent = "The sign is off";
-  } else if (sign.version !== lastSignVersion) {
+  } else if (sign.version !== lastSignVersion && !signPictureLoading) {
+    // A new src cancels the one still loading, so asking every second on a slow connection would never finish one.
     lastSignVersion = sign.version;
+    signPictureLoading = true;
     focusEls.signImage.src = `/api/sign.png?v=${sign.version}`;
   }
 }
@@ -549,8 +552,13 @@ async function flipSignPage() {
 focusEls.block.addEventListener("click", toggleBlock);
 focusEls.signFlip.addEventListener("click", flipSignPage);
 focusEls.signImage.addEventListener("load", () => {
+  signPictureLoading = false;
   focusEls.signImage.hidden = false;
   focusEls.signEmpty.hidden = true;
+});
+focusEls.signImage.addEventListener("error", () => {
+  signPictureLoading = false;
+  lastSignVersion = null; // the next snapshot tries again, even if the picture hasn't changed
 });
 focusEls.timer.replaceChildren();
 
