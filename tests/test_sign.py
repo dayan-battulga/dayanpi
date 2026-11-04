@@ -1,12 +1,17 @@
+import ast
 import math
+import string
 import sys
 import types
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 
+from dayanpi.focus import tracker as focus_tracker
+from dayanpi.sign import controller as sign_controller
 from dayanpi.sign import renderer as sign
 from dayanpi.sign import glyphs as sign_glyphs
 from dayanpi.sign.renderer import (
@@ -52,9 +57,20 @@ def crop_text_area(frame):
     return text_area
 
 
-def test_font_covers_every_printable_ascii_character():
-    assert set(sign_glyphs.FONT) == {chr(code) for code in range(32, 127)}
-    assert len(sign_glyphs.FONT) == 95
+def test_font_covers_everything_the_sign_writes():
+    """A character the font lacks draws as '?', so a callout saying "Nice!" would quietly show "Nice?".
+
+    This reads every string in the code the sign's text comes from, docstrings too, so at
+    worst it asks for a glyph that wasn't strictly needed.
+    """
+    strings = [
+        node.value
+        for module in (sign, sign_controller, focus_tracker)
+        for node in ast.walk(ast.parse(Path(module.__file__).read_text()))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    written = {char for text in strings for char in text if char.isascii() and char.isprintable()}
+    assert written | set(string.ascii_letters + string.digits) <= set(sign_glyphs.FONT)
 
 
 def test_every_glyph_is_7_rows_of_5_pixels():
