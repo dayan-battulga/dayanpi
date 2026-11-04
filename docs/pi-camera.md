@@ -153,7 +153,7 @@ INFO dayanpi.hardware.camera: side camera: Pi camera through picamera2 (DAYANPI_
 - **Arducam camera?** Official cameras get detected on their own, but an Arducam one needs a line in `config.txt`, like `dtoverlay=imx708,cam0` for the `CAM/DISP 0` connector.
 - **The feeds.** `/video` is the front camera and `/video/side` is the side one. Each allows 2 viewers at a time, so a side feed left open somewhere can't lock you out of the front. With any other `DAYANPI_CAMERA` setting, `/video/side` is a 404.
 - **The detector runs on both.** Every check scans a new frame from each camera, and the tracker gets one combined reading. Faces and gestures only use the front camera. [With both cameras](focus-tracker.md#with-both-cameras) in the focus tracker guide has what that means day to day and how to tell which camera caught a phone.
-- **What isn't in yet.** The dashboard only shows the front feed, with the front camera's boxes. To see the side camera, open https://dayoon.tail279594.ts.net/video/side.
+- **The dashboard.** The Camera card shows both feeds, labeled Front and Side, each with its own boxes. See [The dashboard](MANUAL.md#the-dashboard).
 - **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the side camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
 - **The detector check.** `scripts/focus_check.py` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
 

@@ -103,6 +103,7 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     now = time.time()
     status = tracker.status(now)
     status["enabled"] = worker is not None and worker.running
+    status["side_camera"] = side_stream is not None
     status["overlay"] = stamp_overlay_age(None if worker is None else worker.last_overlay, now)
     status["side_overlay"] = stamp_overlay_age(None if worker is None else worker.last_side_overlay, now)
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}

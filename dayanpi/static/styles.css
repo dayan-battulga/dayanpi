@@ -592,9 +592,18 @@ ol {
   gap: 24px;
 }
 
+.feeds {
+  position: relative;
+  display: flex;
+  flex: 1 1 340px;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
 .feed-frame {
   position: relative;
-  flex: 1 1 340px;
+  flex: 1 1 260px;
   min-width: 0;
   aspect-ratio: 4 / 3;
   overflow: hidden;
@@ -603,7 +612,40 @@ ol {
   background: var(--sunken);
 }
 
-#feed {
+.camera.has-side .feeds {
+  flex-basis: 100%;
+}
+
+/* Stretching a frame to match its neighbor would crop its picture and throw off its boxes. */
+.camera.has-side .feed-frame {
+  align-self: flex-start;
+}
+
+.camera.has-side .reading-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.camera.has-side .readings-foot {
+  margin-top: 18px;
+}
+
+.feed-label {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: none;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  color: var(--ink);
+}
+
+.camera.has-side .feed-label {
+  display: block;
+}
+
+.feed-frame img {
   display: block;
   width: 100%;
   height: 100%;
@@ -615,7 +657,7 @@ ol {
     transform 0.9s var(--ease);
 }
 
-.camera.is-live #feed {
+.feed-frame.is-live img {
   opacity: 1;
   transform: none;
 }
@@ -628,7 +670,7 @@ ol {
   transition: opacity 0.5s var(--ease);
 }
 
-.camera.is-live .overlay {
+.feed-frame.is-live .overlay {
   opacity: 1;
 }
 
@@ -697,7 +739,7 @@ ol {
   pointer-events: none;
 }
 
-.camera.is-peeking:not(.is-live) .scan {
+.camera.is-peeking .feed-frame:not(.is-live) .scan {
   opacity: 1;
   animation: scan 3.2s linear infinite;
 }
@@ -712,6 +754,8 @@ ol {
   gap: 12px;
   overflow: hidden;
   padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
   background: color-mix(in srgb, var(--surface) 60%, var(--sunken));
   text-align: center;
   transition:

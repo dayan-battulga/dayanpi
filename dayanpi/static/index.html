@@ -116,10 +116,19 @@
             </button>
           </div>
           <div class="camera-body">
-            <div class="feed-frame">
-              <img id="feed" alt="Live camera feed" width="640" height="480" />
-              <div id="overlay" class="overlay" aria-hidden="true"></div>
-              <div class="scan" aria-hidden="true"></div>
+            <div class="feeds">
+              <div class="feed-frame" data-feed="/video" data-overlay-key="overlay">
+                <img alt="Live front camera feed" width="640" height="480" />
+                <div class="overlay" aria-hidden="true"></div>
+                <div class="scan" aria-hidden="true"></div>
+                <span class="feed-label label">Front</span>
+              </div>
+              <div class="feed-frame" data-feed="/video/side" data-overlay-key="side_overlay" hidden>
+                <img alt="Live side camera feed" width="640" height="480" />
+                <div class="overlay" aria-hidden="true"></div>
+                <div class="scan" aria-hidden="true"></div>
+                <span class="feed-label label">Side</span>
+              </div>
               <div class="veil">
                 <span class="veil-icon" aria-hidden="true">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

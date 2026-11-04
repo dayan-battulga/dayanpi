@@ -357,6 +357,40 @@ class FakeCamera:
         return result
 
 
+def read_stats_focus(client):
+    deadline = time.monotonic() + 3
+    body = {}
+    while "focus" not in body and time.monotonic() < deadline:
+        body = client.get("/api/stats", auth=AUTH).json()
+        time.sleep(0.05)
+    return body["focus"]
+
+
+def test_status_says_when_there_is_no_side_camera(factory):
+    with TestClient(app.app) as client:
+        assert client.get("/api/focus", auth=AUTH).json()["side_camera"] is False
+        assert read_stats_focus(client)["side_camera"] is False
+
+
+def test_status_says_when_there_is_a_side_camera(factory, monkeypatch):
+    monkeypatch.setattr(app, "side_stream", FakeCamera())
+    with TestClient(app.app) as client:
+        assert client.get("/api/focus", auth=AUTH).json()["side_camera"] is True
+        assert read_stats_focus(client)["side_camera"] is True
+
+
+def test_the_dashboard_feeds_match_the_server(factory):
+    """No JS tests here, so a typo in one of these would just be a dead feed or no boxes."""
+    with TestClient(app.app) as client:
+        page = client.get("/", auth=AUTH).text
+        status = client.get("/api/focus", auth=AUTH).json()
+    feed_paths = re.findall(r'data-feed="([^"]+)"', page)
+    overlay_keys = re.findall(r'data-overlay-key="([^"]+)"', page)
+    assert len(feed_paths) == len(overlay_keys) == 2
+    assert set(feed_paths) <= {route.path for route in app.app.routes}
+    assert set(overlay_keys) <= set(status)
+
+
 def test_side_video_is_a_404_without_a_side_camera(factory):
     with TestClient(app.app) as client:
         assert app.side_stream is None

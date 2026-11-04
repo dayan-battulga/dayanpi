@@ -40,15 +40,22 @@ const els = {
   power: document.getElementById("power"),
   camera: document.getElementById("camera"),
   cameraStatus: document.getElementById("camera-status"),
-  feed: document.getElementById("feed"),
   peekToggle: document.getElementById("peek-toggle"),
   peekLabel: document.getElementById("peek-label"),
 };
 
+const feeds = Array.from(document.querySelectorAll(".feed-frame")).map((frame) => ({
+  frame,
+  image: frame.querySelector("img"),
+  src: frame.dataset.feed,
+  state: "off", // off | connecting | live | retrying
+  retryTimer: null,
+}));
+const sideFeed = feeds[1];
+
 let events = null;
 let themeFadeTimer = null;
 let feedWanted = false;
-let feedRetryTimer = null;
 
 // ---------- connection ----------
 
@@ -63,6 +70,7 @@ function startEvents() {
     events.onmessage = (event) => {
       const sample = JSON.parse(event.data);
       renderStats(sample);
+      setSideCamera(sample.focus?.side_camera === true);
       setStatus("connected");
       // focus.js listens for this instead of opening a second stream.
       window.dispatchEvent(new CustomEvent("dayanpi:snapshot", { detail: sample }));
@@ -267,15 +275,39 @@ function followSystemTheme(event) {
 
 // ---------- camera ----------
 
-function setCameraStatus(text) {
-  els.cameraStatus.textContent = text;
+function describeFeeds() {
+  const on = feeds.filter((feed) => feed.state !== "off");
+  let text = "hidden · nothing saved";
+  if (on.some((feed) => feed.state === "retrying")) {
+    text = "reconnecting…";
+  } else if (on.some((feed) => feed.state === "connecting")) {
+    text = "connecting…";
+  } else if (on.length > 0) {
+    text = "live · nothing saved";
+  }
+  return text;
+}
+
+function setFeedState(feed, state) {
+  feed.state = state;
+  feed.frame.classList.toggle("is-live", state === "live");
+  els.cameraStatus.textContent = describeFeeds();
+}
+
+function connectFeed(feed) {
+  feed.image.src = `${feed.src}?t=${Date.now()}`;
 }
 
 // Swapping the src for a blank image is what actually closes the MJPEG connection.
-function stopFeed() {
-  clearTimeout(feedRetryTimer);
-  els.camera.classList.remove("is-live");
-  els.feed.src = BLANK_IMAGE;
+function syncFeed(feed) {
+  clearTimeout(feed.retryTimer);
+  if (feedWanted && !feed.frame.hidden) {
+    setFeedState(feed, "connecting");
+    connectFeed(feed);
+  } else {
+    setFeedState(feed, "off");
+    feed.image.src = BLANK_IMAGE;
+  }
 }
 
 function setPeek(peeking) {
@@ -283,32 +315,30 @@ function setPeek(peeking) {
   els.camera.classList.toggle("is-peeking", peeking);
   els.peekLabel.textContent = peeking ? "Hide" : "Peek";
   els.peekToggle.setAttribute("aria-pressed", String(peeking));
-  if (peeking) {
-    setCameraStatus("connecting…");
-    els.feed.src = `/video?t=${Date.now()}`;
-  } else {
-    stopFeed();
-    setCameraStatus("hidden · nothing saved");
+  feeds.forEach((feed) => syncFeed(feed));
+}
+
+// Every snapshot calls this, so it only acts on a change. It opens a stream only while peeking.
+function setSideCamera(present) {
+  const showing = !sideFeed.frame.hidden;
+  if (present !== showing) {
+    sideFeed.frame.hidden = !present;
+    els.camera.classList.toggle("has-side", present);
+    syncFeed(sideFeed);
   }
 }
 
-function handleFeedError() {
-  if (feedWanted) {
-    els.camera.classList.remove("is-live");
-    setCameraStatus("reconnecting…");
-    clearTimeout(feedRetryTimer);
-    feedRetryTimer = setTimeout(() => {
-      if (feedWanted) {
-        els.feed.src = `/video?t=${Date.now()}`;
-      }
-    }, FEED_RETRY_MS);
+function handleFeedError(feed) {
+  if (feed.state !== "off") {
+    setFeedState(feed, "retrying");
+    clearTimeout(feed.retryTimer);
+    feed.retryTimer = setTimeout(() => connectFeed(feed), FEED_RETRY_MS);
   }
 }
 
-function handleFeedLoad() {
-  if (feedWanted) {
-    els.camera.classList.add("is-live");
-    setCameraStatus("live · nothing saved");
+function handleFeedLoad(feed) {
+  if (feed.state !== "off") {
+    setFeedState(feed, "live");
   }
 }
 
@@ -321,8 +351,10 @@ applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light",
 els.themeToggle.addEventListener("click", toggleTheme);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", followSystemTheme);
 
-els.feed.addEventListener("error", handleFeedError);
-els.feed.addEventListener("load", handleFeedLoad);
+for (const feed of feeds) {
+  feed.image.addEventListener("error", () => handleFeedError(feed));
+  feed.image.addEventListener("load", () => handleFeedLoad(feed));
+}
 els.peekToggle.addEventListener("click", () => {
   const peeking = !feedWanted;
   writeStored("peek", peeking ? "1" : "0");

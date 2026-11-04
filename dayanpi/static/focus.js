@@ -54,11 +54,13 @@ const focusEls = {
   todayList: document.getElementById("today-list"),
 };
 
-const overlayEls = {
-  camera: document.getElementById("camera"),
-  frame: document.querySelector(".feed-frame"),
-  layer: document.getElementById("overlay"),
-};
+const cameraCard = document.getElementById("camera");
+const overlayViews = Array.from(document.querySelectorAll(".feed-frame")).map((frame) => ({
+  key: frame.dataset.overlayKey,
+  frame,
+  layer: frame.querySelector(".overlay"),
+  shown: new Map(),
+}));
 
 const readingRows = Array.from(document.querySelectorAll(".reading")).map((row) => ({
   key: row.dataset.key,
@@ -83,7 +85,6 @@ let timelineWindow = null;
 let todaySignature = "";
 let todayMetas = [];
 let blockBusy = false;
-const shownBoxes = new Map();
 
 function readLocalMidnight() {
   const midnight = new Date();
@@ -385,14 +386,13 @@ function placeBox(el, box) {
 
 // Boxes are matched by kind and rank, so the strongest person box glides to its new
 // spot each second instead of blinking out and back in.
-function renderOverlay(focus) {
-  const overlay = focus.overlay;
+function renderOverlay(view, focus) {
+  const overlay = focus[view.key];
   const fresh = overlay != null && focus.camera_ok && overlay.age_s <= OVERLAY_STALE_S;
-  overlayEls.camera.dataset.state = focus.state;
   if (fresh) {
     // The feed is drawn with object-fit: cover, so the frame must match the camera's shape
     // or the boxes would sit over a cropped picture.
-    overlayEls.frame.style.aspectRatio = `${overlay.frame_width} / ${overlay.frame_height}`;
+    view.frame.style.aspectRatio = `${overlay.frame_width} / ${overlay.frame_height}`;
   }
   const ranks = {};
   const current = new Set();
@@ -400,16 +400,16 @@ function renderOverlay(focus) {
     ranks[box.kind] = (ranks[box.kind] ?? 0) + 1;
     const key = `${box.kind}-${ranks[box.kind]}`;
     current.add(key);
-    if (!shownBoxes.has(key)) {
+    if (!view.shown.has(key)) {
       const el = createBox(box.kind);
-      shownBoxes.set(key, el);
-      overlayEls.layer.append(el);
+      view.shown.set(key, el);
+      view.layer.append(el);
     }
-    placeBox(shownBoxes.get(key), box);
+    placeBox(view.shown.get(key), box);
   }
-  for (const [key, el] of shownBoxes) {
+  for (const [key, el] of view.shown) {
     if (!current.has(key)) {
-      shownBoxes.delete(key);
+      view.shown.delete(key);
       el.classList.add("is-leaving");
       setTimeout(() => el.remove(), BOX_FADE_MS);
     }
@@ -476,7 +476,8 @@ function renderFocus(focus) {
   focusEls.voice.textContent = describeVoice(focus.voice);
   focusEls.mac.textContent = focus.app || "—";
   renderReadings(focus);
-  renderOverlay(focus);
+  cameraCard.dataset.state = focus.state;
+  overlayViews.forEach((view) => renderOverlay(view, focus));
   renderSign(focus);
 }
 
