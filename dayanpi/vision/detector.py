@@ -93,6 +93,7 @@ class FrameReading:
     food: list[Detection] = field(default_factory=list)
     drinks: list[Detection] = field(default_factory=list)
     poses: list = field(default_factory=list)  # pose.PoseDetection, only when the pose model runs
+    side: "FrameReading | None" = None  # the side camera's own reading, when this one was merged from two
 
 
 @dataclass

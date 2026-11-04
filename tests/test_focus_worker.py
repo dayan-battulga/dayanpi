@@ -7,7 +7,7 @@ import pytest
 
 from dayanpi.vision import detector
 from dayanpi.focus import worker as focus_worker
-from dayanpi.vision.detector import Box, Detection, FrameReading
+from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
 from dayanpi.focus.tracker import FocusTracker
 from dayanpi.focus.worker import FocusWorker
 
@@ -26,8 +26,10 @@ class FakeStream:
         self.jpeg = jpeg
         self.frozen = frozen
         self.frame_id = 0
+        self.asked: list[int] = []
 
     def frame_after(self, last_id: int, timeout: float):
+        self.asked.append(last_id)
         result = None
         if self.jpeg is not None:
             if not self.frozen:
@@ -103,7 +105,7 @@ def test_scanner_errors_are_logged_and_survived(caplog):
         for second in range(1, 4):
             update = worker.run_once(NOON + second)
     assert update.state == "unknown"
-    assert worker.failures == 3
+    assert worker.front.failures == 3
     assert caplog.text.count("focus check failed") == 1
 
 
@@ -245,3 +247,174 @@ def test_build_scanner_is_none_without_model_files(monkeypatch, tmp_path, caplog
     with caplog.at_level(logging.WARNING):
         assert focus_worker.build_scanner() is None
     assert "missing.onnx" in caplog.text
+
+
+# ----- both cameras -----
+
+FRONT_BOX = Box(100, 100, 300, 400)
+SIDE_BOX = Box(32, 24, 160, 120)
+FRONT_BRIGHTNESS = 90  # what fake_jpeg() makes
+SIDE_BRIGHTNESS = 200
+
+
+def side_jpeg() -> bytes:
+    """Half the size and much brighter, so the scanner and the overlays can tell it from the front."""
+    encoded = cv2.imencode(".jpg", np.full((240, 320, 3), SIDE_BRIGHTNESS, np.uint8))[1].tobytes()
+    return encoded
+
+
+def make_view(box: Box, phone: float = 0.0, poses: tuple = (), faces: tuple = ()) -> FrameReading:
+    phones = [Detection("phone", phone, box)] if phone else []
+    view = FrameReading([Detection("person", 0.9, box)], phones, list(faces), 100.0, poses=list(poses))
+    return view
+
+
+class TwoCameraScanner:
+    """Tells the cameras apart by frame brightness and hands back what each one "sees"."""
+
+    def __init__(self, front: FrameReading | None = None, side: FrameReading | None = None, failing: str | None = None) -> None:
+        self.views = {"front": front or make_view(FRONT_BOX), "side": side or make_view(SIDE_BOX)}
+        self.failing = failing
+        self.scans = {"front": 0, "side": 0}
+
+    def scan(self, image: np.ndarray) -> FrameReading:
+        camera = "side" if image.mean() > (FRONT_BRIGHTNESS + SIDE_BRIGHTNESS) / 2 else "front"
+        self.scans[camera] += 1
+        if camera == self.failing:
+            raise RuntimeError(f"{camera} model exploded")
+        view = self.views[camera]
+        return view
+
+
+def test_one_camera_has_no_side_anything():
+    tracker = FocusTracker(started_at=NOON)
+    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(), tracker)
+    worker.run_once(NOON + 1)
+    assert worker.side is None
+    assert worker.last_side_overlay is None
+    assert tracker.status(NOON + 1)["last_check"]["side_person"] is None
+
+
+def test_a_phone_only_the_side_camera_sees_counts_as_on_phone():
+    tracker = FocusTracker(started_at=NOON)
+    scanner = TwoCameraScanner(side=make_view(SIDE_BOX, phone=0.6))
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, tracker, side_stream=FakeStream(side_jpeg()))
+    for second in range(1, 4):
+        update = worker.run_once(NOON + second)
+    assert update.state == "phone"
+    assert scanner.scans == {"front": 3, "side": 3}
+    check = tracker.status(NOON + 3)["last_check"]
+    assert (check["phone"], check["side_phone"], check["side_person"]) == (0.6, 0.6, 0.9)
+
+
+def test_each_camera_is_asked_for_frames_after_its_own_last_id():
+    front = FakeStream(fake_jpeg())
+    side = FakeStream(side_jpeg())
+    side.frame_id = 100
+    worker = FocusWorker(front, TwoCameraScanner(), FocusTracker(started_at=NOON), side_stream=side)
+    for second in range(1, 4):
+        worker.run_once(NOON + second)
+    assert front.asked == [-1, 1, 2]
+    assert side.asked == [-1, 101, 102]
+
+
+def test_each_overlay_holds_only_its_own_cameras_boxes_at_its_own_frame_size():
+    scanner = TwoCameraScanner(side=make_view(SIDE_BOX, phone=0.6))
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, FocusTracker(started_at=NOON), side_stream=FakeStream(side_jpeg()))
+    worker.run_once(NOON + 1)
+    front_overlay = worker.last_overlay
+    side_overlay = worker.last_side_overlay
+    assert [box["kind"] for box in front_overlay["boxes"]] == ["person"]
+    assert [box["kind"] for box in side_overlay["boxes"]] == ["person", "phone"]
+    assert (front_overlay["frame_width"], front_overlay["frame_height"]) == (640, 480)
+    assert (side_overlay["frame_width"], side_overlay["frame_height"]) == (320, 240)
+    assert front_overlay["boxes"][0]["x"] == pytest.approx(100 / 640, abs=1e-4)
+    assert side_overlay["boxes"][0]["x"] == pytest.approx(32 / 320, abs=1e-4)
+
+
+def test_a_frozen_side_camera_counts_as_no_frame_for_that_camera():
+    tracker = FocusTracker(started_at=NOON)
+    side = FakeStream(side_jpeg())
+    scanner = TwoCameraScanner()
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, tracker, side_stream=side)
+    for second in range(1, 4):
+        worker.run_once(NOON + second)
+    assert tracker.status(NOON + 3)["last_check"]["side_person"] == 0.9
+    side.frozen = True  # the Pi camera hangs and keeps serving the same frame
+    for second in range(4, 40):
+        worker.run_once(NOON + second)
+    assert scanner.scans == {"front": 39, "side": 3}, "a stale side frame must not be re-scanned"
+    assert worker.last_side_overlay["at"] == NOON + 3
+    assert worker.last_overlay["at"] == NOON + 39
+    assert worker.last_update.state == "working"
+    assert tracker.status(NOON + 39)["last_check"]["side_person"] is None
+
+
+def test_a_frozen_front_camera_keeps_tracking_from_the_side_without_faces():
+    tracker = FocusTracker(started_at=NOON)
+    front = FakeStream(fake_jpeg())
+    face = FaceReading(0.9, FRONT_BOX, [Point(200, 200)] * 5, turn=0.1, tilt=0.4)
+    scanner = TwoCameraScanner(front=make_view(FRONT_BOX, faces=(face,)))
+    worker = FocusWorker(front, scanner, tracker, side_stream=FakeStream(side_jpeg()))
+    for second in range(1, 4):
+        worker.run_once(NOON + second)
+    assert tracker.status(NOON + 3)["last_check"]["turn"] == 0.1
+    front.frozen = True
+    for second in range(4, 40):
+        worker.run_once(NOON + second)
+    status = tracker.status(NOON + 39)
+    assert scanner.scans == {"front": 3, "side": 39}
+    assert worker.last_update.state == "working"
+    assert status["camera_ok"] is True
+    assert status["last_check"]["turn"] is None
+    assert worker.last_overlay["at"] == NOON + 3
+    assert worker.last_side_overlay["at"] == NOON + 39
+
+
+def test_both_cameras_frozen_goes_unknown_after_thirty_seconds():
+    tracker = FocusTracker(started_at=NOON)
+    front = FakeStream(fake_jpeg())
+    side = FakeStream(side_jpeg())
+    scanner = TwoCameraScanner()
+    worker = FocusWorker(front, scanner, tracker, side_stream=side)
+    for second in range(1, 4):
+        worker.run_once(NOON + second)
+    assert worker.last_update.state == "working"
+    front.frozen = True
+    side.frozen = True
+    for second in range(4, 40):
+        worker.run_once(NOON + second)
+    assert scanner.scans == {"front": 3, "side": 3}
+    assert worker.last_update.state == "unknown"
+    assert tracker.status(NOON + 40)["camera_ok"] is False
+
+
+@pytest.mark.parametrize(("camera", "fired"), [("front", ["next_page"]), ("side", [])])
+def test_only_the_front_cameras_pose_makes_gestures(camera, fired):
+    box = FRONT_BOX if camera == "front" else SIDE_BOX
+    scanner = TwoCameraScanner(**{camera: make_view(box, poses=(raised_pose(left_up=False, right_up=True),))})
+    seen = []
+    worker = FocusWorker(
+        FakeStream(fake_jpeg()),
+        scanner,
+        FocusTracker(started_at=NOON),
+        on_gesture=lambda name, now: seen.append(name),
+        side_stream=FakeStream(side_jpeg()),
+    )
+    for second in range(1, 5):
+        worker.run_once(NOON + second)
+    assert seen == fired
+
+
+@pytest.mark.parametrize(("failing", "healthy"), [("side", "front"), ("front", "side")])
+def test_one_camera_failing_leaves_the_other_working_and_the_log_quiet(caplog, failing, healthy):
+    scanner = TwoCameraScanner(failing=failing)
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, FocusTracker(started_at=NOON), side_stream=FakeStream(side_jpeg()))
+    with caplog.at_level(logging.ERROR):
+        for second in range(1, 5):
+            update = worker.run_once(NOON + second)
+    assert update.state == "working"
+    assert getattr(worker, failing).failures == 4
+    assert getattr(worker, healthy).failures == 0
+    assert caplog.text.count("focus check failed") == 1
+    assert f"on the {failing} camera" in caplog.text

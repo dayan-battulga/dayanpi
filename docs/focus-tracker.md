@@ -101,7 +101,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 Gestures get a `gesture` line in the log too, and the both-hands gesture says "Block started." / "Block stopped."
 
-**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, snacks, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone / food confidence, face turn and tilt). **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, snacks, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone / food confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
 
 Check it's filling up:
 
@@ -136,6 +136,35 @@ journalctl -u dayanpi -n 20 --no-pager     # look for "focus tracker running"
 ```
 
 Then open the site: the Focus card should flip to **focused** within a couple of seconds of you sitting down.
+
+## With both cameras
+
+With `DAYANPI_CAMERA=both` (setup is in [Using both cameras](pi-camera.md#using-both-cameras)) the webcam faces you straight on and the Pi camera watches from the side, so it can catch what the front misses, like a phone in your lap. With one camera none of this applies, and the log lines stay the same as ever.
+
+Every check grabs a new frame from each camera and gives each one its own full scan, so each camera's zoomed phone pass is around the person that camera sees. The two results then become one reading for the tracker:
+
+| What | Comes from |
+| --- | --- |
+| People, phones, food, drinks | Both cameras |
+| Face turn and tilt, gestures | The front camera only, because they assume the straight-on view |
+
+What that means day to day:
+
+- **You count as there if either camera sees you.** So **away** needs both to lose you, and someone walking through the side view can hold it off.
+- **A phone either camera sees counts.** That's the point, but a false alarm from either one counts too. The cutoffs were tuned on front-view frames, so watch for pickups that didn't happen.
+- **The side camera has to see you first.** It only does the zoomed phone pass when it finds a person at 0.5 or above. If it only catches part of you, a phone in your lap never gets looked at. `side_person` in the log tells you.
+- **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people, phones and food but no face numbers or gestures. With neither, it goes to **unknown** after 30 s.
+- **A dead front camera doesn't look dead.** The tracker keeps running off the side camera and the card looks normal, but gestures stop. What gives it away is the front feed stopping and `camera read failing` in the journal.
+
+**Which camera caught it?** Sample lines gain `side_person`, `side_phone` and `side_food`, the side camera's own best numbers. The usual `person`, `phone` and `food` are the best of both cameras, so if `phone` is higher than `side_phone`, the front camera saw it better. If they match, the side did at least as well. No `side_` fields means the side camera gave no frame for that check. Samples only come every 30 s, so they show the long stretches, and a quick pickup can fall between them.
+
+```bash
+cd ~/Desktop/site-page/dayanpi
+grep '"sample"' data/focus_log/$(date +%F).jsonl | tail -3
+curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json, sys; print(json.load(sys.stdin)['last_check'])"
+```
+
+**Timing.** A scan takes about 185 ms on the Pi, so two come to about 370 ms, and a stuck camera adds up to 0.2 s while it waits for a frame. `ms` in the sample lines and "~X ms each" on the card are both scans added together. Checks still run once a second as long as a check stays under 1 s. If it reaches about 1.5 s (a hot Pi slowing itself down, say), the boxes over the video start flickering, because the page hides boxes older than 3 s. The scans use all four cores, so keep an eye on the Temp tile too.
 
 ## Gestures
 
@@ -194,7 +223,7 @@ Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' mod
 
 ### Tips
 
-- Face the camera and sit like you normally do.
+- Face the camera and sit like you normally do. With both cameras on, gestures only use the front one (the webcam).
 - Keep both shoulders in the shot. No shoulders, no gestures.
 - Keep the raised hand in the shot too. The camera looks down at your desk, so a hand straight up can go off the top of the picture. Head height works better.
 - Hold still. The tracker only checks about once a second, so quick waves and swipes won't register.

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from dayanpi.focus import tracker as focus
+from dayanpi.focus.merge import merge_readings
 from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
 from dayanpi.focus.tracker import FocusLog, FocusTracker
 
@@ -277,6 +278,54 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
     assert len(samples) == 2
     assert samples[0]["tilt"] == 0.5
     assert samples[0]["state"] == "working"
+
+
+SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "food", "drink", "turn", "tilt", "ms", "block", "app", "streak_s"}
+
+
+def read_samples(log: FocusLog) -> list[dict]:
+    samples = [event for event in log.read_day("2026-10-29") if event["event"] == "sample"]
+    return samples
+
+
+def test_one_camera_samples_have_exactly_the_same_fields_as_ever(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    Desk(log=log).tick(make_reading(), 31)
+    assert set(read_samples(log)[0]) == SAMPLE_FIELDS
+
+
+def test_samples_add_the_side_cameras_own_numbers_and_keep_the_rest(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    front = make_reading(person=0.8, tilt=0.5)
+    side = make_reading(person=0.612, phone=0.456, food=0.333, tilt=0.9)
+    Desk(log=log).tick(merge_readings(front, side), 31)
+    sample = read_samples(log)[0]
+    assert set(sample) == SAMPLE_FIELDS | {"side_person", "side_phone", "side_food"}
+    assert (sample["side_person"], sample["side_phone"], sample["side_food"]) == (0.61, 0.46, 0.33)
+    assert (sample["person"], sample["phone"], sample["food"]) == (0.8, 0.46, 0.33), "the existing fields are the best of both cameras"
+    assert sample["tilt"] == 0.5, "faces only come from the front camera"
+    assert sample["ms"] == 600, "both scans added up"
+
+
+def test_a_check_with_no_side_frame_leaves_the_side_numbers_out(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(log=log)
+    desk.tick(merge_readings(make_reading(), make_reading()), 31)
+    desk.tick(merge_readings(make_reading(), None), 31)
+    samples = read_samples(log)
+    assert "side_phone" in samples[0]
+    assert set(samples[1]) == SAMPLE_FIELDS
+
+
+def test_side_numbers_in_the_log_do_not_change_the_days_totals(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    Desk(log=log).tick(merge_readings(make_reading(), make_reading(phone=0.6)), 90)
+    events = log.read_day("2026-10-29")
+    plain = [{key: value for key, value in event.items() if not key.startswith("side_")} for event in events]
+    with_side = focus.total_day(focus.replay_day(events, "2026-10-29"))
+    without_side = focus.total_day(focus.replay_day(plain, "2026-10-29"))
+    assert with_side == without_side
+    assert with_side.phone_seconds > 0
 
 
 def test_restore_rebuilds_today_from_the_log(tmp_path):

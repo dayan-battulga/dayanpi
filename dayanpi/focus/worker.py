@@ -1,18 +1,22 @@
-"""Runs the detector on the live camera about once a second and feeds the FocusTracker.
+"""Runs the detector on the live cameras about once a second and feeds the FocusTracker.
 
-It reads frames from the app's camera stream (the one opener of the camera), so it never
-fights the video feed for the device. Everything the detector finds goes into the
-tracker; the app's hooks get each FocusUpdate (speaker, sign) and each gesture.
+It reads frames from the app's camera streams (the one opener of each camera), so it never
+fights the video feed for the device. With a side camera, each check scans a frame from each
+camera and merges the two readings. Everything the detector finds goes into the tracker; the
+app's hooks get each FocusUpdate (speaker, sign) and each gesture.
 """
 
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
+from dayanpi.hardware.camera import CameraStream
 from dayanpi.vision import detector
 from dayanpi.vision import pose
 from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
+from dayanpi.focus.merge import merge_readings
 from dayanpi.focus.overlay import FrameSize, build_overlay
 from dayanpi.focus.tracker import FocusTracker, FocusUpdate
 from dayanpi.vision.gestures import GestureTracker
@@ -70,10 +74,21 @@ def wait_for_clock(synced_path: Path = CLOCK_SYNCED_PATH, timeout_s: float = CLO
     return synced
 
 
+@dataclass
+class CameraFeed:
+    """One camera the worker reads, with its own place in the frame sequence and its own error count."""
+
+    name: str
+    stream: CameraStream
+    last_frame_id: int = -1
+    frame_size: FrameSize | None = None
+    failures: int = 0
+
+
 class FocusWorker(LoopThread):
     def __init__(
         self,
-        stream,
+        stream: CameraStream,
         scanner,
         tracker: FocusTracker,
         clock: Callable[[], float] = time.time,
@@ -81,55 +96,68 @@ class FocusWorker(LoopThread):
         interval_s: float = CHECK_INTERVAL_S,
         on_gesture: GestureHook | None = None,
         wait_for_clock_first: bool = False,
+        side_stream: CameraStream | None = None,
     ) -> None:
         super().__init__(name="focus-worker", interval_s=interval_s)
-        self._stream = stream
+        self.front = CameraFeed("front", stream)
+        self.side = None if side_stream is None else CameraFeed("side", side_stream)
         self._scanner = scanner
         self._tracker = tracker
         self._clock = clock
         self._on_update = on_update
         self._on_gesture = on_gesture
         self._wait_for_clock_first = wait_for_clock_first
-        self._last_frame_id = -1
-        self._frame_size: FrameSize | None = None
         self.gestures = GestureTracker()
         self.checks = 0
-        self.failures = 0
         self.last_update: FocusUpdate | None = None
         self.last_gesture: str | None = None
         self.last_overlay: dict | None = None
+        self.last_side_overlay: dict | None = None
 
-    def read_frame(self) -> FrameReading | None:
+    def read_frame(self, feed: CameraFeed) -> FrameReading | None:
         """One detector pass on a frame newer than the last one, or None when the camera gave nothing new.
 
         latest_frame() would hand back the same JPEG forever when the camera freezes, and the
         tracker would log hours of "focused" from one stale picture.
         """
         reading = None
-        arrived = self._stream.frame_after(self._last_frame_id, timeout=FRAME_WAIT_S)
+        arrived = feed.stream.frame_after(feed.last_frame_id, timeout=FRAME_WAIT_S)
         if arrived is not None:
-            jpeg, self._last_frame_id = arrived
+            jpeg, feed.last_frame_id = arrived
             image = decode_jpeg(jpeg)
             if image is not None:
-                self._frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
+                feed.frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
                 reading = self._scanner.scan(image)
         return reading
 
-    def run_once(self, now: float) -> FocusUpdate:
+    def read_feed(self, feed: CameraFeed) -> FrameReading | None:
+        """read_frame, where a failure only costs this camera this check.
+
+        Each camera counts its own failures: with one shared count, a healthy camera would
+        reset it every check, and a broken one would log a traceback every second.
+        """
         reading = None
         try:
-            reading = self.read_frame()
-            self.failures = 0
+            reading = self.read_frame(feed)
+            feed.failures = 0
         except Exception:
-            self.failures += 1
-            if self.failures == 1 or self.failures % ERROR_LOG_EVERY == 0:
-                logger.exception("focus check failed (%s in a row)", self.failures)
+            feed.failures += 1
+            if feed.failures == 1 or feed.failures % ERROR_LOG_EVERY == 0:
+                logger.exception("focus check failed on the %s camera (%s in a row)", feed.name, feed.failures)
+        return reading
+
+    def run_once(self, now: float) -> FocusUpdate:
+        front_reading = self.read_feed(self.front)
+        side_reading = None if self.side is None else self.read_feed(self.side)
+        reading = merge_readings(front_reading, side_reading)
         update = self._tracker.update(reading, now)
         self.checks += 1
         self.last_update = update
-        if reading is not None and self._frame_size is not None:
-            # Swapped in whole, so the stream thread never sees a half-built overlay.
-            self.last_overlay = build_overlay(reading, self._frame_size, now)
+        # Swapped in whole, so the stream thread never sees a half-built overlay.
+        if front_reading is not None:
+            self.last_overlay = build_overlay(front_reading, self.front.frame_size, now)
+        if side_reading is not None:
+            self.last_side_overlay = build_overlay(side_reading, self.side.frame_size, now)
         if self._on_update is not None:
             try:
                 self._on_update(update, now)

@@ -290,6 +290,17 @@ def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
         status = client.get("/api/focus", auth=AUTH).json()
         assert status["enabled"] is True
         assert status["overlay"] is None
+        assert status["side_overlay"] is None
+        assert app.worker.side is None
+
+
+def test_the_worker_reads_the_side_camera_when_there_is_one(factory, monkeypatch):
+    side = FakeCamera()
+    monkeypatch.setattr(app, "side_stream", side)
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: object())
+    with TestClient(app.app):
+        assert app.worker.side.stream is side
+        assert app.worker.front.stream is app.stream
 
 
 def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
@@ -306,6 +317,26 @@ def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
         assert (overlay["frame_width"], overlay["frame_height"]) == (640, 480)
         assert 1.5 <= overlay["age_s"] <= 3.0
     assert app.worker is None
+
+
+def test_focus_status_carries_the_side_boxes_and_their_age(factory, monkeypatch):
+    class FakeScanner:
+        def scan(self, image):
+            raise AssertionError("no frames here")
+
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
+    with TestClient(app.app) as client:
+        box = {"kind": "phone", "label": "phone", "confidence": 0.7, "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}
+        app.worker.last_side_overlay = {"at": time.time() - 2.0, "frame_width": 640, "frame_height": 480, "boxes": [box]}
+        status = client.get("/api/focus", auth=AUTH).json()
+        assert status["overlay"] is None, "the side boxes must not land on the front feed"
+        assert status["side_overlay"]["boxes"] == [box]
+        assert 1.5 <= status["side_overlay"]["age_s"] <= 3.0
+
+
+def test_focus_status_has_no_side_boxes_without_a_worker(factory):
+    with TestClient(app.app) as client:
+        assert client.get("/api/focus", auth=AUTH).json()["side_overlay"] is None
 
 
 class FakeCamera:

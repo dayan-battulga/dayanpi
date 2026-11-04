@@ -97,6 +97,9 @@ class CheckSummary:
     turn: float | None = None
     tilt: float | None = None
     elapsed_ms: float = 0.0
+    side_person: float | None = None  # the side camera's own best numbers; None means no side reading this check
+    side_phone: float | None = None
+    side_food: float | None = None
 
 
 @dataclass
@@ -207,6 +210,10 @@ def summarize_reading(reading: FrameReading, now: float) -> CheckSummary:
         face = max(reading.faces, key=lambda found: found.confidence)
         summary.turn = face.turn
         summary.tilt = face.tilt
+    if reading.side is not None:
+        summary.side_person = find_best_confidence(reading.side.people)
+        summary.side_phone = find_best_confidence(reading.side.phones)
+        summary.side_food = find_best_confidence(reading.side.food)
     return summary
 
 
@@ -582,6 +589,10 @@ class FocusTracker:
                 "app": self._current_app,
                 "streak_s": None if self._streak_start is None else round(now - self._streak_start),
             }
+            if check.side_person is not None:
+                sample["side_person"] = round(check.side_person, 2)
+                sample["side_phone"] = round(check.side_phone, 2)
+                sample["side_food"] = round(check.side_food, 2)
             self._write(sample, now)
 
     def _write(self, event: dict, now: float, day: str | None = None) -> None:

@@ -88,6 +88,12 @@ def _authorized(request: Request) -> bool:
     return user_ok and pass_ok
 
 
+def stamp_overlay_age(overlay: dict | None, now: float) -> dict | None:
+    """The page hides boxes older than a few seconds, so it needs their age, not the Pi's clock."""
+    stamped = None if overlay is None else {**overlay, "age_s": round(now - overlay["at"], 1)}
+    return stamped
+
+
 def build_focus_status(sign_since_version: int | None = None) -> dict:
     """The focus status for the API and the stats stream.
 
@@ -97,9 +103,8 @@ def build_focus_status(sign_since_version: int | None = None) -> dict:
     now = time.time()
     status = tracker.status(now)
     status["enabled"] = worker is not None and worker.running
-    overlay = None if worker is None else worker.last_overlay
-    # The page hides boxes older than a few seconds, so it needs their age, not the Pi's clock.
-    status["overlay"] = None if overlay is None else {**overlay, "age_s": round(now - overlay["at"], 1)}
+    status["overlay"] = stamp_overlay_age(None if worker is None else worker.last_overlay, now)
+    status["side_overlay"] = stamp_overlay_age(None if worker is None else worker.last_side_overlay, now)
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
@@ -155,7 +160,13 @@ def start_focus_worker() -> FocusWorker | None:
         if restored:
             logger.info("focus tracker restored %s events from today's log", restored)
         started = FocusWorker(
-            stream, scanner, tracker, on_update=handle_focus_update, on_gesture=handle_gesture, wait_for_clock_first=True
+            stream,
+            scanner,
+            tracker,
+            on_update=handle_focus_update,
+            on_gesture=handle_gesture,
+            wait_for_clock_first=True,
+            side_stream=side_stream,
         )
         started.start()
         logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)
