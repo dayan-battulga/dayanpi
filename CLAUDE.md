@@ -1,11 +1,11 @@
 # dayanpi: notes for Claude Code
 
 ## What this repo is
-A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can also drive my 4WD rover, but the rover is paused: the motors are unplugged from the Pi and the Drive card is hidden. Right now I'm building a focus tracker: the webcam sits at my desk and the site shows whether I'm working, on my phone, or away. docs/MANUAL.md explains how the app runs, and docs/ has a guide per add-on. If anything in this file disagrees with the code or the docs, trust those and tell me.
+A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). Right now I'm building a focus tracker: the webcam sits at my desk and the site shows whether I'm working, on my phone, or away. docs/MANUAL.md explains how the app runs, and docs/ has a guide per add-on. If anything in this file disagrees with the code or the docs, trust those and tell me.
 
 ## Where things are
-- All the Python lives in one package, dayanpi/, split by what it talks to: app.py (FastAPI), paths.py (STATIC_DIR, MODELS_DIR, DEFAULT_DATA_DIR, FOCUS_CHECK_DIR), hardware/ (camera, collector, voice, drivetrain), vision/ (detector, pose, gestures), focus/ (tracker, worker, stats, check), sign/ (renderer, glyphs, controller), utils/ (threads), static/ (the dashboard). Import with the full path (`from dayanpi.focus.tracker import FocusTracker`), never a bare module name.
-- Outside the package: models/ (ONNX files), tests/, mac_helper/, deploy/ (dayanpi.service, dayanpi.env.example), docs/ (MANUAL.md for setup and running, plus one guide per add-on: focus-tracker.md, pi-camera.md, led-sign.md, voice.md, rover.md), and the gitignored data/ and focus_check/ written on the Pi. pyproject.toml sets pytest's testpaths and pythonpath, so plain `pytest` from the repo root works.
+- All the Python lives in one package, dayanpi/, split by what it talks to: app.py (FastAPI), paths.py (STATIC_DIR, MODELS_DIR, DEFAULT_DATA_DIR, FOCUS_CHECK_DIR), hardware/ (camera, collector, voice), vision/ (detector, pose, gestures), focus/ (tracker, worker, stats, check), sign/ (renderer, glyphs, controller), utils/ (threads), static/ (the dashboard). Import with the full path (`from dayanpi.focus.tracker import FocusTracker`), never a bare module name.
+- Outside the package: models/ (ONNX files), tests/, mac_helper/, deploy/ (dayanpi.service, dayanpi.env.example), docs/ (MANUAL.md for setup and running, plus one guide per add-on: focus-tracker.md, pi-camera.md, led-sign.md, voice.md), and the gitignored data/ and focus_check/ written on the Pi. pyproject.toml sets pytest's testpaths and pythonpath, so plain `pytest` from the repo root works.
 - A new module goes in the package folder that matches what it talks to; a new thing you run by hand gets a main() and runs with `.venv/bin/python -m dayanpi.<module>` from the repo root, like dayanpi.focus.check and dayanpi.focus.stats. Nothing that imports the package goes at the repo root.
 
 ## How it runs
@@ -13,7 +13,7 @@ A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can
 - uvicorn serves `dayanpi.app:app` on 127.0.0.1:8000 under systemd (deploy/dayanpi.service, runs as user dayoon; a change to that file needs `sudo cp deploy/dayanpi.service /etc/systemd/system/` and `sudo systemctl daemon-reload` on the Pi). Tailscale Serve/Funnel exposes it at https://dayoon.tail279594.ts.net.
 - Every HTTP route sits behind the Basic Auth middleware in dayanpi/app.py. That middleware does not run for WebSocket connections, so don't add WebSocket routes.
 - No per-minute rate limits (slowapi is gone: it sat behind the auth middleware, so it only ever throttled me, and behind Tailscale every request shares 127.0.0.1). The expensive streams have connection caps instead: /video and /video/side allow 2 at once each and /api/stream 5 (threading.BoundedSemaphore in app.py); past that they return 503. SlotResponse gives a slot back as soon as its stream ends, because a finally in the generator would wait for the garbage collector.
-- Startup fails if DAYANPI_USER or DAYANPI_PASSWORD is missing, or if /sys/class/net/wlan0 doesn't exist (sampler.sample() runs at startup). A missing camera doesn't stop startup: stream.start() logs a warning and the capture loop keeps retrying. Neither do motor problems (GPIO busy, dayoon not in the gpio group, gpiozero/lgpio not visible to the venv): DriveTrain() failing is logged, the dashboard runs without motors, and /api/drive returns 503.
+- Startup fails if DAYANPI_USER or DAYANPI_PASSWORD is missing, or if /sys/class/net/wlan0 doesn't exist (sampler.sample() runs at startup). A missing camera doesn't stop startup: stream.start() logs a warning and the capture loop keeps retrying.
 - You run in a cloud session or on my Mac, never on the Pi. You can't reach the Pi, its GPIO, or its camera. When something needs the Pi, give me the exact commands and I'll run them.
 
 ## Focus tracker
@@ -25,7 +25,7 @@ A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can
 - hardware/voice.py: VoiceAnnouncer speaks through ALSA aplay (a systemd system service can't reach the desktop's PipeWire). DAYANPI_VOICE = off (default, logs "would say") | piper; DAYANPI_PIPER_MODEL, DAYANPI_AUDIO_DEVICE. A voice that can't run logs one error and stays off.
 - vision/pose.py + vision/gestures.py: with models/yolo11n-pose_480x640.onnx present, focus/worker.py uses PoseDeskScanner (pose model for the full-frame pass) and runs GestureTracker each check. Gestures: right hand up 1 s = next_page, left = previous_page, both 2 s = toggle_block. app.handle_gesture logs the gesture, toggles the block and speaks; page flips go to the sign controller.
 - sign/renderer.py (numpy renderer for the 128x32 LED sign: NowPage/TodayPage/CalloutPage/SummaryPage, PreviewOutput for the website, PanelOutput for the real panels through Adafruit's Piomatter) + sign/glyphs.py (5x7 font and 16x16 icons as ASCII art) + sign/controller.py (which page shows, callout scrolling, ambient dimming during a block and at night, 8 fps loop). DAYANPI_SIGN = preview (default) | panel | off. The focus status carries the preview's version, and the page fetches GET /api/sign.png when it changes.
-- The sign uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 26, 27 (the Matrix Bonnet also ties up 24), i.e. all six motor pins, whether it goes through the bonnet or is wired straight to the header (docs/led-sign.md, "Without the bonnet"). With DAYANPI_SIGN=panel, app.py never creates the DriveTrain. Don't try to run both.
+- The sign uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 26, 27 (the Matrix Bonnet also ties up 24), whether it goes through the bonnet or is wired straight to the header (docs/led-sign.md, "Without the bonnet").
 - app.py calls logging.basicConfig(INFO) at import, because uvicorn only configures its own loggers and the app's INFO lines would otherwise never reach journalctl.
 - vision/detector.py runs two ONNX models through plain OpenCV (cv2.dnn and cv2.FaceDetectorYN), so the Pi needs no new pip packages. The models live in models/: YOLO11 nano (COCO, exported at 640x480; class 0 = person, 67 = cell phone) and YuNet for faces.
 - Phones come from a second YOLO pass on a crop around the main person (person >= 0.5, box plus margin); full-frame phone hits are ignored. On my real desk frames that took a phone in hand from 10% to 80% of checks at >= 0.3, with no hits while working. It roughly doubles the time per check.
@@ -33,14 +33,11 @@ A FastAPI dashboard for my Raspberry Pi 5 (focus tracker, stats, camera). It can
 - Never save video or frames on the Pi, except the detector check's snapshots in focus_check/ (gitignored). Only state changes get logged.
 - The site shows a camera pointed at me all day, so it stays on Tailscale Serve, not Funnel.
 
-## Rover hardware (paused)
-- To bring driving back: plug the motors back in (pin table below), remove `hidden` from #drive-card in dayanpi/static/index.html, and add `<script type="module" src="/drive.js"></script>` back after app.js.
-- L298N motor driver, two motors per side wired together.
-- Left: IN1 = GPIO17, IN2 = GPIO27, ENA = GPIO12. Right: IN3 = GPIO22, IN4 = GPIO23, ENB = GPIO13. IN1 or IN3 high means forward.
-- Use gpiozero: DigitalOutputDevice for the IN pins, PWMOutputDevice for the EN pins. Don't use gpiozero's Motor class; it puts PWM on the IN pins and holds EN high.
-- To change a side's speed or direction: set EN to 0, then set the IN pins, then set EN to the new speed.
-- On the Pi, gpiozero and lgpio come from apt. The venv sees them through system site packages: docs/MANUAL.md creates it with `python3 -m venv --system-site-packages .venv`, and an older venv gets `include-system-site-packages = true` in .venv/pyvenv.cfg. Don't add gpiozero or lgpio to requirements.txt. For Mac tests, requirements-dev.txt pulls in requirements.txt plus gpiozero, pytest and httpx; use gpiozero's MockFactory with MockPWMPin.
-- The motor code is hardware/drivetrain.py (DriveTrain, MotorSide). app.py creates the DriveTrain at startup, so while the dayanpi service runs it owns the motor pins, and other scripts get "GPIO busy".
+## Rover (removed)
+The 4WD rover code (motors, /api/drive, the Drive card, docs/rover.md) is gone for now but may come back. `git log --grep="Remove the rover"` finds the commit, and `git revert` on it restores everything, including the wiring notes that used to be here. Its motors use six of the LED panels' GPIO pins (12, 13, 17, 22, 23, 27), so this Pi can't run both.
+
+## Python packages on the Pi
+picamera2 comes from apt, and the venv sees it through system site packages: docs/MANUAL.md creates it with `python3 -m venv --system-site-packages .venv`. Don't add it to requirements.txt. For Mac tests, requirements-dev.txt pulls in requirements.txt plus pytest and httpx.
 
 ## Ground rules
 - You can commit and push to main. One commit per step, with a message that says what changed, and only after the tests for what changed pass. Finish with the list of changed files.

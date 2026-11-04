@@ -19,7 +19,6 @@ from typing import Literal
 from dayanpi.hardware import collector
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
-from dayanpi.hardware.drivetrain import CommandTimer, DriveTrain
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.voice import VoiceAnnouncer
@@ -39,8 +38,6 @@ MAX_CONSECUTIVE_TIMEOUTS = 3
 SNAPSHOT_INTERVAL_S = 1.0
 VIDEO_MAX_CONCURRENT = 2
 STREAM_MAX_CONCURRENT = 5
-WATCHDOG_INTERVAL_S = 0.1
-DRIVE_TIMEOUT_S = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +48,6 @@ sampler = collector.RateSampler("wlan0")
 stream = create_stream()
 side_stream = create_side_stream()
 latest_snapshot: dict | None = None
-drive_train: DriveTrain | None = None
-command_timer = CommandTimer(DRIVE_TIMEOUT_S)
 focus_log = FocusLog(FOCUS_LOG_DIR)
 tracker = FocusTracker(focus_log, started_at=time.time())
 worker: FocusWorker | None = None
@@ -179,20 +174,9 @@ async def snapshot_producer() -> None:
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
 
-async def watch_drive_commands() -> None:
-    """Stops the motors once the browser stops sending commands."""
-    while True:
-        try:
-            if command_timer.is_stale():
-                drive_train.stop()
-        except Exception:
-            logger.exception("drive watchdog failed")
-        await asyncio.sleep(WATCHDOG_INTERVAL_S)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global drive_train, worker, sign_controller
+    global worker, sign_controller
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -205,27 +189,8 @@ async def lifespan(app: FastAPI):
     voice.start()
     sign_controller = start_sign()
     worker = start_focus_worker()
-    drive_train = None
-    watchdog = None
-    if SIGN_MODE == "panel":
-        # The Matrix Bonnet uses the six motor pins (12, 13, 17, 22, 23, 27), so it's one or the other.
-        logger.info("sign on the panels, so the motors stay off; /api/drive will return 503")
-    else:
-        try:
-            drive_train = DriveTrain()
-            watchdog = asyncio.create_task(watch_drive_commands(), name="drive-watchdog")
-        except Exception:
-            # Busy pins, no gpio permission, no lgpio/gpiozero: run the dashboard without motors.
-            logger.exception("motors unavailable; /api/drive will return 503")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
-    try:
-        yield
-    finally:
-        if watchdog is not None:
-            watchdog.cancel()
-            with suppress(asyncio.CancelledError):
-                await watchdog
-            drive_train.close()
+    yield
     producer.cancel()
     with suppress(asyncio.CancelledError):
         await producer
@@ -313,23 +278,6 @@ def stats():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
-
-
-class DriveCommand(BaseModel):
-    left: float = Field(ge=-1, le=1, allow_inf_nan=False)
-    right: float = Field(ge=-1, le=1, allow_inf_nan=False)
-
-
-@app.post("/api/drive")
-def drive(command: DriveCommand):
-    if drive_train is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Motors unavailable",
-        )
-    command_timer.record_command()
-    drive_train.drive(command.left, command.right)
     return {"status": "ok"}
 
 

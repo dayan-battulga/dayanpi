@@ -10,7 +10,6 @@ This manual covers setting up the Pi, shipping code, running the service, Tailsc
 - [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
 - [LED sign](led-sign.md): the 128x32 sign's pages, wiring and bring-up
 - [Voice](voice.md): callouts out loud through a USB speaker
-- [Driving the rover](rover.md): paused for now; keys, safety and tuning
 
 ---
 
@@ -34,7 +33,6 @@ Always use the **`main`** branch on both machines.
 | `/api/health` | Health check |
 | `/video` | MJPEG camera |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
-| `/api/drive` | Motor commands (POST, used by the Drive card) |
 | `/api/focus` | Focus state, today's totals and timeline |
 | `/api/focus/block` | Start/stop a work block (POST) |
 | `/api/mac/app` | The Mac helper reports the front app (POST) |
@@ -62,7 +60,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`--system-site-packages` lets the venv see `gpiozero` and `lgpio`, which come from apt, not pip.
+`--system-site-packages` lets the venv see `picamera2`, which comes from apt, not pip.
 
 ### Already have a venv? Switch it over
 
@@ -72,7 +70,6 @@ If your `.venv` was made without that flag, you don't need to rebuild it. Just f
 cd ~/Desktop/site-page/dayanpi
 sed -i 's/^include-system-site-packages = false/include-system-site-packages = true/' .venv/pyvenv.cfg
 grep include-system-site-packages .venv/pyvenv.cfg   # should say true
-.venv/bin/python -c "import gpiozero, lgpio"         # no output = good
 ```
 
 ### Camera group
@@ -267,12 +264,11 @@ When it's all set, a boot goes: Pi boots → Tailscale connects → `dayanpi` st
 
 Don't just yank the plug. A sudden power cut can corrupt the SD card.
 
-1. **Motor battery off first**, so nothing can move while the Pi shuts down.
-2. Shut the Pi down:
+1. Shut the Pi down:
    ```bash
    sudo poweroff
    ```
-3. Wait for the green light to stop blinking, then unplug the Pi.
+2. Wait for the green light to stop blinking, then unplug the Pi.
 
 If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. The camera and stats streams keep the app busy until systemd gives up and force-stops it. That's harmless, just slow. Close the tabs first to avoid it.
 
@@ -280,15 +276,6 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 
 1. Plug in the Pi (webcam already connected).
 2. Wait about a minute, then open https://dayoon.tail279594.ts.net/ and log in. Hard-refresh if it looks stale.
-3. Put the rover up on a box, then turn the motor battery on.
-4. Tap `W` quickly to make sure the motors respond.
-
-Turning the motor battery on at any point is safe. The motor pins sit low (off) during boot, and the app starts them at 0.
-
-### Only unplugging the motor battery
-
-- **If it only powers the motors:** the Pi and the site keep running. The wheels just won't move until the battery's back. Nothing needs a restart.
-- **If it powers the Pi too:** that's a full power cut. Use the shutdown steps above next time.
 
 ### Missing something after boot?
 
@@ -297,8 +284,7 @@ Turning the motor battery on at any point is safe. The motor pins sit low (off) 
 | Site won't load at all | `sudo systemctl status dayanpi` and `tailscale serve status` |
 | Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
 | Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
-| Drive card says unavailable | `journalctl -u dayanpi -b \| grep -i motors`, then check the `gpio` group and whether a script is holding the pins |
-| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak, especially with the motors or the sign running. Undervoltage can reboot the Pi |
+| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak, especially with the sign running. Undervoltage can reboot the Pi |
 
 ---
 
@@ -357,10 +343,6 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | Camera busy / black | Only one opener; restart service; confirm `video` in `groups` |
 | Camera says "Hidden while you work" | That's on purpose: press **Peek** |
 | Numbers stuck on `--` | The live stream isn't connecting: check the pill at the top right says **Live**, then hard refresh |
-| "GPIO busy" in a REPL or script | The service owns the motor pins, so `sudo systemctl stop dayanpi` first |
-| Service won't start, GPIO permission error | `groups` must include `gpio`, then restart |
-| Drive card says `drive failed` | Check the service is running and you're logged in; `journalctl -u dayanpi -n 50 --no-pager` |
-| Driving feels jerky (stops and starts) | Laggy network; raise `DRIVE_TIMEOUT_S` in `dayanpi/app.py` (see the rover's [Tuning](rover.md#tuning)) |
 | `No serve config` after Ctrl+C | Use `sudo tailscale serve --bg 8000` |
 | Serve access denied | Approve in Tailscale admin; try `sudo` |
 | `listener already exists for port 443` | Funnel is probably on: `sudo tailscale funnel reset` then `sudo tailscale serve --bg 8000` |

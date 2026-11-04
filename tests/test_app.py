@@ -1,8 +1,6 @@
 import gc
-import importlib
 import os
 import re
-import sys
 import tempfile
 import threading
 import time
@@ -11,7 +9,6 @@ import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
-from gpiozero.pins.mock import MockFactory, MockPWMPin
 
 os.environ.setdefault("DAYANPI_USER", "tester")
 os.environ.setdefault("DAYANPI_PASSWORD", "secret")
@@ -20,11 +17,9 @@ os.environ.setdefault("DAYANPI_DATA_DIR", tempfile.mkdtemp(prefix="dayanpi-test-
 from dayanpi import app  # noqa: E402  (auth env must be set before import)
 from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
-from dayanpi.hardware import drivetrain  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
-FORWARD = {"left": 1, "right": 1}
 
 
 @pytest.fixture(autouse=True)
@@ -36,46 +31,14 @@ def mac_friendly(monkeypatch):
     monkeypatch.setattr(focus_worker, "build_scanner", lambda: None)
 
 
-@pytest.fixture
-def factory(monkeypatch):
-    mock_factory = MockFactory(pin_class=MockPWMPin)
-    monkeypatch.setattr(app, "DriveTrain", lambda: drivetrain.DriveTrain(pin_factory=mock_factory))
-    yield mock_factory
-    mock_factory.close()
-
-
-def read_enable(factory):
-    enable_duty = factory.pin(drivetrain.LEFT_ENABLE_PIN).state
-    return enable_duty
-
-
-def test_dashboard_runs_without_motors(monkeypatch, caplog):
-    # Same failure as a venv that can't see apt's gpiozero.
-    monkeypatch.setitem(sys.modules, "gpiozero", None)
-    with TestClient(app.app) as client:
-        assert client.get("/api/health", auth=AUTH).status_code == 200
-        response = client.post("/api/drive", json=FORWARD, auth=AUTH)
-        assert response.status_code == 503
-        assert response.json()["detail"] == "Motors unavailable"
-    assert "motors unavailable" in caplog.text
-
-
-def test_drivetrain_imports_without_gpiozero(monkeypatch):
-    monkeypatch.setitem(sys.modules, "gpiozero", None)
-    monkeypatch.delitem(sys.modules, "dayanpi.hardware.drivetrain")
-    fresh_drivetrain = importlib.import_module("dayanpi.hardware.drivetrain")
-    with pytest.raises(ImportError):
-        fresh_drivetrain.DriveTrain()
-
-
-def test_dashboard_runs_without_camera(factory, caplog):
+def test_dashboard_runs_without_camera(caplog):
     with TestClient(app.app) as client:
         assert client.get("/api/health", auth=AUTH).status_code == 200
         assert app.stream._thread.is_alive()
     assert "camera unavailable at startup" in caplog.text
 
 
-def test_dashboard_serves_every_file_it_links(factory):
+def test_dashboard_serves_every_file_it_links():
     with TestClient(app.app) as client:
         page = client.get("/", auth=AUTH)
         assert page.status_code == 200
@@ -86,37 +49,7 @@ def test_dashboard_serves_every_file_it_links(factory):
         assert client.get("/", headers={}).status_code == 401
 
 
-def test_drive_moves_then_watchdog_stops(factory):
-    with TestClient(app.app) as client:
-        response = client.post("/api/drive", json=FORWARD, auth=AUTH)
-        assert response.status_code == 200
-        assert read_enable(factory) == pytest.approx(drivetrain.MAX_SPEED)
-        time.sleep(app.DRIVE_TIMEOUT_S + 3 * app.WATCHDOG_INTERVAL_S)
-        assert read_enable(factory) == 0
-
-
-def test_drive_needs_auth(factory):
-    with TestClient(app.app) as client:
-        response = client.post("/api/drive", json=FORWARD)
-        assert response.status_code == 401
-        assert read_enable(factory) == 0
-
-
-def test_drive_rejects_out_of_range(factory):
-    with TestClient(app.app) as client:
-        response = client.post("/api/drive", json={"left": 2, "right": 0}, auth=AUTH)
-        assert response.status_code == 422
-        assert read_enable(factory) == 0
-
-
-def test_shutdown_stops_motors(factory):
-    with TestClient(app.app) as client:
-        client.post("/api/drive", json=FORWARD, auth=AUTH)
-        assert read_enable(factory) > 0
-    assert read_enable(factory) == 0
-
-
-def test_focus_api_reports_disabled_without_models(factory):
+def test_focus_api_reports_disabled_without_models():
     with TestClient(app.app) as client:
         response = client.get("/api/focus", auth=AUTH)
         assert response.status_code == 200
@@ -127,7 +60,7 @@ def test_focus_api_reports_disabled_without_models(factory):
         assert client.get("/api/focus").status_code == 401
 
 
-def test_stats_snapshot_carries_focus(factory):
+def test_stats_snapshot_carries_focus():
     with TestClient(app.app) as client:
         deadline = time.monotonic() + 3
         body = {}
@@ -139,7 +72,7 @@ def test_stats_snapshot_carries_focus(factory):
         assert "today" in body["focus"]
 
 
-def test_mac_app_route_records_the_front_app(factory):
+def test_mac_app_route_records_the_front_app():
     with TestClient(app.app) as client:
         assert client.post("/api/mac/app", json={"app": "Code"}).status_code == 401
         first = client.post("/api/mac/app", json={"app": "  Code "}, auth=AUTH)
@@ -152,7 +85,7 @@ def test_mac_app_route_records_the_front_app(factory):
         assert client.post("/api/mac/app", json={"app": "x" * 101}, auth=AUTH).status_code == 422
 
 
-def test_block_route_starts_stops_and_toggles(factory):
+def test_block_route_starts_stops_and_toggles():
     with TestClient(app.app) as client:
         assert client.post("/api/focus/block", json={"action": "stop"}, auth=AUTH).json()["active"] is False
         started = client.post("/api/focus/block", json={"action": "start"}, auth=AUTH).json()
@@ -163,7 +96,7 @@ def test_block_route_starts_stops_and_toggles(factory):
         assert client.post("/api/focus/block", json={"action": "dance"}, auth=AUTH).status_code == 422
 
 
-def test_focus_status_reports_the_voice(factory):
+def test_focus_status_reports_the_voice():
     with TestClient(app.app) as client:
         status = client.get("/api/focus", auth=AUTH).json()
     assert status["voice"] == {"enabled": False, "backend": "off", "problem": None}
@@ -182,7 +115,7 @@ def test_callouts_reach_the_voice(monkeypatch):
     assert said == ["Already?"]
 
 
-def test_gesture_toggles_the_block_and_speaks(monkeypatch, factory):
+def test_gesture_toggles_the_block_and_speaks(monkeypatch):
     said = []
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     with TestClient(app.app) as client:
@@ -194,7 +127,7 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch, factory):
     assert said == ["Block started.", "Block stopped."]
 
 
-def test_sign_preview_renders_and_the_status_says_when_it_changes(factory):
+def test_sign_preview_renders_and_the_status_says_when_it_changes():
     with TestClient(app.app) as client:
         deadline = time.monotonic() + 3
         body = {"sign": {"version": 0}}
@@ -215,7 +148,7 @@ def test_sign_preview_renders_and_the_status_says_when_it_changes(factory):
         assert client.get("/api/sign.png").status_code == 401
 
 
-def test_the_site_can_flip_the_sign_page(factory):
+def test_the_site_can_flip_the_sign_page():
     with TestClient(app.app) as client:
         assert client.post("/api/sign/page", json={"step": 1}).status_code == 401
         assert client.post("/api/sign/page", json={"step": 1}, auth=AUTH).json() == {"status": "ok", "page": "today"}
@@ -225,7 +158,7 @@ def test_the_site_can_flip_the_sign_page(factory):
         assert client.get("/api/focus", auth=AUTH).json()["sign"]["page"] == "today"
 
 
-def test_flipping_an_off_sign_says_so(monkeypatch, factory):
+def test_flipping_an_off_sign_says_so(monkeypatch):
     monkeypatch.setattr(app, "SIGN_MODE", "off")
     with TestClient(app.app) as client:
         response = client.post("/api/sign/page", json={"step": 1}, auth=AUTH)
@@ -233,12 +166,12 @@ def test_flipping_an_off_sign_says_so(monkeypatch, factory):
         assert response.json()["detail"] == "Sign is off"
 
 
-def test_focus_api_lists_todays_snack_times(factory):
+def test_focus_api_lists_todays_snack_times():
     with TestClient(app.app) as client:
         assert client.get("/api/focus", auth=AUTH).json()["snack_times"] == []
 
 
-def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
+def test_callouts_and_gestures_reach_the_sign(monkeypatch):
     from dayanpi.focus import tracker as focus
 
     monkeypatch.setattr(app.voice, "say", lambda text: True)
@@ -257,7 +190,7 @@ def test_callouts_and_gestures_reach_the_sign(monkeypatch, factory):
     assert app.sign_controller is None
 
 
-def test_panel_mode_keeps_the_motors_off(monkeypatch, factory, caplog):
+def test_panels_that_cannot_start_leave_the_preview_running(monkeypatch, caplog):
     import logging
     from dayanpi.sign import renderer as sign
 
@@ -265,15 +198,12 @@ def test_panel_mode_keeps_the_motors_off(monkeypatch, factory, caplog):
     monkeypatch.setattr(app, "SIGN_MODE", "panel")
     monkeypatch.setattr(sign, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
     monkeypatch.setattr(app, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
-    with TestClient(app.app) as client:
-        assert app.drive_train is None
-        assert client.post("/api/drive", json=FORWARD, auth=AUTH).status_code == 503
+    with TestClient(app.app):
         assert app.sign_controller is not None
     assert "panels unavailable, preview only" in caplog.text
-    assert "motors stay off" in caplog.text
 
 
-def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
+def test_worker_runs_when_a_scanner_exists(monkeypatch):
     class FakeScanner:
         def scan(self, image):
             raise AssertionError("no frames here, so scan must not be called")
@@ -289,7 +219,7 @@ def test_worker_runs_when_a_scanner_exists(factory, monkeypatch):
         assert app.worker.side is None
 
 
-def test_the_worker_reads_the_side_camera_when_there_is_one(factory, monkeypatch):
+def test_the_worker_reads_the_side_camera_when_there_is_one(monkeypatch):
     side = FakeCamera()
     monkeypatch.setattr(app, "side_stream", side)
     monkeypatch.setattr(focus_worker, "build_scanner", lambda: object())
@@ -298,7 +228,7 @@ def test_the_worker_reads_the_side_camera_when_there_is_one(factory, monkeypatch
         assert app.worker.front.stream is app.stream
 
 
-def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
+def test_focus_status_carries_the_boxes_and_their_age(monkeypatch):
     class FakeScanner:
         def scan(self, image):
             raise AssertionError("no frames here")
@@ -314,7 +244,7 @@ def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
     assert app.worker is None
 
 
-def test_focus_status_carries_the_side_boxes_and_their_age(factory, monkeypatch):
+def test_focus_status_carries_the_side_boxes_and_their_age(monkeypatch):
     class FakeScanner:
         def scan(self, image):
             raise AssertionError("no frames here")
@@ -329,7 +259,7 @@ def test_focus_status_carries_the_side_boxes_and_their_age(factory, monkeypatch)
         assert 1.5 <= status["side_overlay"]["age_s"] <= 3.0
 
 
-def test_focus_status_has_no_side_boxes_without_a_worker(factory):
+def test_focus_status_has_no_side_boxes_without_a_worker():
     with TestClient(app.app) as client:
         assert client.get("/api/focus", auth=AUTH).json()["side_overlay"] is None
 
@@ -361,20 +291,20 @@ def read_stats_focus(client):
     return body["focus"]
 
 
-def test_status_says_when_there_is_no_side_camera(factory):
+def test_status_says_when_there_is_no_side_camera():
     with TestClient(app.app) as client:
         assert client.get("/api/focus", auth=AUTH).json()["side_camera"] is False
         assert read_stats_focus(client)["side_camera"] is False
 
 
-def test_status_says_when_there_is_a_side_camera(factory, monkeypatch):
+def test_status_says_when_there_is_a_side_camera(monkeypatch):
     monkeypatch.setattr(app, "side_stream", FakeCamera())
     with TestClient(app.app) as client:
         assert client.get("/api/focus", auth=AUTH).json()["side_camera"] is True
         assert read_stats_focus(client)["side_camera"] is True
 
 
-def test_the_dashboard_feeds_match_the_server(factory):
+def test_the_dashboard_feeds_match_the_server():
     """No JS tests here, so a typo in one of these would just be a dead feed or no boxes."""
     with TestClient(app.app) as client:
         page = client.get("/", auth=AUTH).text
@@ -438,14 +368,14 @@ def test_a_viewer_who_leaves_gives_the_slot_back_right_away(real_server, path, s
         assert slots._value == all_free
 
 
-def test_side_video_is_a_404_without_a_side_camera(factory):
+def test_side_video_is_a_404_without_a_side_camera():
     with TestClient(app.app) as client:
         assert app.side_stream is None
         assert client.get("/video/side", auth=AUTH).status_code == 404
         assert client.get("/video/side").status_code == 401
 
 
-def test_each_video_route_serves_its_own_camera(factory, monkeypatch):
+def test_each_video_route_serves_its_own_camera(monkeypatch):
     monkeypatch.setattr(app, "stream", FakeCamera(b"front-jpeg"))
     monkeypatch.setattr(app, "side_stream", FakeCamera(b"side-jpeg"))
     with TestClient(app.app) as client:
@@ -462,7 +392,7 @@ def test_each_video_route_serves_its_own_camera(factory, monkeypatch):
     ("full_route", "full_slots", "open_route"),
     [("/video", "_video_slots", "/video/side"), ("/video/side", "_side_video_slots", "/video")],
 )
-def test_a_full_feed_does_not_lock_out_the_other(factory, monkeypatch, full_route, full_slots, open_route):
+def test_a_full_feed_does_not_lock_out_the_other(monkeypatch, full_route, full_slots, open_route):
     monkeypatch.setattr(app, "side_stream", FakeCamera())
     monkeypatch.setattr(app, "frame_generator", lambda camera: iter([b"frame"]))
     slots = getattr(app, full_slots)
@@ -477,7 +407,7 @@ def test_a_full_feed_does_not_lock_out_the_other(factory, monkeypatch, full_rout
                 slots.release()
 
 
-def test_the_side_camera_starts_and_stops_with_the_service(factory, monkeypatch):
+def test_the_side_camera_starts_and_stops_with_the_service(monkeypatch):
     side = FakeCamera()
     monkeypatch.setattr(app, "side_stream", side)
     with TestClient(app.app):
@@ -485,7 +415,7 @@ def test_the_side_camera_starts_and_stops_with_the_service(factory, monkeypatch)
     assert side.running is False
 
 
-def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(factory, monkeypatch):
+def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(monkeypatch):
     monkeypatch.setattr(app, "frame_generator", lambda camera: iter([b"frame"]))
     with TestClient(app.app) as client:
         for _ in range(app.VIDEO_MAX_CONCURRENT):
@@ -499,7 +429,7 @@ def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(factory, monke
                 app._video_slots.release()
 
 
-def test_every_response_refuses_to_be_framed(factory):
+def test_every_response_refuses_to_be_framed():
     with TestClient(app.app) as client:
         responses = [client.get("/api/health", auth=AUTH), client.get("/", auth=AUTH), client.get("/api/health")]
         assert [response.status_code for response in responses] == [200, 200, 401]

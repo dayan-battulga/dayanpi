@@ -42,10 +42,6 @@ open /tmp/sign.png
 
 ## Bringing up the panels
 
-### Heads up: the sign and the rover share pins
-
-The sign uses 13 GPIO pins (the bonnet ties up a 14th), and six of them are the rover's motor pins (12, 13, 17, 22, 23, 27), with or without the bonnet. So the rover stays unplugged while the sign is on. With `DAYANPI_SIGN=panel` the app leaves the motor pins alone; with any other setting it grabs them at startup, which is why the smoke test below stops the service first.
-
 ### What you need
 
 - 2 HUB75 RGB panels, 64x32, with the power cable they come with
@@ -176,8 +172,10 @@ After the reboot, check it worked:
 
 ```bash
 ls -l /dev/pio*   # the group should say gpio
-groups            # should include gpio (it already does from the rover)
+groups            # should include gpio
 ```
+
+If `gpio` is missing from `groups`, run `sudo usermod -aG gpio dayoon`, then log out and back in.
 
 Install Adafruit's Piomatter library into the dashboard's venv:
 
@@ -248,5 +246,3 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 | `off` | Nothing, not even the preview |
 
 What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures or the **Flip sign page** button on the dashboard (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
-
-**The motors and the sign can't both be on.** The Matrix Bonnet uses GPIO 4, 5, 6, 12, 13, 16, 17, 20, 21, 22, 23, 24, 26 and 27, which includes all six motor pins. With `DAYANPI_SIGN=panel` the app doesn't touch the motor pins at all (the Drive card is hidden anyway while the rover's paused, and `/api/drive` answers 503).

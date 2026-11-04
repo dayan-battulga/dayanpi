@@ -40,7 +40,7 @@ rpicam-hello -n -t 3000
 
 ## 3. Check Python can use it
 
-The app talks to the camera through `picamera2`. Like `gpiozero`, it comes from apt, not pip.
+The app talks to the camera through `picamera2`, which comes from apt, not pip.
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
