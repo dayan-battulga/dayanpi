@@ -380,17 +380,6 @@ def mac_app(report: AppReport):
     return {"status": "ok", "changed": changed}
 
 
-class Phrase(BaseModel):
-    text: str = Field(min_length=1, max_length=200)
-
-
-@app.post("/api/voice/say")
-def voice_say(phrase: Phrase):
-    """For trying the speaker from the browser or curl. Off means it only lands in the log."""
-    queued = voice.say(phrase.text)
-    return {"status": "ok", "queued": queued, "backend": voice.backend}
-
-
 @app.get("/api/sign.png")
 def sign_png():
     """What the LED sign is showing right now, as the website preview image."""

@@ -163,19 +163,10 @@ def test_block_route_starts_stops_and_toggles(factory):
         assert client.post("/api/focus/block", json={"action": "dance"}, auth=AUTH).status_code == 422
 
 
-def test_voice_say_route_logs_when_the_voice_is_off(factory, caplog):
-    import logging
-
-    caplog.set_level(logging.INFO, logger="dayanpi.hardware.voice")
+def test_focus_status_reports_the_voice(factory):
     with TestClient(app.app) as client:
-        assert client.post("/api/voice/say", json={"text": "Phone down."}).status_code == 401
-        response = client.post("/api/voice/say", json={"text": "Phone down."}, auth=AUTH)
-        assert response.status_code == 200
-        assert response.json() == {"status": "ok", "queued": False, "backend": "off"}
-        assert client.post("/api/voice/say", json={"text": ""}, auth=AUTH).status_code == 422
         status = client.get("/api/focus", auth=AUTH).json()
-        assert status["voice"] == {"enabled": False, "backend": "off", "problem": None}
-    assert "would say: 'Phone down.'" in caplog.text
+    assert status["voice"] == {"enabled": False, "backend": "off", "problem": None}
 
 
 def test_callouts_reach_the_voice(monkeypatch):
