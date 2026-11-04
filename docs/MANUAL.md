@@ -7,7 +7,7 @@ The app is password-protected and bound to **localhost only**. You reach it thro
 This manual covers setting up the Pi, shipping code, running the service, Tailscale, power, security and troubleshooting. Each add-on has its own guide next to it:
 
 - [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, gestures
-- [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam
+- [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
 - [LED sign](led-sign.md): the 128x32 sign's pages, wiring and bring-up
 - [Voice](voice.md): callouts out loud through a USB speaker
 - [Driving the rover](rover.md): paused for now; keys, safety and tuning
@@ -33,6 +33,7 @@ Always use the **`main`** branch on both machines.
 | `/api/stream` | Live SSE feed |
 | `/api/health` | Health check |
 | `/video` | MJPEG camera |
+| `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
 | `/api/drive` | Motor commands (POST, used by the Drive card) |
 | `/api/focus` | Focus state, today's totals and timeline |
 | `/api/focus/block` | Start/stop a work block (POST) |

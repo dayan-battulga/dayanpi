@@ -2,7 +2,7 @@
 
 Part of the dayanpi docs. Setting up and running the Pi is in the [manual](MANUAL.md).
 
-The app can use the ribbon-cable Pi camera or the USB webcam. By default (`DAYANPI_CAMERA=auto`) it uses the Pi camera whenever it finds one and falls back to the webcam otherwise. Nothing else changes: same 640x480 picture, same `/video` stream, same detector.
+The app can use the ribbon-cable Pi camera, the USB webcam, or [both at once](#using-both-cameras). By default (`DAYANPI_CAMERA=auto`) it uses the Pi camera whenever it finds one and falls back to the webcam otherwise. Nothing else changes: same 640x480 picture, same `/video` stream, same detector.
 
 ## 1. Plug it in
 
@@ -74,18 +74,23 @@ Always use the webcam:
 
 ```
 DAYANPI_CAMERA=usb
-DAYANPI_USB_DEVICE=/dev/v4l/by-id/usb-YOUR_WEBCAM-video-index0
 ```
 
 Put any comments on their own line. systemd doesn't strip a `#` comment from the end of a value, and the app would see `picamera # blah`, warn that it's not a valid choice, and fall back to auto.
 
-**The `/dev/video0` trap.** With the Pi camera plugged in, the Pi 5 hands some of the `/dev/video*` numbers to the camera's own hardware, so the webcam might not be `/dev/video0` anymore. Whenever you want the webcam while the Pi camera is still connected, point the app at it by name:
+**The `/dev/video0` trap.** With the Pi camera plugged in, the Pi 5 hands some of the `/dev/video*` numbers to the camera's own hardware, so the webcam might not be `/dev/video0` anymore. The app handles this for you: it looks for the webcam's stable name in `/dev/v4l/by-id/` first, and only tries `/dev/video0` if there isn't one. That name stays the same however things get numbered at boot.
+
+You only need to step in if you have two webcams and it picks the wrong one. See what's there:
 
 ```bash
 ls /dev/v4l/by-id/
 ```
 
-Pick the one ending in `-video-index0` and put `/dev/v4l/by-id/` plus that name in `DAYANPI_USB_DEVICE`. That name stays the same however things get numbered at boot.
+Pick the one ending in `-video-index0` and put `/dev/v4l/by-id/` plus that name in `/etc/dayanpi.env`:
+
+```
+DAYANPI_USB_DEVICE=/dev/v4l/by-id/usb-YOUR_WEBCAM-video-index0
+```
 
 ## 5. Make sure it picks the right one, then start the app
 
@@ -112,13 +117,44 @@ Run the same desk check on both cameras and compare the two summary tables. The 
 ```bash
 cd ~/Desktop/site-page/dayanpi
 sudo systemctl stop dayanpi
-DAYANPI_CAMERA=usb DAYANPI_USB_DEVICE=/dev/v4l/by-id/usb-YOUR_WEBCAM-video-index0 .venv/bin/python scripts/focus_check.py
+DAYANPI_CAMERA=usb .venv/bin/python scripts/focus_check.py
 cp focus_check/summary.txt focus_check/summary_usb.txt
 DAYANPI_CAMERA=picamera .venv/bin/python scripts/focus_check.py
 sudo systemctl start dayanpi
 ```
 
 Each run clears out `focus_check/frames/`, so if you want to keep the webcam's frames, copy them to your Mac before the second run (see [Getting the files to your Mac](focus-tracker.md#getting-the-files-to-your-mac)). Then send Claude both summaries (`summary_usb.txt` and `summary.txt`) plus the snapshots.
+
+## Using both cameras
+
+You can run both at once: the webcam faces you straight on (the **front** camera) and the Pi camera watches from the side.
+
+Add this to `/etc/dayanpi.env` with `sudo nano /etc/dayanpi.env`, on its own line:
+
+```
+DAYANPI_CAMERA=both
+```
+
+Then restart and check the app found both:
+
+```bash
+sudo systemctl restart dayanpi
+journalctl -u dayanpi -n 30 --no-pager | grep -i camera
+```
+
+You want these two lines:
+
+```text
+INFO dayanpi.hardware.camera: camera: USB webcam at /dev/v4l/by-id/usb-...-video-index0 (DAYANPI_CAMERA=both)
+INFO dayanpi.hardware.camera: side camera: Pi camera through picamera2 (DAYANPI_CAMERA=both)
+```
+
+- **The webcam finds itself.** The app takes the first name in `/dev/v4l/by-id/` ending in `-video-index0`. You only need `DAYANPI_USB_DEVICE` if you have two webcams and it picks the wrong one.
+- **Arducam camera?** Official cameras get detected on their own, but an Arducam one needs a line in `config.txt`, like `dtoverlay=imx708,cam0` for the `CAM/DISP 0` connector.
+- **The feeds.** `/video` is the front camera and `/video/side` is the side one. Each allows 2 viewers at a time, so a side feed left open somewhere can't lock you out of the front. With any other `DAYANPI_CAMERA` setting, `/video/side` is a 404.
+- **What isn't in yet.** So far this only opens the second camera. The detector still only looks at the front one, and the dashboard only shows the front feed. To see the side camera, open https://dayoon.tail279594.ts.net/video/side.
+- **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the side camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
+- **The detector check.** `scripts/focus_check.py` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
 
 ## What's different about the Pi camera
 
@@ -144,5 +180,7 @@ These live at the top of `dayanpi/hardware/camera.py`. Change them on the Mac, p
 | `rpicam-hello` says no cameras are available | Cable: power off, reseat both ends, contacts toward the Ethernet port on the Pi end |
 | `rpicam-hello` says the camera is busy or in use | The app has it: `sudo systemctl stop dayanpi` first |
 | Site still shows the webcam | Run the check in step 5. Is `DAYANPI_CAMERA=usb` in `/etc/dayanpi.env`? |
-| Webcam stopped working after adding the Pi camera | `/dev/video0` moved. Set `DAYANPI_USB_DEVICE` (step 4) |
+| Webcam stopped working after adding the Pi camera | `ls /dev/v4l/by-id/` should list it. Nothing there? Check the USB cable. Two webcams? Set `DAYANPI_USB_DEVICE` (step 4) |
+| `/video/side` gives a 404 | `DAYANPI_CAMERA=both` isn't in `/etc/dayanpi.env`, or the service hasn't restarted since you added it |
+| `/video/side` never shows a picture | `journalctl -u dayanpi -n 50 --no-pager \| grep -i camera`. If it says `can't open Pi camera 0`, run the check in step 3 |
 | Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or `scripts/focus_check.py` still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |

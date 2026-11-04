@@ -18,7 +18,7 @@ from typing import Literal
 
 from dayanpi.hardware import collector
 from dayanpi.focus import worker as focus_worker
-from dayanpi.hardware.camera import create_stream
+from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.hardware.drivetrain import CommandTimer, DriveTrain
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
 from dayanpi.focus.worker import FocusWorker
@@ -49,6 +49,7 @@ AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
 
 sampler = collector.RateSampler("wlan0")
 stream = create_stream()
+side_stream = create_side_stream()
 latest_snapshot: dict | None = None
 drive_train: DriveTrain | None = None
 command_timer = CommandTimer(DRIVE_TIMEOUT_S)
@@ -61,6 +62,7 @@ sign_preview = PreviewOutput()
 sign_controller: SignController | None = None
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
+_side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _stream_slots = threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
 
 
@@ -196,6 +198,8 @@ async def lifespan(app: FastAPI):
         )
     sampler.sample()
     stream.start()
+    if side_stream is not None:
+        side_stream.start()
     voice.start()
     sign_controller = start_sign()
     worker = start_focus_worker()
@@ -231,6 +235,8 @@ async def lifespan(app: FastAPI):
         sign_controller = None
     voice.stop()
     stream.stop()
+    if side_stream is not None:
+        side_stream.stop()
 
 
 app = FastAPI(
@@ -258,12 +264,12 @@ async def basic_auth_middleware(request: Request, call_next):
     return response
 
 
-def frame_generator() -> Iterator[bytes]:
+def frame_generator(camera: CameraStream) -> Iterator[bytes]:
     last_id = -1
     consecutive_timeouts = 0
 
     while True:
-        result = stream.frame_after(last_id, timeout=FRAME_TIMEOUT_S)
+        result = camera.frame_after(last_id, timeout=FRAME_TIMEOUT_S)
         if result is None:
             consecutive_timeouts += 1
             if consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS:
@@ -412,9 +418,8 @@ async def api_stream(request: Request):
     )
 
 
-@app.get("/video")
-def video():
-    if not _video_slots.acquire(blocking=False):
+def stream_video(camera: CameraStream, slots: threading.BoundedSemaphore) -> StreamingResponse:
+    if not slots.acquire(blocking=False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Too many video connections",
@@ -422,14 +427,27 @@ def video():
 
     def guarded() -> Iterator[bytes]:
         try:
-            yield from frame_generator()
+            yield from frame_generator(camera)
         finally:
-            _video_slots.release()
+            slots.release()
 
-    return StreamingResponse(
+    response = StreamingResponse(
         guarded(),
         media_type=f"multipart/x-mixed-replace; boundary={FRAME_BOUNDARY}",
     )
+    return response
+
+
+@app.get("/video")
+def video():
+    return stream_video(stream, _video_slots)
+
+
+@app.get("/video/side")
+def side_video():
+    if side_stream is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No side camera")
+    return stream_video(side_stream, _side_video_slots)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

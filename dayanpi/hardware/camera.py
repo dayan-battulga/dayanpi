@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import threading
@@ -9,6 +10,7 @@ import numpy as np
 
 # Tunables — change these in one place only.
 DEVICE_PATH = "/dev/video0"
+USB_BY_ID_PATTERN = "/dev/v4l/by-id/*-video-index0"
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 FRAME_SKIP = 2  # keep 1 of every N frames when streaming
@@ -27,13 +29,14 @@ PICAMERA_CAPTURE_TIMEOUT_S = 1.0  # keep under STOP_JOIN_TIMEOUT_S so stop() can
 AUTOFOCUS_CONTROL = "AfMode"
 USB_CAMERA_ID_PART = "/usb"  # libcamera lists USB webcams too; Picamera2 spots them by this in their Id
 
-# Which camera create_stream() hands out.
+# Which cameras create_stream() and create_side_stream() hand out.
 CAMERA_SETTING_ENV = "DAYANPI_CAMERA"
 USB_DEVICE_ENV = "DAYANPI_USB_DEVICE"
 CAMERA_AUTO = "auto"
 CAMERA_USB = "usb"
 CAMERA_PICAMERA = "picamera"
-CAMERA_SETTINGS = (CAMERA_AUTO, CAMERA_USB, CAMERA_PICAMERA)
+CAMERA_BOTH = "both"
+CAMERA_SETTINGS = (CAMERA_AUTO, CAMERA_USB, CAMERA_PICAMERA, CAMERA_BOTH)
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,9 @@ class CameraStream:
         self._running = False
 
     def _open_capture(self) -> cv2.VideoCapture:
+        # A webcam plugged in after startup has a by-id name, and /dev/video0 can be the Pi camera's hardware.
+        if self._device == DEVICE_PATH:
+            self._device = find_usb_device()
         capture = cv2.VideoCapture(self._device, cv2.CAP_V4L2)
         if not capture.isOpened():
             raise OSError(f"failed to open {self._device}")
@@ -93,7 +99,8 @@ class CameraStream:
                 consecutive_failures += 1
                 if consecutive_failures % FAILURE_LOG_THRESHOLD == 0:
                     logger.warning(
-                        "camera read failing (%s consecutive); reconnecting",
+                        "camera read failing on %s (%s consecutive); reconnecting",
+                        self._device,
                         consecutive_failures,
                     )
                 self._reconnect()
@@ -312,25 +319,50 @@ def detect_camera() -> CameraChoice:
     return choice
 
 
-def create_stream() -> CameraStream:
-    """The camera the app should use, picked by DAYANPI_CAMERA: auto (the default), usb or picamera.
-
-    DAYANPI_USB_DEVICE points the webcam somewhere other than /dev/video0. On a Pi 5 with a
-    Pi camera plugged in, /dev/video0 can belong to the Pi camera's own hardware, so a
-    /dev/v4l/by-id/... path is the safe way to name the webcam.
-    """
+def read_camera_setting() -> str:
     setting = os.environ.get(CAMERA_SETTING_ENV, "").strip().lower() or CAMERA_AUTO
+    return setting
+
+
+def find_usb_device() -> str:
+    """The webcam: DAYANPI_USB_DEVICE if set, else the first stable by-id name, else /dev/video0.
+
+    With a Pi camera plugged in, the Pi 5 hands the low /dev/video numbers to the camera's
+    own hardware, so the webcam isn't /dev/video0 anymore. Its by-id name doesn't move.
+    """
+    named_webcams = sorted(glob.glob(USB_BY_ID_PATTERN))
+    fallback = named_webcams[0] if named_webcams else DEVICE_PATH
+    device = os.environ.get(USB_DEVICE_ENV, "").strip() or fallback
+    return device
+
+
+def create_stream() -> CameraStream:
+    """The main camera, picked by DAYANPI_CAMERA: auto (the default), usb, picamera or both.
+
+    With both, this is the USB webcam (the front camera) and create_side_stream() is the Pi camera.
+    """
+    setting = read_camera_setting()
     if setting not in CAMERA_SETTINGS:
         logger.warning("%s=%r isn't one of %s, so using auto", CAMERA_SETTING_ENV, setting, ", ".join(CAMERA_SETTINGS))
         setting = CAMERA_AUTO
-    choice = detect_camera() if setting == CAMERA_AUTO else CameraChoice(setting, f"{CAMERA_SETTING_ENV}={setting}")
+    backend = CAMERA_USB if setting == CAMERA_BOTH else setting
+    choice = detect_camera() if setting == CAMERA_AUTO else CameraChoice(backend, f"{CAMERA_SETTING_ENV}={setting}")
 
     if choice.backend == CAMERA_PICAMERA:
         stream = PiCameraStream()
         logger.info("camera: Pi camera through picamera2 (%s)", choice.reason)
     else:
-        usb_device = os.environ.get(USB_DEVICE_ENV, "").strip() or DEVICE_PATH
+        usb_device = find_usb_device()
         stream = CameraStream(usb_device)
         logger.info("camera: USB webcam at %s (%s)", usb_device, choice.reason)
+    return stream
+
+
+def create_side_stream() -> CameraStream | None:
+    """The second camera: the Pi camera when DAYANPI_CAMERA=both, and None for every other setting."""
+    stream = None
+    if read_camera_setting() == CAMERA_BOTH:
+        stream = PiCameraStream()
+        logger.info("side camera: Pi camera through picamera2 (%s=%s)", CAMERA_SETTING_ENV, CAMERA_BOTH)
     return stream
 

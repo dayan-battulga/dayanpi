@@ -308,8 +308,73 @@ def test_focus_status_carries_the_boxes_and_their_age(factory, monkeypatch):
     assert app.worker is None
 
 
+class FakeCamera:
+    """Hands out one frame, then nothing, so a video response ends by itself."""
+
+    def __init__(self, jpeg: bytes = b"jpeg") -> None:
+        self.frames = [jpeg]
+        self.running = False
+
+    def start(self) -> None:
+        self.running = True
+
+    def stop(self) -> None:
+        self.running = False
+
+    def frame_after(self, last_id: int, timeout: float):
+        result = (self.frames.pop(), 1) if self.frames else None
+        return result
+
+
+def test_side_video_is_a_404_without_a_side_camera(factory):
+    with TestClient(app.app) as client:
+        assert app.side_stream is None
+        assert client.get("/video/side", auth=AUTH).status_code == 404
+        assert client.get("/video/side").status_code == 401
+
+
+def test_each_video_route_serves_its_own_camera(factory, monkeypatch):
+    monkeypatch.setattr(app, "stream", FakeCamera(b"front-jpeg"))
+    monkeypatch.setattr(app, "side_stream", FakeCamera(b"side-jpeg"))
+    with TestClient(app.app) as client:
+        front = client.get("/video", auth=AUTH)
+        side = client.get("/video/side", auth=AUTH)
+        assert client.get("/video/side").status_code == 401
+    assert b"front-jpeg" in front.content and b"side-jpeg" not in front.content
+    assert b"side-jpeg" in side.content and b"front-jpeg" not in side.content
+    assert side.headers["content-type"] == front.headers["content-type"]
+    assert side.headers["content-type"].startswith("multipart/x-mixed-replace")
+
+
+@pytest.mark.parametrize(
+    ("full_route", "full_slots", "open_route"),
+    [("/video", "_video_slots", "/video/side"), ("/video/side", "_side_video_slots", "/video")],
+)
+def test_a_full_feed_does_not_lock_out_the_other(factory, monkeypatch, full_route, full_slots, open_route):
+    monkeypatch.setattr(app, "side_stream", FakeCamera())
+    monkeypatch.setattr(app, "frame_generator", lambda camera: iter([b"frame"]))
+    slots = getattr(app, full_slots)
+    with TestClient(app.app) as client:
+        held = [slots.acquire(blocking=False) for _ in range(app.VIDEO_MAX_CONCURRENT)]
+        assert all(held)
+        try:
+            assert client.get(full_route, auth=AUTH).status_code == 503
+            assert client.get(open_route, auth=AUTH).status_code == 200
+        finally:
+            for _ in held:
+                slots.release()
+
+
+def test_the_side_camera_starts_and_stops_with_the_service(factory, monkeypatch):
+    side = FakeCamera()
+    monkeypatch.setattr(app, "side_stream", side)
+    with TestClient(app.app):
+        assert side.running is True
+    assert side.running is False
+
+
 def test_video_frees_its_slot_and_turns_away_viewers_past_the_cap(factory, monkeypatch):
-    monkeypatch.setattr(app, "frame_generator", lambda: iter([b"frame"]))
+    monkeypatch.setattr(app, "frame_generator", lambda camera: iter([b"frame"]))
     with TestClient(app.app) as client:
         for _ in range(app.VIDEO_MAX_CONCURRENT):
             assert client.get("/video", auth=AUTH).status_code == 200

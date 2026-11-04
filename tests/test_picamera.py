@@ -118,8 +118,9 @@ def raise_numpy_mismatch(name: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def quick_retries_and_no_camera_settings(monkeypatch):
+def quick_retries_and_no_camera_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(camera, "RECONNECT_SLEEP_S", 0.01)
+    monkeypatch.setattr(camera, "USB_BY_ID_PATTERN", str(tmp_path / "*-video-index0"))
     monkeypatch.delenv(camera.CAMERA_SETTING_ENV, raising=False)
     monkeypatch.delenv(camera.USB_DEVICE_ENV, raising=False)
 
@@ -335,3 +336,47 @@ def test_unknown_setting_warns_and_acts_like_auto(cameras, monkeypatch, caplog):
     stream = camera.create_stream()
     assert isinstance(stream, PiCameraStream)
     assert "isn't one of auto, usb, picamera" in caplog.text
+
+
+def test_a_bad_setting_warns_once_across_both_streams(cameras, monkeypatch, caplog):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, "webcam")
+    camera.create_stream()
+    camera.create_side_stream()
+    assert caplog.text.count("isn't one of") == 1
+
+
+@pytest.mark.parametrize("setting", ["both", " Both "])
+def test_both_puts_the_webcam_in_front_and_the_pi_camera_on_the_side(cameras, monkeypatch, setting):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, setting)
+    monkeypatch.setenv(camera.USB_DEVICE_ENV, USB_WEBCAM_BY_ID)
+    front = camera.create_stream()
+    side = camera.create_side_stream()
+    assert type(front) is CameraStream
+    assert front._device == USB_WEBCAM_BY_ID
+    assert isinstance(side, PiCameraStream)
+    assert cameras.listing_calls == 0
+    assert cameras.opened == []
+
+
+@pytest.mark.parametrize("setting", [None, "", "auto", "usb", "picamera", "webcam"])
+def test_there_is_no_side_camera_without_both(cameras, monkeypatch, setting):
+    if setting is not None:
+        monkeypatch.setenv(camera.CAMERA_SETTING_ENV, setting)
+    assert camera.create_side_stream() is None
+
+
+def test_find_usb_device_tries_the_setting_then_the_stable_name_then_video0(monkeypatch, tmp_path):
+    assert camera.find_usb_device() == "/dev/video0"
+    (tmp_path / "usb-B_camera-video-index0").touch()
+    (tmp_path / "usb-A_camera-video-index0").touch()
+    (tmp_path / "usb-A_camera-video-index1").touch()
+    assert camera.find_usb_device() == str(tmp_path / "usb-A_camera-video-index0")
+    monkeypatch.setenv(camera.USB_DEVICE_ENV, USB_WEBCAM_BY_ID)
+    assert camera.find_usb_device() == USB_WEBCAM_BY_ID
+
+
+def test_usb_setting_finds_the_webcam_by_its_stable_name(no_picamera2, monkeypatch, tmp_path):
+    webcam = tmp_path / "usb-USB_Live_camera-video-index0"
+    webcam.touch()
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, "usb")
+    assert camera.create_stream()._device == str(webcam)
