@@ -162,7 +162,30 @@ INFO dayanpi.hardware.camera: side camera: Pi camera through picamera2 (DAYANPI_
 - **Wider view.** The Wide sees about 102° across and 67° top to bottom. The app reads the whole sensor and trims the sides to make the 4:3 picture, which comes out to roughly 85° across. Left to its default, Picamera2 would only read the middle of the sensor at this size (roughly 63° by 48°).
 - **Autofocus** runs the whole time, so it stays sharp whether you lean in or sit back. It can focus as close as about 5 cm.
 - **15 frames a second.** The webcam hands over ready-made JPEGs, but the Pi camera's frames get turned into JPEGs on the Pi, so it runs a bit slower to leave CPU for the detector.
-- **Picture upside down?** That's a small change in `dayanpi/hardware/camera.py` (flip it in the camera setup). Ask Claude.
+- **Picture upside down?** One line in `/etc/dayanpi.env` fixes it. See [Upside-down picture](#upside-down-picture).
+
+## Upside-down picture
+
+Mounted the Pi camera upside down? Add this to `/etc/dayanpi.env` with `sudo nano /etc/dayanpi.env`, on its own line:
+
+```
+DAYANPI_PICAMERA_ROTATION=180
+```
+
+Then restart and check it took:
+
+```bash
+sudo systemctl restart dayanpi
+journalctl -u dayanpi -n 30 --no-pager | grep -i "turning the picture"
+```
+
+You want `Pi camera: turning the picture 180 degrees (DAYANPI_PICAMERA_ROTATION)`.
+
+- **It's free.** The camera flips the picture itself before the app ever sees it, so the Pi's CPU doesn't do any extra work.
+- **Only the Pi camera.** It works however the Pi camera's being used: `picamera`, `auto` when it picks the Pi camera, or as the side camera with `both`. The webcam never gets flipped.
+- **Only 0 or 180.** `0` is the default. The camera can only flip, not turn sideways, so there's no 90. Anything else logs a warning and leaves the picture alone.
+- **The `rpicam-*` tools don't know about it.** They don't read `/etc/dayanpi.env`, so they'll still show it upside down. Give them `--rotation 180` yourself, like `rpicam-hello --rotation 180`.
+- **The detector check doesn't either.** Put it in front of the command, like the camera setting: `DAYANPI_CAMERA=picamera DAYANPI_PICAMERA_ROTATION=180 .venv/bin/python -m dayanpi.focus.check`.
 
 ## Tuning
 

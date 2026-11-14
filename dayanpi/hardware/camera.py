@@ -28,6 +28,8 @@ PICAMERA_FULL_VIEW = True  # read the whole sensor; False lets Picamera2 pick a 
 PICAMERA_CAPTURE_TIMEOUT_S = 1.0  # keep under STOP_JOIN_TIMEOUT_S so stop() can join the capture thread
 AUTOFOCUS_CONTROL = "AfMode"
 USB_CAMERA_ID_PART = "/usb"  # libcamera lists USB webcams too; Picamera2 spots them by this in their Id
+PICAMERA_ROTATION_ENV = "DAYANPI_PICAMERA_ROTATION"
+PICAMERA_ROTATIONS = ("0", "180")  # degrees; the sensor can only flip, so there's no 90
 
 # Which cameras create_stream() and create_side_stream() hand out.
 CAMERA_SETTING_ENV = "DAYANPI_CAMERA"
@@ -219,9 +221,10 @@ class PiCameraCapture:
     passthrough gives, so /video and the detector don't change.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, rotation: int = 0) -> None:
         from picamera2 import Picamera2
 
+        self._rotation = rotation
         pi_cameras = list_pi_cameras(Picamera2)
         if PICAMERA_INDEX >= len(pi_cameras):
             raise OSError(f"no Pi camera #{PICAMERA_INDEX} (libcamera sees {len(pi_cameras)})")
@@ -243,10 +246,16 @@ class PiCameraCapture:
         sensor = {}
         if full_view_mode is not None:
             sensor = {"output_size": full_view_mode["size"], "bit_depth": full_view_mode["bit_depth"]}
+        flip = {}
+        if self._rotation == 180:
+            from libcamera import Transform
+
+            flip = {"transform": Transform(hflip=1, vflip=1)}
         configuration = self._camera.create_video_configuration(
             main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": PICAMERA_FORMAT},
             sensor=sensor,
             controls={"FrameDurationLimits": (frame_duration_us, frame_duration_us)},
+            **flip,
         )
         return configuration
 
@@ -291,10 +300,14 @@ class PiCameraStream(CameraStream):
     def __init__(self) -> None:
         # frame_skip=1: the camera itself is slowed down to PICAMERA_FPS, so skipping frames would halve it again.
         super().__init__(f"Pi camera {PICAMERA_INDEX}", frame_skip=1)
+        # Read once here, not per open, so a bad value warns once instead of on every reconnect.
+        self._rotation = read_picamera_rotation()
+        if self._rotation:
+            logger.info("Pi camera: turning the picture %s degrees (%s)", self._rotation, PICAMERA_ROTATION_ENV)
 
     def _open_capture(self) -> PiCameraCapture:
         try:
-            capture = PiCameraCapture()
+            capture = PiCameraCapture(self._rotation)
         except Exception as error:
             # CameraStream only retries on OSError, and picamera2 fails with ImportError, RuntimeError and more.
             raise OSError(f"can't open {self._device}: {type(error).__name__}: {error}") from error
@@ -322,6 +335,18 @@ def detect_camera() -> CameraChoice:
 def read_camera_setting() -> str:
     setting = os.environ.get(CAMERA_SETTING_ENV, "").strip().lower() or CAMERA_AUTO
     return setting
+
+
+def read_picamera_rotation() -> int:
+    """DAYANPI_PICAMERA_ROTATION in degrees: 0 (the default) or 180 for a Pi camera mounted upside down."""
+    setting = os.environ.get(PICAMERA_ROTATION_ENV, "").strip() or PICAMERA_ROTATIONS[0]
+    if setting not in PICAMERA_ROTATIONS:
+        logger.warning(
+            "%s=%r isn't one of %s, so using 0", PICAMERA_ROTATION_ENV, setting, ", ".join(PICAMERA_ROTATIONS)
+        )
+        setting = PICAMERA_ROTATIONS[0]
+    rotation = int(setting)
+    return rotation
 
 
 def find_usb_device() -> str:

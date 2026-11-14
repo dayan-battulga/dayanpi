@@ -77,8 +77,8 @@ class FakePicamera2:
         camera_infos = list(cls.system.camera_infos)
         return camera_infos
 
-    def create_video_configuration(self, main: dict, sensor: dict, controls: dict) -> dict:
-        configuration = {"main": main, "sensor": sensor, "controls": controls}
+    def create_video_configuration(self, main: dict, sensor: dict, controls: dict, **options) -> dict:
+        configuration = {"main": main, "sensor": sensor, "controls": controls, **options}
         return configuration
 
     def configure(self, configuration: dict) -> None:
@@ -123,6 +123,7 @@ def quick_retries_and_no_camera_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(camera, "USB_BY_ID_PATTERN", str(tmp_path / "*-video-index0"))
     monkeypatch.delenv(camera.CAMERA_SETTING_ENV, raising=False)
     monkeypatch.delenv(camera.USB_DEVICE_ENV, raising=False)
+    monkeypatch.delenv(camera.PICAMERA_ROTATION_ENV, raising=False)
 
 
 @pytest.fixture
@@ -132,6 +133,7 @@ def cameras(monkeypatch) -> FakeCameraSystem:
     picamera2_module.Picamera2 = type("Picamera2", (FakePicamera2,), {"system": system})
     libcamera_module = types.ModuleType("libcamera")
     libcamera_module.controls = types.SimpleNamespace(AfModeEnum=types.SimpleNamespace(Continuous=AF_CONTINUOUS))
+    libcamera_module.Transform = types.SimpleNamespace  # Transform(hflip=1, vflip=1) compares by its flips
     monkeypatch.setitem(sys.modules, "picamera2", picamera2_module)
     monkeypatch.setitem(sys.modules, "libcamera", libcamera_module)
     return system
@@ -195,6 +197,35 @@ def test_full_view_can_be_turned_off(cameras, monkeypatch):
     with run_stream(PiCameraStream()) as stream:
         assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
     assert cameras.opened[0].configuration["sensor"] == {}
+
+
+@pytest.mark.parametrize("setting, create", [("picamera", camera.create_stream), ("both", camera.create_side_stream)])
+def test_rotation_180_has_the_camera_flip_the_picture(cameras, monkeypatch, setting, create):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, setting)
+    monkeypatch.setenv(camera.PICAMERA_ROTATION_ENV, "180")
+    with run_stream(create()) as stream:
+        assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
+    assert cameras.opened[0].configuration["transform"] == types.SimpleNamespace(hflip=1, vflip=1)
+
+
+@pytest.mark.parametrize("setting", [None, "", "0", " 0 "])
+def test_no_rotation_leaves_the_transform_out(cameras, monkeypatch, setting):
+    if setting is not None:
+        monkeypatch.setenv(camera.PICAMERA_ROTATION_ENV, setting)
+    with run_stream(PiCameraStream()) as stream:
+        assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
+    assert "transform" not in cameras.opened[0].configuration
+
+
+@pytest.mark.parametrize("setting", ["90", "upside down"])
+def test_bad_rotation_warns_once_and_leaves_the_transform_out(cameras, monkeypatch, caplog, setting):
+    monkeypatch.setenv(camera.PICAMERA_ROTATION_ENV, setting)
+    cameras.failed_captures = 1  # forces a reopen, which mustn't warn again
+    with run_stream(PiCameraStream()) as stream:
+        assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
+    assert len(cameras.opened) == 2
+    assert all("transform" not in opened.configuration for opened in cameras.opened)
+    assert caplog.text.count("isn't one of 0, 180") == 1
 
 
 def test_stop_ends_the_capture_thread_and_closes_the_camera(cameras):
