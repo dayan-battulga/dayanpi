@@ -138,7 +138,7 @@ class PoseDetector:
 class PoseDeskScanner(DeskScanner):
     """A DeskScanner whose full-frame pass is the pose model, so people come with keypoints.
 
-    The zoomed pass (phones, food, drinks) and the face pass are unchanged.
+    The zoomed pass for phones and the face pass are unchanged.
     """
 
     def __init__(self) -> None:

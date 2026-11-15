@@ -10,7 +10,7 @@ Want the step-by-step commands? Setup and running are in **[docs/MANUAL.md](docs
 
 - **Keeping an eye on the Pi.** Temperature (as a gauge), CPU (with a live bar per core), memory and disk, updated live every second, plus a status bar with network speed, uptime, power, the voice, the Mac's front app and the sign mode. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
 - **Seeing the desk.** Live camera feeds right on the page.
-- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup, snacks and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**, and then it shows boxes around whatever the detector counted (you, a phone, food, a drink). Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
+- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**, and then it shows boxes around whatever the detector counted (you or a phone). Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
 - **Light and dark.** The page follows your device's light or dark setting. The sun/moon button flips it, and your browser remembers the choice.
 
 It's a personal project, so it's built for one person (me) on my own devices, not for a crowd.
@@ -30,7 +30,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
         └─ dayanpi/ (the Python package)
              ├─ app.py      → login, routes, startup and shutdown
              ├─ hardware/   → collector (stats), camera (one thread owns the webcam), voice
-             ├─ vision/     → detector (people, phones, faces, food), pose, gestures
+             ├─ vision/     → detector (people, phones, faces), pose, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
              ├─ sign/       → the LED sign renderer, font and icons, page controller
              └─ static/     → the dashboard page (app.js for stats, theme and camera, focus.js for the Focus card)
@@ -83,7 +83,7 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/app.py` | The FastAPI app: login, routes, startup and shutdown |
 | `dayanpi/paths.py` | Where `static/`, `models/`, `data/` and `focus_check/` live, so no module counts parent folders |
 | `dayanpi/hardware/` | Things attached to the Pi: `collector.py` (stats), `camera.py` (one thread owns the webcam, many viewers), `voice.py` (the USB speaker) |
-| `dayanpi/vision/` | The models: `detector.py` (people, phones, faces, food and drinks), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
+| `dayanpi/vision/` | The models: `detector.py` (people, phones and faces), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
 | `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |

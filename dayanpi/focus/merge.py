@@ -4,7 +4,7 @@ from dayanpi.vision.detector import FrameReading
 
 
 def merge_readings(front: FrameReading | None, side: FrameReading | None) -> FrameReading | None:
-    """People, phones, food and drinks from both cameras; faces and poses from the front only.
+    """People and phones from both cameras; faces and poses from the front only.
 
     Face turn and tilt and the gestures assume the straight-on view. With no side reading,
     front comes back untouched, so one camera behaves as if this function weren't here.
@@ -20,8 +20,6 @@ def merge_readings(front: FrameReading | None, side: FrameReading | None) -> Fra
             phones=base.phones + side.phones,
             faces=base.faces,
             elapsed_ms=base.elapsed_ms + side.elapsed_ms,
-            food=base.food + side.food,
-            drinks=base.drinks + side.drinks,
             poses=base.poses,
             side=side,
         )

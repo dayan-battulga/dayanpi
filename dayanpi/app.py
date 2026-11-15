@@ -285,7 +285,6 @@ def health():
 def focus_now():
     status = build_focus_status()
     status["segments"] = tracker.segments()
-    status["snack_times"] = tracker.snack_times()
     return status
 
 

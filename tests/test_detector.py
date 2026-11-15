@@ -59,18 +59,16 @@ def test_decode_keeps_people_and_phones_only():
     assert detections[1].confidence == pytest.approx(0.6)
 
 
-def test_decode_keeps_food_and_drink_labels():
+def test_decode_drops_food_drinks_and_phone_lookalikes():
+    remote_class_id = 65
     output = make_output(
         [
             {"box": [100, 100, 40, 40], "scores": {41: 0.7}},
             {"box": [300, 300, 60, 40], "scores": {54: 0.5}},
-            {"box": [500, 300, 80, 80], "scores": {63: 0.95}},
+            {"box": [500, 300, 20, 40], "scores": {remote_class_id: 0.6, detector.PHONE_CLASS_ID: 0.4}},
         ]
     )
-    labels = [d.label for d in decode_objects(output, PLAIN_LETTERBOX)]
-    assert labels == ["cup", "donut"]
-    assert "cup" in detector.DRINK_LABELS
-    assert "donut" in detector.FOOD_LABELS
+    assert decode_objects(output, PLAIN_LETTERBOX) == []
 
 
 def test_decode_maps_boxes_back_through_padding():
@@ -166,21 +164,18 @@ def test_scanner_takes_phones_from_the_zoomed_crop_only():
     assert reading.phones[0].box == Box(x1=290, y1=335, x2=330, y2=395)
 
 
-def test_scanner_sorts_zoomed_finds_into_phones_food_and_drinks():
+def test_scanner_keeps_only_phones_from_the_zoomed_crop():
     person = Detection("person", 0.9, Box(x1=300, y1=150, x2=500, y2=450))
     zoomed = [
         Detection("phone", 0.6, Box(x1=20, y1=200, x2=60, y2=260)),
-        Detection("donut", 0.5, Box(x1=0, y1=0, x2=10, y2=10)),
-        Detection("cup", 0.8, Box(x1=5, y1=5, x2=15, y2=15)),
+        Detection("person", 0.8, Box(x1=0, y1=0, x2=200, y2=300)),
     ]
     objects = FakeObjectDetector(full_frame=[person], zoomed=zoomed)
 
     reading = DeskScanner(objects, FakeFaceDetector()).scan(np.zeros((480, 640, 3), np.uint8))
 
     assert [d.label for d in reading.phones] == ["phone"]
-    assert [d.label for d in reading.food] == ["donut"]
-    assert [d.label for d in reading.drinks] == ["cup"]
-    assert reading.food[0].box == Box(x1=270, y1=135, x2=280, y2=145)
+    assert reading.people == [person]
 
 
 def test_scanner_skips_the_zoom_without_a_clear_person():
@@ -191,8 +186,6 @@ def test_scanner_skips_the_zoom_without_a_clear_person():
 
     assert len(objects.shapes) == 1
     assert reading.phones == []
-    assert reading.food == []
-    assert reading.drinks == []
 
 
 @pytest.mark.skipif(

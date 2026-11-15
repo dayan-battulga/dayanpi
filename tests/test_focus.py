@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from dayanpi.focus import stats as focus_stats
 from dayanpi.focus import tracker as focus
 from dayanpi.focus.merge import merge_readings
 from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
@@ -12,15 +13,13 @@ BOX = Box(x1=10, y1=10, x2=50, y2=50)
 NOON = datetime(2026, 10, 29, 12, 0).timestamp()
 
 
-def make_reading(person: float = 0.9, phone: float = 0.0, food: float = 0.0, drink: float = 0.0, tilt: float | None = None) -> FrameReading:
+def make_reading(person: float = 0.9, phone: float = 0.0, tilt: float | None = None) -> FrameReading:
     faces = [] if tilt is None else [FaceReading(0.9, BOX, [Point(20, 20)] * 5, turn=-0.5, tilt=tilt)]
     reading = FrameReading(
         people=[Detection("person", person, BOX)] if person else [],
         phones=[Detection("phone", phone, BOX)] if phone else [],
         faces=faces,
         elapsed_ms=300.0,
-        food=[Detection("donut", food, BOX)] if food else [],
-        drinks=[Detection("cup", drink, BOX)] if drink else [],
     )
     return reading
 
@@ -195,43 +194,6 @@ def test_break_over_flag_during_a_block_is_silent():
     assert desk.names() == ["break_over"]
 
 
-def test_snacks_count_once_per_sitting():
-    desk = settled_desk()
-    desk.tick(make_reading(food=0.6), 3)
-    assert desk.tracker.status(desk.now)["today"]["snacks"] == 1
-    assert desk.names() == ["snack"]
-    desk.tick(make_reading(food=0.6), 60)
-    assert desk.tracker.status(desk.now)["today"]["snacks"] == 1
-    desk.work(119)
-    desk.tick(make_reading(food=0.6), 3)
-    assert desk.tracker.status(desk.now)["today"]["snacks"] == 1
-    desk.work(121)
-    desk.tick(make_reading(food=0.6), 3)
-    assert desk.tracker.status(desk.now)["today"]["snacks"] == 2
-
-
-def test_snack_times_are_kept_for_the_today_list():
-    desk = settled_desk()
-    assert desk.tracker.snack_times() == []
-    desk.tick(make_reading(food=0.6), 3)
-    first = desk.tracker.snack_times()
-    assert len(first) == 1 and first[0] <= desk.now
-    desk.work(121)
-    desk.tick(make_reading(food=0.6), 3)
-    times = desk.tracker.snack_times()
-    assert len(times) == 2 and times[0] == first[0] and times[1] > times[0]
-
-
-def test_snack_times_start_over_at_midnight(tmp_path):
-    desk = Desk(start=datetime(2026, 10, 29, 23, 58, 0).timestamp(), log=FocusLog(tmp_path / "focus_log"))
-    desk.work(5)
-    desk.tick(make_reading(food=0.6), 3)
-    assert len(desk.tracker.snack_times()) == 1
-    desk.work(120)
-    assert desk.tracker.status(desk.now)["today"]["day"] == "2026-10-30"
-    assert desk.tracker.snack_times() == []
-
-
 def test_no_frames_keeps_state_briefly_then_unknown():
     desk = settled_desk()
     assert desk.tick(None, 29) == "working"
@@ -280,7 +242,7 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
     assert samples[0]["state"] == "working"
 
 
-SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "food", "drink", "turn", "tilt", "ms", "block", "app", "streak_s"}
+SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "turn", "tilt", "ms", "block", "app", "streak_s"}
 
 
 def read_samples(log: FocusLog) -> list[dict]:
@@ -297,12 +259,12 @@ def test_one_camera_samples_have_exactly_the_same_fields_as_ever(tmp_path):
 def test_samples_add_the_side_cameras_own_numbers_and_keep_the_rest(tmp_path):
     log = FocusLog(tmp_path / "focus_log")
     front = make_reading(person=0.8, tilt=0.5)
-    side = make_reading(person=0.612, phone=0.456, food=0.333, tilt=0.9)
+    side = make_reading(person=0.612, phone=0.456, tilt=0.9)
     Desk(log=log).tick(merge_readings(front, side), 31)
     sample = read_samples(log)[0]
-    assert set(sample) == SAMPLE_FIELDS | {"side_person", "side_phone", "side_food"}
-    assert (sample["side_person"], sample["side_phone"], sample["side_food"]) == (0.61, 0.46, 0.33)
-    assert (sample["person"], sample["phone"], sample["food"]) == (0.8, 0.46, 0.33), "the existing fields are the best of both cameras"
+    assert set(sample) == SAMPLE_FIELDS | {"side_person", "side_phone"}
+    assert (sample["side_person"], sample["side_phone"]) == (0.61, 0.46)
+    assert (sample["person"], sample["phone"]) == (0.8, 0.46), "the existing fields are the best of both cameras"
     assert sample["tilt"] == 0.5, "faces only come from the front camera"
     assert sample["ms"] == 600, "both scans added up"
 
@@ -328,13 +290,56 @@ def test_side_numbers_in_the_log_do_not_change_the_days_totals(tmp_path):
     assert with_side.phone_seconds > 0
 
 
+def make_old_log_line(seconds: float, event: str, **fields) -> dict:
+    line = {"ts": NOON + seconds, "day": "2026-10-29", "event": event, **fields}
+    return line
+
+
+OLD_SAMPLE = {"person": 0.9, "phone": 0.0, "food": 0.61, "drink": 0.4, "turn": None, "tilt": None, "ms": 380, "block": False, "app": None}
+OLD_LOG = [
+    make_old_log_line(0, "state", state="working", prev="unknown", seconds_in_prev=2.0),
+    make_old_log_line(30, "sample", state="working", streak_s=30, side_person=0.7, side_phone=0.0, side_food=0.5, **OLD_SAMPLE),
+    make_old_log_line(31, "snack", count=1),
+    make_old_log_line(31, "callout", name="snack", text="Snack number 1."),
+    make_old_log_line(60, "pickup", count=1),
+    make_old_log_line(60, "state", state="phone", prev="working", seconds_in_prev=60.0),
+    make_old_log_line(90, "state", state="working", prev="phone", seconds_in_prev=30.0),
+    make_old_log_line(120, "sample", state="working", streak_s=30, **OLD_SAMPLE),
+]
+
+
+def test_old_logs_with_snacks_and_food_replay_and_report_without_them(tmp_path):
+    log_dir = tmp_path / "focus_log"
+    log_dir.mkdir()
+    (log_dir / "2026-10-29.jsonl").write_text("".join(json.dumps(line) + "\n" for line in OLD_LOG))
+    log = FocusLog(log_dir)
+    events = log.read_day("2026-10-29")
+    stripped = [
+        {key: value for key, value in event.items() if key not in ("food", "drink", "side_food")}
+        for event in events
+        if event["event"] != "snack" and event.get("name") != "snack"
+    ]
+
+    totals = focus.total_day(focus.replay_day(events, "2026-10-29"))
+    assert totals == focus.total_day(focus.replay_day(stripped, "2026-10-29"))
+    assert (totals.working_seconds, totals.phone_seconds, totals.pickups) == (90, 30, 1)
+
+    later = NOON + 300
+    fresh = FocusTracker(started_at=later)
+    assert fresh.restore(events, later) == len(OLD_LOG)
+    assert "snacks" not in fresh.status(later)["today"]
+
+    report = focus_stats.build_report(log, ["2026-10-29"])
+    assert "pickups   1" in report
+    assert "snack" not in report
+
+
 def test_restore_rebuilds_today_from_the_log(tmp_path):
     log = FocusLog(tmp_path / "focus_log")
     desk = Desk(log=log)
     desk.work(60)
     desk.phone(5)
-    desk.work(10)
-    desk.tick(make_reading(food=0.6), 5)
+    desk.work(15)
     desk.tracker.set_block(True, desk.now)
     desk.work(30)
 
@@ -345,8 +350,6 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
     status = fresh.status(later)
     assert status["state"] == "unknown"
     assert status["today"]["pickups"] == 1
-    assert status["today"]["snacks"] == 1
-    assert fresh.snack_times() == pytest.approx(desk.tracker.snack_times(), abs=0.01)
     # The open segment closes at the last logged event (a sample at 90 s), so up to 30 s is lost: 64 + 17.
     assert status["today"]["working_seconds"] == pytest.approx(81, abs=2)
     assert status["today"]["longest_streak_seconds"] >= 60

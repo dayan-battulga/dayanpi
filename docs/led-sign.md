@@ -15,13 +15,13 @@ The code is in `dayanpi/sign/`:
 | Page | What's on it |
 | --- | --- |
 | **Now** | A big icon for what you're doing, a label, how long you've been doing it, and today's phone pickups (little phone + number) in the top right. Fire + `FOCUSED` in amber, phone + `PHONE` in red, zzz + `AWAY` in dim blue, `?` in gray when it's not sure. |
-| **Today** | `FOCUS 3h12` and `PHONE 45m` in big numbers, with snacks (donut) and pickups (little phone) on the right. |
-| **Callout** | An icon on the left and a message sliding past it, like "Snack number 2." next to a donut, or "Sat down 30 seconds ago and already on the phone." next to a phone. |
+| **Today** | `FOCUS 3h12` and `PHONE 45m` in big numbers, with pickups (little phone + number) on the right of the PHONE row. |
+| **Callout** | An icon on the left and a message sliding past it, like "Break's over. Back to it." next to a warning sign, or "Sat down 30 seconds ago and already on the phone." next to a phone. |
 | **Day done** | A big green check, `DAY DONE`, today's focus and phone time, your longest focus streak (`BEST`), and pickups. |
 
 Times are short so they fit: `45s`, `12m`, `1h05`, `10h30`.
 
-The icons are `fire`, `phone`, `zzz`, `question`, `food` (a donut), `check`, `moon` and `alert`. A callout with any other icon name shows the question mark.
+The icons are `fire`, `phone`, `zzz`, `question`, `check`, `moon` and `alert`. A callout with any other icon name shows the question mark.
 
 Nothing ever goes above 200 out of 255 on any color, even at full brightness. Full white is blinding up close, and both panels on full white would pull about 8 A from a 4 A supply. Every page also takes a brightness from 0 to 1, for dimming at night.
 

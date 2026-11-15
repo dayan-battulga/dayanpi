@@ -81,7 +81,7 @@ def test_work_block_dims_the_sign_but_not_a_callout():
     controller = make_controller()
     controller._tracker.set_block(True, NOON)
     assert controller._brightness(NOON + 1) == sign_controller.AMBIENT_BRIGHTNESS
-    controller.show_callout(Callout("snack", "Snack number 1.", speak=False))
+    controller.show_callout(Callout("break_over", "Break's over. Back to it.", speak=False))
     controller.render(NOON + 1)
     assert controller._brightness(NOON + 1) == sign_controller.DAY_BRIGHTNESS
 
@@ -106,5 +106,5 @@ def test_loop_pushes_frames_to_every_output():
 def test_queue_is_bounded():
     controller = make_controller()
     for index in range(10):
-        controller.show_callout(Callout("snack", f"Snack number {index}.", speak=False))
+        controller.show_callout(Callout("break_over", f"Break {index} is over.", speak=False))
     assert len(controller._queue) == sign_controller.CALLOUT_QUEUE_MAX

@@ -32,12 +32,7 @@ PAD_VALUE = 114
 
 PERSON_CLASS_ID = 0
 PHONE_CLASS_ID = 67
-# COCO ids the zoomed pass also keeps, so snacks and drinks come for free.
-FOOD_CLASS_IDS = {45: "bowl", 46: "banana", 47: "apple", 48: "sandwich", 49: "orange", 52: "hot dog", 53: "pizza", 54: "donut", 55: "cake"}
-DRINK_CLASS_IDS = {39: "bottle", 40: "wine glass", 41: "cup"}
-LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone", **FOOD_CLASS_IDS, **DRINK_CLASS_IDS}
-FOOD_LABELS = set(FOOD_CLASS_IDS.values())
-DRINK_LABELS = set(DRINK_CLASS_IDS.values())
+LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone"}
 BOX_VALUES = 4
 
 MIN_CONFIDENCE = 0.15
@@ -90,19 +85,8 @@ class FrameReading:
     phones: list[Detection]
     faces: list[FaceReading]
     elapsed_ms: float
-    food: list[Detection] = field(default_factory=list)
-    drinks: list[Detection] = field(default_factory=list)
     poses: list = field(default_factory=list)  # pose.PoseDetection, only when the pose model runs
     side: "FrameReading | None" = None  # the side camera's own reading, when this one was merged from two
-
-
-@dataclass
-class ZoomedFinds:
-    """What the zoomed pass around the person turned up."""
-
-    phones: list[Detection] = field(default_factory=list)
-    food: list[Detection] = field(default_factory=list)
-    drinks: list[Detection] = field(default_factory=list)
 
 
 @dataclass
@@ -197,8 +181,10 @@ def map_row_to_frame(box_row: np.ndarray, letterbox: Letterbox) -> Box:
 def decode_objects(output: np.ndarray, letterbox: Letterbox) -> list[Detection]:
     """output is the raw YOLO tensor, shape (1, 4 + classes, anchors).
 
-    Each anchor counts only for its single best class, like Ultralytics does, so a
-    box that's mostly "person" doesn't also show up as a weak "phone".
+    Each anchor counts only for its single best class out of all 80, like Ultralytics
+    does, so a box that's mostly "person" doesn't also show up as a weak "phone".
+    Keep the argmax over all 80, not just person and phone: that's what stops a mouse
+    or a TV remote from counting as a phone.
     """
     predictions = output[0].T
     class_scores = predictions[:, BOX_VALUES:]
@@ -302,27 +288,10 @@ class FaceDetector:
         return faces
 
 
-def sort_zoomed_finds(found: list[Detection], region: Box) -> ZoomedFinds:
-    finds = ZoomedFinds()
-    for detection in found:
-        placed = Detection(
-            label=detection.label,
-            confidence=detection.confidence,
-            box=shift_box(detection.box, region.x1, region.y1),
-        )
-        if detection.label == "phone":
-            finds.phones.append(placed)
-        elif detection.label in FOOD_LABELS:
-            finds.food.append(placed)
-        elif detection.label in DRINK_LABELS:
-            finds.drinks.append(placed)
-    return finds
-
-
 class DeskScanner:
-    """Full-frame pass for people, zoomed pass for phones, food and drinks, plus faces.
+    """Full-frame pass for people, zoomed pass for phones, plus faces.
 
-    Phones, food and drinks only come from the zoomed pass, so no person means no zoomed pass.
+    Phones only come from the zoomed pass, so no person means no zoomed pass.
     """
 
     def __init__(
@@ -337,26 +306,28 @@ class DeskScanner:
         people = [detection for detection in self._objects.detect(image) if detection.label == "person"]
         return people
 
-    def scan_zoomed(self, image: np.ndarray, people: list[Detection]) -> ZoomedFinds:
-        finds = ZoomedFinds()
+    def find_phones(self, image: np.ndarray, people: list[Detection]) -> list[Detection]:
+        phones = []
         main_person = max(people, key=lambda person: person.confidence, default=None)
         if main_person is not None and main_person.confidence >= ZOOM_PERSON_MIN:
             frame_height, frame_width = image.shape[:2]
             region = find_zoom_region(main_person.box, frame_width, frame_height)
             crop = image[int(region.y1):int(region.y2), int(region.x1):int(region.x2)]
-            finds = sort_zoomed_finds(self._objects.detect(crop), region)
-        return finds
+            phones = [
+                Detection(label=found.label, confidence=found.confidence, box=shift_box(found.box, region.x1, region.y1))
+                for found in self._objects.detect(crop)
+                if found.label == "phone"
+            ]
+        return phones
 
     def scan(self, image: np.ndarray) -> FrameReading:
         started = time.perf_counter()
         people = self.find_people(image)
-        finds = self.scan_zoomed(image, people)
+        phones = self.find_phones(image, people)
         reading = FrameReading(
             people=people,
-            phones=finds.phones,
+            phones=phones,
             faces=self._faces.detect(image),
             elapsed_ms=(time.perf_counter() - started) * 1000,
-            food=finds.food,
-            drinks=finds.drinks,
         )
         return reading

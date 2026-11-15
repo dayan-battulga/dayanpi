@@ -24,8 +24,6 @@ PALETTE = {
     "b": (90, 140, 200),  # light blue
     "C": (40, 170, 190),  # cyan
     "G": (40, 190, 50),  # green
-    "P": (200, 70, 140),  # pink
-    "n": (170, 105, 40),  # tan
 }
 
 FONT = {
@@ -824,24 +822,6 @@ ICONS = {
         ".......LL.......",
         "................",
     ),
-    "food": (
-        "................",
-        ".....nnnnnn.....",
-        "...nnPPPPPPnn...",
-        "..nPPPPYPPPPPn..",
-        "..nPPBPPPPPGPn..",
-        ".nPPPPPPPPPPPPn.",
-        ".nPGPPP..PPPPPn.",
-        ".nPPPP....PPYPn.",
-        ".nPPPP....PPPPn.",
-        ".nPPYPP..PPBPPn.",
-        ".nPPPPPPPPPPPPn.",
-        "..nPPGPPPPPPPn..",
-        "..nnPPPPPPPPnn..",
-        "...nnnnnnnnnn...",
-        ".....nnnnnn.....",
-        "................",
-    ),
     "check": (
         "................",
         "................",
@@ -907,14 +887,5 @@ MINI_ICONS = {
         "LCCCL",
         "LL.LL",
         ".LLL.",
-    ),
-    "food": (
-        ".nPPPn.",
-        "nPPYPPn",
-        "PPP.PPP",
-        "PP...PP",
-        "PPP.PPP",
-        "nPPGPPn",
-        ".nnnnn.",
     ),
 }

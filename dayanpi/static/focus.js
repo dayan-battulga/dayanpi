@@ -39,7 +39,6 @@ const focusEls = {
   pickups: document.getElementById("focus-pickups"),
   ripple: document.getElementById("focus-ripple"),
   free: document.getElementById("focus-free"),
-  snacks: document.getElementById("focus-snacks"),
   best: document.getElementById("focus-best"),
   checkMs: document.getElementById("check-ms"),
   signImage: document.getElementById("sign-image"),
@@ -71,13 +70,11 @@ let latestFocus = null;
 let latestFocusAt = 0;
 let lastState = null;
 let lastPickups = null;
-let lastSnacks = null;
 let lastSignPage = null;
 let lastSignVersion = null;
 let signPictureLoading = false;
 let signBusy = false;
 let todaySegments = [];
-let todaySnacks = [];
 let timelineDrawn = false;
 let timelineStartHour = null;
 let liveSegment = null;
@@ -259,25 +256,22 @@ function describeLength(segment, now) {
   return text;
 }
 
-// State changes and snacks, newest first. A segment row's length keeps ticking while it's open.
-function buildTodayItems(known, snacks) {
+// State changes, newest first. A row's length keeps ticking while its segment is open.
+function buildTodayItems(known) {
   const items = known.map((segment, index) => ({
     at: segment.start,
     kind: segment.state,
     title: describeSegment(segment, known[index - 1]),
     segment,
   }));
-  snacks.forEach((at, index) => {
-    items.push({ at, kind: "snack", title: "Snack spotted", meta: `${index + 1} of ${snacks.length}` });
-  });
   items.sort((first, second) => second.at - first.at);
   const recent = items.slice(0, TODAY_LIST_LENGTH);
   return recent;
 }
 
-function renderToday(now, midnight, known) {
-  const recent = buildTodayItems(known, todaySnacks.filter((at) => at >= midnight));
-  const signature = recent.map((item) => `${item.kind}@${item.at}:${item.segment?.end == null}`).join("|");
+function renderToday(now, known) {
+  const recent = buildTodayItems(known);
+  const signature = recent.map((item) => `${item.kind}@${item.at}:${item.segment.end == null}`).join("|");
   if (signature !== todaySignature) {
     todaySignature = signature;
     todayMetas = [];
@@ -294,11 +288,8 @@ function renderToday(now, midnight, known) {
       what.className = "today-what";
       what.textContent = item.title;
       meta.className = "today-meta mono";
-      meta.textContent = item.meta ?? "";
       row.append(time, dot, what, meta);
-      if (item.segment != null) {
-        todayMetas.push({ el: meta, segment: item.segment });
-      }
+      todayMetas.push({ el: meta, segment: item.segment });
       return row;
     });
     if (rows.length === 0) {
@@ -335,12 +326,11 @@ async function refreshTimeline() {
     if (response.ok) {
       const body = await response.json();
       todaySegments = body.segments ?? [];
-      todaySnacks = body.snack_times ?? [];
       const now = Date.now() / 1000;
       const midnight = readLocalMidnight();
       const known = mergeKnownSegments(todaySegments, midnight);
       renderTimeline(now, midnight, known);
-      renderToday(now, midnight, known);
+      renderToday(now, known);
     }
   } catch (error) {
     // The next state change or the minute timer tries again.
@@ -468,7 +458,6 @@ function renderFocus(focus) {
   setText(focusEls.working, formatDuration(today.working_seconds));
   setText(focusEls.phone, formatDuration(today.phone_seconds));
   setText(focusEls.pickups, today.pickups);
-  setText(focusEls.snacks, today.snacks);
   setText(focusEls.best, formatDuration(today.longest_streak_seconds));
   if (lastPickups != null && today.pickups > lastPickups) {
     replayAnimation(focusEls.ripple, "rip");
@@ -520,9 +509,8 @@ window.addEventListener("dayanpi:snapshot", (event) => {
     latestFocusAt = Date.now();
     renderFocus(focus);
     tick();
-    if (focus.state !== lastState || focus.today.snacks !== lastSnacks) {
+    if (focus.state !== lastState) {
       lastState = focus.state;
-      lastSnacks = focus.today.snacks;
       refreshTimeline();
     }
   }

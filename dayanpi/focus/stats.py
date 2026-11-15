@@ -62,7 +62,7 @@ def format_day_line(totals: DayTotals) -> str:
     line = (
         f"{totals.day}  first {first}  focus {format_duration(totals.working_seconds):>6}  "
         f"phone {format_duration(totals.phone_seconds):>6}  pickups {totals.pickups:>3}  "
-        f"snacks {totals.snacks:>2}  best {format_duration(totals.longest_streak_seconds):>6}"
+        f"best {format_duration(totals.longest_streak_seconds):>6}"
     )
     return line
 

@@ -79,7 +79,6 @@ class TodayPage:
     working_seconds: float
     phone_seconds: float
     pickups: int
-    snacks: int
 
 
 @dataclass
@@ -309,32 +308,29 @@ def draw_stat_row(
     label: str,
     value: str,
     color: tuple[int, int, int],
-    badge_icon: str,
+    badge_icon: str | None,
     badge_text: str,
     top: int,
 ) -> None:
-    """One TodayPage row: small label level with the big value's middle, and a badge on the right
-    that a huge value gets clipped short of."""
-    value_area = Region(
-        left=0,
-        top=0,
-        right=find_badge_left(badge_icon, badge_text) - BADGE_GAP,
-        bottom=SIGN_HEIGHT,
-    )
+    """One TodayPage row: small label level with the big value's middle, and an optional badge on
+    the right that a huge value gets clipped short of. badge_icon None means no badge."""
+    value_right = SIGN_WIDTH if badge_icon is None else find_badge_left(badge_icon, badge_text) - BADGE_GAP
+    value_area = Region(left=0, top=0, right=value_right, bottom=SIGN_HEIGHT)
     draw_text(frame, label, TODAY_LABEL_LEFT, top + TODAY_LABEL_DROP, color)
     draw_text(frame, value, TODAY_VALUE_LEFT, top, color, scale=BIG_SCALE, clip=value_area)
-    draw_badge(frame, badge_icon, badge_text, top + TODAY_LABEL_DROP)
+    if badge_icon is not None:
+        draw_badge(frame, badge_icon, badge_text, top + TODAY_LABEL_DROP)
 
 
 def draw_today_page(frame: np.ndarray, page: TodayPage) -> None:
-    """FOCUS and PHONE totals, with snacks and pickups as badges."""
+    """FOCUS and PHONE totals, with pickups as a badge on the PHONE row."""
     draw_stat_row(
         frame,
         "FOCUS",
         format_duration(page.working_seconds),
         AMBER,
-        "food",
-        format_count(page.snacks),
+        None,
+        "",
         TODAY_FOCUS_TOP,
     )
     draw_stat_row(

@@ -1,13 +1,14 @@
 import pytest
 
 from dayanpi.focus.overlay import MAX_BOXES_PER_KIND, FrameSize, build_overlay
+from dayanpi.focus.tracker import PERSON_MIN, PHONE_MIN
 from dayanpi.vision.detector import Box, Detection, FrameReading
 
 SIZE = FrameSize(width=640, height=480)
 
 
-def make_reading(people=(), phones=(), food=(), drinks=()) -> FrameReading:
-    reading = FrameReading(people=list(people), phones=list(phones), faces=[], elapsed_ms=200.0, food=list(food), drinks=list(drinks))
+def make_reading(people=(), phones=()) -> FrameReading:
+    reading = FrameReading(people=list(people), phones=list(phones), faces=[], elapsed_ms=200.0)
     return reading
 
 
@@ -29,13 +30,11 @@ def test_boxes_that_spill_off_the_frame_are_clamped():
 
 def test_only_what_the_focus_rules_count_gets_a_box():
     reading = make_reading(
-        people=[Detection("person", 0.4, Box(0, 0, 10, 10))],
-        phones=[Detection("phone", 0.2, Box(0, 0, 10, 10)), Detection("phone", 0.3, Box(0, 0, 10, 10))],
-        food=[Detection("apple", 0.35, Box(0, 0, 10, 10))],
-        drinks=[Detection("cup", 0.29, Box(0, 0, 10, 10))],
+        people=[Detection("person", PERSON_MIN - 0.01, Box(0, 0, 10, 10))],
+        phones=[Detection("phone", PHONE_MIN - 0.01, Box(0, 0, 10, 10)), Detection("phone", PHONE_MIN, Box(0, 0, 10, 10))],
     )
     boxes = build_overlay(reading, SIZE, at=0.0)["boxes"]
-    assert [(box["kind"], box["label"]) for box in boxes] == [("phone", "phone"), ("food", "apple")]
+    assert [(box["kind"], box["confidence"]) for box in boxes] == [("phone", PHONE_MIN)]
 
 
 def test_each_kind_keeps_its_strongest_few():

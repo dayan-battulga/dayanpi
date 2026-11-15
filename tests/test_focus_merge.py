@@ -14,8 +14,6 @@ def make_reading(camera: str, face: FaceReading, pose: str, elapsed_ms: float) -
         phones=[Detection(f"{camera} phone", 0.6, BOX)],
         faces=[face],
         elapsed_ms=elapsed_ms,
-        food=[Detection(f"{camera} food", 0.5, BOX)],
-        drinks=[Detection(f"{camera} drink", 0.4, BOX)],
         poses=[pose],
     )
     return reading
@@ -26,14 +24,12 @@ def read_labels(detections: list[Detection]) -> list[str]:
     return labels
 
 
-def test_both_cameras_share_people_phones_food_and_drinks_but_only_the_front_has_faces_and_poses():
+def test_both_cameras_share_people_and_phones_but_only_the_front_has_faces_and_poses():
     front = make_reading("front", FRONT_FACE, FRONT_POSE, 200.0)
     side = make_reading("side", SIDE_FACE, SIDE_POSE, 180.0)
     merged = merge_readings(front, side)
     assert read_labels(merged.people) == ["front person", "side person"]
     assert read_labels(merged.phones) == ["front phone", "side phone"]
-    assert read_labels(merged.food) == ["front food", "side food"]
-    assert read_labels(merged.drinks) == ["front drink", "side drink"]
     assert merged.faces == [FRONT_FACE]
     assert merged.poses == [FRONT_POSE]
     assert merged.elapsed_ms == 380.0
@@ -59,8 +55,6 @@ def test_only_the_side_camera_gives_its_finds_with_no_faces_or_poses():
     merged = merge_readings(None, side)
     assert read_labels(merged.people) == ["side person"]
     assert read_labels(merged.phones) == ["side phone"]
-    assert read_labels(merged.food) == ["side food"]
-    assert read_labels(merged.drinks) == ["side drink"]
     assert merged.faces == []
     assert merged.poses == []
     assert merged.elapsed_ms == 180.0

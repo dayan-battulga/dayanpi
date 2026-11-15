@@ -23,8 +23,7 @@ from dayanpi.vision.detector import FrameReading, find_best_confidence
 logger = logging.getLogger(__name__)
 
 PERSON_MIN = 0.5
-PHONE_MIN = 0.25
-FOOD_MIN = 0.3
+PHONE_MIN = 0.5
 
 PHONE_WINDOW = 5  # checks
 PHONE_ENTER_HITS = 3  # hits in the window to count as "on phone"
@@ -32,10 +31,6 @@ PHONE_EXIT_HITS = 0  # hits in the window to count as done with it
 AWAY_AFTER_S = 10.0
 RETURN_CHECKS = 2  # person seen this many checks in a row to count as back
 NO_FRAME_UNKNOWN_S = 30.0
-
-SNACK_WINDOW = 5
-SNACK_ENTER_HITS = 3
-SNACK_END_S = 120.0  # food unseen this long ends the snack
 
 INSTANT_PICKUP_S = 60.0
 LATE_NIGHT_START_HOUR = 1
@@ -53,7 +48,9 @@ DATA_DIR_ENV = "DAYANPI_DATA_DIR"
 
 def find_focus_log_dir() -> Path:
     """focus_log/ inside DAYANPI_DATA_DIR, or inside data/ at the repo root."""
-    log_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR) / "focus_log"
+    log_dir = (
+        Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR) / "focus_log"
+    )
     return log_dir
 
 
@@ -71,7 +68,6 @@ class DayTotals:
     phone_seconds: float = 0.0
     away_seconds: float = 0.0
     pickups: int = 0
-    snacks: int = 0
     longest_streak_seconds: float = 0.0
     first_seen: float | None = None
 
@@ -92,14 +88,13 @@ class CheckSummary:
     at: float
     person: float = 0.0
     phone: float = 0.0
-    food: float = 0.0
-    drink: float = 0.0
     turn: float | None = None
     tilt: float | None = None
     elapsed_ms: float = 0.0
-    side_person: float | None = None  # the side camera's own best numbers; None means no side reading this check
+    side_person: float | None = (
+        None  # the side camera's own best numbers; None means no side reading this check
+    )
     side_phone: float | None = None
-    side_food: float | None = None
 
 
 @dataclass
@@ -115,8 +110,6 @@ class DayReplay:
     day: str
     segments: list[Segment] = field(default_factory=list)
     pickups: int = 0
-    snacks: int = 0
-    snack_times: list[float] = field(default_factory=list)
     block_active: bool = False
     day_done: bool = False
     last_ts: float | None = None
@@ -134,23 +127,26 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
     A "state" or "day_start" line opens a segment. A "restart" line means the service
     was down: the open segment closes at the last line before it (a sample at most 30 s
     old), not at the next state change, so an outage never counts as focus time. The
-    last open segment closes at the last line of any kind.
+    last open segment closes at the last line of any kind. Kinds it doesn't use, like
+    the "snack" lines in older logs, still count as lines but change nothing else.
     """
     replay = DayReplay(day=day)
-    todays = sorted((event for event in events if event.get("day") == day and "ts" in event), key=lambda event: event["ts"])
+    todays = sorted(
+        (event for event in events if event.get("day") == day and "ts" in event),
+        key=lambda event: event["ts"],
+    )
     for event in todays:
         kind = event.get("event")
         if kind in ("state", "day_start"):
             close_open_segment(replay.segments, event["ts"])
-            replay.segments.append(Segment(state=event.get("state", "unknown"), start=event["ts"]))
+            replay.segments.append(
+                Segment(state=event.get("state", "unknown"), start=event["ts"])
+            )
         elif kind == "restart":
             close_open_segment(replay.segments, replay.last_ts)
             replay.segments.append(Segment(state="unknown", start=event["ts"]))
         elif kind == "pickup":
             replay.pickups += 1
-        elif kind == "snack":
-            replay.snacks += 1
-            replay.snack_times.append(event["ts"])
         elif kind == "block":
             replay.block_active = event.get("action") == "start"
         elif kind == "callout" and event.get("name") == "day_done":
@@ -162,9 +158,12 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
 
 
 def total_day(replay: DayReplay) -> DayTotals:
-    totals = DayTotals(day=replay.day, pickups=replay.pickups, snacks=replay.snacks)
+    totals = DayTotals(day=replay.day, pickups=replay.pickups)
     for segment in replay.segments:
-        length = max(0.0, (segment.end if segment.end is not None else segment.start) - segment.start)
+        length = max(
+            0.0,
+            (segment.end if segment.end is not None else segment.start) - segment.start,
+        )
         if segment.state == "working":
             totals.working_seconds += length
             totals.longest_streak_seconds = max(totals.longest_streak_seconds, length)
@@ -202,8 +201,6 @@ def summarize_reading(reading: FrameReading, now: float) -> CheckSummary:
         at=now,
         person=find_best_confidence(reading.people),
         phone=find_best_confidence(reading.phones),
-        food=find_best_confidence(reading.food),
-        drink=find_best_confidence(reading.drinks),
         elapsed_ms=reading.elapsed_ms,
     )
     if reading.faces:
@@ -213,7 +210,6 @@ def summarize_reading(reading: FrameReading, now: float) -> CheckSummary:
     if reading.side is not None:
         summary.side_person = find_best_confidence(reading.side.people)
         summary.side_phone = find_best_confidence(reading.side.phones)
-        summary.side_food = find_best_confidence(reading.side.food)
     return summary
 
 
@@ -301,10 +297,6 @@ class FocusTracker:
         self._last_person_at: float | None = None
         self._consecutive_person = 0
         self._phone_hits: deque[bool] = deque(maxlen=PHONE_WINDOW)
-        self._food_hits: deque[bool] = deque(maxlen=SNACK_WINDOW)
-        self._snacking = False
-        self._snack_times: list[float] = []
-        self._last_food_at: float | None = None
         self._returned_at: float | None = None
         self._away_since: float | None = None
         self._break_over_fired = False
@@ -354,7 +346,14 @@ class FocusTracker:
         if changed:
             self._block_active = active
             self._break_over_fired = False
-            self._write({"event": "block", "action": "start" if active else "stop", "source": source}, now)
+            self._write(
+                {
+                    "event": "block",
+                    "action": "start" if active else "stop",
+                    "source": source,
+                },
+                now,
+            )
         return changed
 
     def status(self, now: float) -> dict:
@@ -365,11 +364,6 @@ class FocusTracker:
     def segments(self) -> list[dict]:
         with self._lock:
             copied = [asdict(segment) for segment in self._segments]
-        return copied
-
-    def snack_times(self) -> list[float]:
-        with self._lock:
-            copied = list(self._snack_times)
         return copied
 
     def restore(self, events: list[dict], now: float) -> int:
@@ -394,8 +388,6 @@ class FocusTracker:
             self._last_check = check
             self._note_person(check, now)
             self._phone_hits.append(check.phone >= PHONE_MIN)
-            self._food_hits.append(check.food >= FOOD_MIN)
-            callouts.extend(self._track_snacks(check, now))
             next_state = self._decide_state(now)
             self._maybe_log_sample(check, now)
 
@@ -428,7 +420,11 @@ class FocusTracker:
     def _decide_state(self, now: float) -> str:
         present = self._consecutive_person >= RETURN_CHECKS
         # Nobody seen yet counts from startup, so a restart with an empty desk settles on "away" too.
-        last_seen = self._last_person_at if self._last_person_at is not None else self._started_at
+        last_seen = (
+            self._last_person_at
+            if self._last_person_at is not None
+            else self._started_at
+        )
         gone_for = now - last_seen
         phone_hits = sum(self._phone_hits)
 
@@ -451,7 +447,9 @@ class FocusTracker:
         seconds_in_previous = now - self._state_since
 
         if previous == "working" and self._streak_start is not None:
-            self._totals.longest_streak_seconds = max(self._totals.longest_streak_seconds, now - self._streak_start)
+            self._totals.longest_streak_seconds = max(
+                self._totals.longest_streak_seconds, now - self._streak_start
+            )
         self._streak_start = now if next_state == "working" else None
 
         if previous == "away" and next_state in ("working", "phone"):
@@ -474,31 +472,62 @@ class FocusTracker:
         close_open_segment(self._segments, now)
         self._segments.append(Segment(state=next_state, start=now))
         self._trim_segments()
-        self._write({"event": "state", "state": next_state, "prev": previous, "seconds_in_prev": round(seconds_in_previous, 1)}, now)
+        self._write(
+            {
+                "event": "state",
+                "state": next_state,
+                "prev": previous,
+                "seconds_in_prev": round(seconds_in_previous, 1),
+            },
+            now,
+        )
         for callout in callouts:
-            self._write({"event": "callout", "name": callout.name, "text": callout.text}, now)
+            self._write(
+                {"event": "callout", "name": callout.name, "text": callout.text}, now
+            )
         return callouts
 
     def _callouts_on_pickup(self, now: float) -> list[Callout]:
         callouts: list[Callout] = []
-        if self._returned_at is not None and now - self._returned_at <= INSTANT_PICKUP_S:
+        if (
+            self._returned_at is not None
+            and now - self._returned_at <= INSTANT_PICKUP_S
+        ):
             since_return = format_spoken_duration(now - self._returned_at)
-            callouts.append(Callout("instant_pickup", f"Sat down {since_return} ago and already on the phone."))
-        if is_in_night_window(now, LATE_NIGHT_START_HOUR, LATE_NIGHT_END_HOUR) and not self._late_night_fired:
+            callouts.append(
+                Callout(
+                    "instant_pickup",
+                    f"Sat down {since_return} ago and already on the phone.",
+                )
+            )
+        if (
+            is_in_night_window(now, LATE_NIGHT_START_HOUR, LATE_NIGHT_END_HOUR)
+            and not self._late_night_fired
+        ):
             self._late_night_fired = True
-            callouts.append(Callout("late_night_phone", f"It's {read_local_hour(now)} in the morning. Put the phone down and go to sleep."))
+            callouts.append(
+                Callout(
+                    "late_night_phone",
+                    f"It's {read_local_hour(now)} in the morning. Put the phone down and go to sleep.",
+                )
+            )
         return callouts
 
     def _callouts_on_return(self, now: float) -> list[Callout]:
         callouts: list[Callout] = []
         if self._away_since is not None and now - self._away_since >= BREAK_OVER_S:
             away_for = format_spoken_duration(now - self._away_since)
-            callouts.append(Callout("long_break", f"Welcome back. That break ran {away_for}."))
+            callouts.append(
+                Callout("long_break", f"Welcome back. That break ran {away_for}.")
+            )
         return callouts
 
     def _callouts_on_leaving(self, now: float) -> list[Callout]:
         callouts: list[Callout] = []
-        if is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR) and not self._day_done_fired:
+        if (
+            is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR)
+            and not self._day_done_fired
+        ):
             self._day_done_fired = True
             callouts.append(Callout("day_done", self._day_done_text()))
         return callouts
@@ -515,27 +544,25 @@ class FocusTracker:
     def _track_break(self, now: float) -> list[Callout]:
         """Flags a break that's run long during a work block (logged + sign; the phone ping hooks in here later)."""
         callouts: list[Callout] = []
-        if self._block_active and self._state == "away" and self._away_since is not None and not self._break_over_fired:
+        if (
+            self._block_active
+            and self._state == "away"
+            and self._away_since is not None
+            and not self._break_over_fired
+        ):
             if now - self._away_since >= BREAK_OVER_S:
                 self._break_over_fired = True
-                callouts.append(Callout("break_over", "Break's over. Back to it.", speak=False))
-                self._write({"event": "callout", "name": "break_over", "text": callouts[-1].text}, now)
-        return callouts
-
-    def _track_snacks(self, check: CheckSummary, now: float) -> list[Callout]:
-        callouts: list[Callout] = []
-        if check.food >= FOOD_MIN:
-            self._last_food_at = now
-        food_hits = sum(self._food_hits)
-        if not self._snacking and food_hits >= SNACK_ENTER_HITS:
-            self._snacking = True
-            self._totals.snacks += 1
-            self._snack_times.append(now)
-            self._write({"event": "snack", "count": self._totals.snacks}, now)
-            callouts.append(Callout("snack", f"Snack number {self._totals.snacks}.", speak=False))
-        elif self._snacking and self._last_food_at is not None and now - self._last_food_at >= SNACK_END_S:
-            self._snacking = False
-            self._food_hits.clear()
+                callouts.append(
+                    Callout("break_over", "Break's over. Back to it.", speak=False)
+                )
+                self._write(
+                    {
+                        "event": "callout",
+                        "name": "break_over",
+                        "text": callouts[-1].text,
+                    },
+                    now,
+                )
         return callouts
 
     # ----- totals, segments, day rollover -----
@@ -546,7 +573,9 @@ class FocusTracker:
         if self._state == "working":
             self._totals.working_seconds += elapsed
             if self._streak_start is not None:
-                self._totals.longest_streak_seconds = max(self._totals.longest_streak_seconds, now - self._streak_start)
+                self._totals.longest_streak_seconds = max(
+                    self._totals.longest_streak_seconds, now - self._streak_start
+                )
         elif self._state == "phone":
             self._totals.phone_seconds += elapsed
         elif self._state == "away":
@@ -556,9 +585,12 @@ class FocusTracker:
         today = format_day(now)
         if today != self._totals.day:
             self._accumulate(now)
-            self._write({"event": "day_summary", **self._totals_dict()}, now, day=self._totals.day)
+            self._write(
+                {"event": "day_summary", **self._totals_dict()},
+                now,
+                day=self._totals.day,
+            )
             self._totals = DayTotals(day=today)
-            self._snack_times = []
             close_open_segment(self._segments, now)
             self._segments = [Segment(state=self._state, start=now)]
             if self._state == "working":
@@ -577,19 +609,20 @@ class FocusTracker:
                 "state": self._state,
                 "person": round(check.person, 2),
                 "phone": round(check.phone, 2),
-                "food": round(check.food, 2),
-                "drink": round(check.drink, 2),
                 "turn": None if check.turn is None else round(check.turn, 2),
                 "tilt": None if check.tilt is None else round(check.tilt, 2),
                 "ms": round(check.elapsed_ms),
                 "block": self._block_active,
                 "app": self._current_app,
-                "streak_s": None if self._streak_start is None else round(now - self._streak_start),
+                "streak_s": (
+                    None
+                    if self._streak_start is None
+                    else round(now - self._streak_start)
+                ),
             }
             if check.side_person is not None:
                 sample["side_person"] = round(check.side_person, 2)
                 sample["side_phone"] = round(check.side_phone, 2)
-                sample["side_food"] = round(check.side_food, 2)
             self._write(sample, now)
 
     def _write(self, event: dict, now: float, day: str | None = None) -> None:
@@ -601,12 +634,19 @@ class FocusTracker:
 
     def _totals_dict(self) -> dict:
         totals = asdict(self._totals)
-        for key in ("working_seconds", "phone_seconds", "away_seconds", "longest_streak_seconds"):
+        for key in (
+            "working_seconds",
+            "phone_seconds",
+            "away_seconds",
+            "longest_streak_seconds",
+        ):
             totals[key] = round(totals[key], 1)
         return totals
 
     def _status_locked(self, now: float) -> dict:
-        frame_age = None if self._last_frame_at is None else round(now - self._last_frame_at, 1)
+        frame_age = (
+            None if self._last_frame_at is None else round(now - self._last_frame_at, 1)
+        )
         status = {
             "state": self._state,
             "since": round(self._state_since, 3),
@@ -615,7 +655,9 @@ class FocusTracker:
             "block": {"active": self._block_active},
             "app": self._current_app,
             "camera_ok": frame_age is not None and frame_age < NO_FRAME_UNKNOWN_S,
-            "last_check": None if self._last_check is None else asdict(self._last_check),
+            "last_check": (
+                None if self._last_check is None else asdict(self._last_check)
+            ),
         }
         return status
 
@@ -624,7 +666,6 @@ class FocusTracker:
     def _restore_locked(self, events: list[dict], now: float) -> int:
         replay = replay_day(events, format_day(now))
         self._totals = total_day(replay)
-        self._snack_times = list(replay.snack_times)
         self._segments = replay.segments + [Segment(state="unknown", start=now)]
         self._trim_segments()
         self._state = "unknown"

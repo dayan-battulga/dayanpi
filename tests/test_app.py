@@ -109,7 +109,7 @@ def test_callouts_reach_the_voice(monkeypatch):
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     update = focus.FocusUpdate(
         state="phone",
-        callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("snack", "Snack 1.", speak=False)],
+        callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("break_over", "Break's over.", speak=False)],
     )
     app.handle_focus_update(update, time.time())
     assert said == ["Already?"]
@@ -166,11 +166,6 @@ def test_flipping_an_off_sign_says_so(monkeypatch):
         assert response.json()["detail"] == "Sign is off"
 
 
-def test_focus_api_lists_todays_snack_times():
-    with TestClient(app.app) as client:
-        assert client.get("/api/focus", auth=AUTH).json()["snack_times"] == []
-
-
 def test_callouts_and_gestures_reach_the_sign(monkeypatch):
     from dayanpi.focus import tracker as focus
 
@@ -179,7 +174,7 @@ def test_callouts_and_gestures_reach_the_sign(monkeypatch):
         controller = app.sign_controller
         assert controller is not None
         app.handle_focus_update(
-            focus.FocusUpdate(state="phone", callouts=[focus.Callout("snack", "Snack number 1.", speak=False)]),
+            focus.FocusUpdate(state="phone", callouts=[focus.Callout("break_over", "Break's over. Back to it.", speak=False)]),
             time.time(),
         )
         assert controller._queue or controller._active is not None

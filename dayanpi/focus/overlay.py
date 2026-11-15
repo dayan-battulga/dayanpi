@@ -8,7 +8,7 @@ Nothing here is logged.
 
 from dataclasses import dataclass
 
-from dayanpi.focus.tracker import FOOD_MIN, PERSON_MIN, PHONE_MIN
+from dayanpi.focus.tracker import PERSON_MIN, PHONE_MIN
 from dayanpi.vision.detector import Detection, FrameReading
 
 MAX_BOXES_PER_KIND = 3
@@ -26,7 +26,7 @@ def clamp_fraction(value: float) -> float:
 
 
 def place_box(kind: str, detection: Detection, size: FrameSize) -> dict:
-    """kind is person, phone, food or drink; x, y, width and height are fractions of the frame."""
+    """kind is person or phone; x, y, width and height are fractions of the frame."""
     left = clamp_fraction(detection.box.x1 / size.width)
     top = clamp_fraction(detection.box.y1 / size.height)
     right = clamp_fraction(detection.box.x2 / size.width)
@@ -48,8 +48,6 @@ def build_overlay(reading: FrameReading, size: FrameSize, at: float) -> dict:
     groups = (
         ("person", reading.people, PERSON_MIN),
         ("phone", reading.phones, PHONE_MIN),
-        ("food", reading.food, FOOD_MIN),
-        ("drink", reading.drinks, FOOD_MIN),
     )
     boxes = []
     for kind, detections, cutoff in groups:

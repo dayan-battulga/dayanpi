@@ -95,7 +95,7 @@ Once the models are in `models/`, the site runs the detector by itself, about on
 
 The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `dayanpi/focus/tracker.py` if they need tuning.
 
-**What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), snacks (food spotted in 3 of 5 checks; one snack per sitting), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
+**What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
 **The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6), today's totals and a **Start block** button. A work block is just a flag for now: while it's on, the sign dims to ambient and a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
 
@@ -106,11 +106,10 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 - *long break*: you come back after 15+ minutes away
 - *break over*: 15 minutes away during a work block
 - *day done*: you leave after 10 pm (once a night, with the day's totals)
-- *snack*: sign and log only, when a snack starts ("Snack number 2.")
 
 Gestures get a `gesture` line in the log too, and the both-hands gesture says "Block started." / "Block stopped."
 
-**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, snacks, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone / food confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks; the restart and the stats tool just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
 
 Check it's filling up:
 
@@ -154,7 +153,7 @@ Every check grabs a new frame from each camera and gives each one its own full s
 
 | What | Comes from |
 | --- | --- |
-| People, phones, food, drinks | Both cameras |
+| People, phones | Both cameras |
 | Face turn and tilt, gestures | The front camera only, because they assume the straight-on view |
 
 What that means day to day:
@@ -162,10 +161,10 @@ What that means day to day:
 - **You count as there if either camera sees you.** So **away** needs both to lose you, and someone walking through the side view can hold it off.
 - **A phone either camera sees counts.** That's the point, but a false alarm from either one counts too. The cutoffs were tuned on front-view frames, so watch for pickups that didn't happen.
 - **The side camera has to see you first.** It only does the zoomed phone pass when it finds a person at 0.5 or above. If it only catches part of you, a phone in your lap never gets looked at. `side_person` in the log tells you.
-- **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people, phones and food but no face numbers or gestures. With neither, it goes to **unknown** after 30 s.
+- **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people and phones but no face numbers or gestures. With neither, it goes to **unknown** after 30 s.
 - **A dead front camera doesn't look dead.** The tracker keeps running off the side camera and the card looks normal, but gestures stop. What gives it away is the front feed stopping and `camera read failing` in the journal.
 
-**Which camera caught it?** Sample lines gain `side_person`, `side_phone` and `side_food`, the side camera's own best numbers. The usual `person`, `phone` and `food` are the best of both cameras, so if `phone` is higher than `side_phone`, the front camera saw it better. If they match, the side did at least as well. No `side_` fields means the side camera gave no frame for that check. Samples only come every 30 s, so they show the long stretches, and a quick pickup can fall between them.
+**Which camera caught it?** Sample lines gain `side_person` and `side_phone`, the side camera's own best numbers. The usual `person` and `phone` are the best of both cameras, so if `phone` is higher than `side_phone`, the front camera saw it better. If they match, the side did at least as well. No `side_` fields means the side camera gave no frame for that check. Samples only come every 30 s, so they show the long stretches, and a quick pickup can fall between them.
 
 ```bash
 cd ~/Desktop/site-page/dayanpi

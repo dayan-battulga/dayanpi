@@ -41,7 +41,6 @@ CALLOUT_ICONS = {
     "long_break": "check",
     "break_over": "alert",
     "day_done": "check",
-    "snack": "food",
 }
 CALLOUT_COLORS = {
     "instant_pickup": (200, 40, 40),
@@ -49,7 +48,6 @@ CALLOUT_COLORS = {
     "long_break": (60, 160, 90),
     "break_over": (200, 120, 0),
     "day_done": (60, 160, 90),
-    "snack": (200, 140, 40),
 }
 DEFAULT_CALLOUT_COLOR = (200, 200, 200)
 
@@ -137,7 +135,6 @@ class SignController(LoopThread):
                 working_seconds=today["working_seconds"],
                 phone_seconds=today["phone_seconds"],
                 pickups=today["pickups"],
-                snacks=today["snacks"],
             )
         elif self._page == "summary":
             page = SummaryPage(

@@ -317,11 +317,11 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 ## The dashboard
 
-- **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, snacks, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person, phone, food and drink), then the LED sign preview (the dots show which page it's on) and a list of today's last few changes and snacks.
+- **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the LED sign preview (the dots show which page it's on) and a list of today's last few changes.
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
-- **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color, a phone in orange, food or drink in white, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
+- **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
 - **Two cameras.** With `DAYANPI_CAMERA=both`, the Camera card shows both feeds, labeled Front and Side, each with its own boxes. They sit side by side on a wide screen and stack on a phone. The one Peek button opens and closes both, and "What the Pi sees" shows the best of the two cameras. With one camera the card looks the way it always has.
 - **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
 - **Animations** turn themselves off if your device is set to reduce motion.

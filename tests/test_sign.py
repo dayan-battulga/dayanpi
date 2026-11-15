@@ -29,7 +29,7 @@ from dayanpi.sign.renderer import (
 )
 
 PIOMATTER = "adafruit_blinka_raspberry_pi5_piomatter"
-REQUIRED_ICONS = ["fire", "phone", "zzz", "question", "food", "check", "moon", "alert"]
+REQUIRED_ICONS = ["fire", "phone", "zzz", "question", "check", "moon", "alert"]
 STATES = ["working", "phone", "away", "unknown"]
 HOURS_99 = 99 * 3600
 PINK = (200, 80, 140)
@@ -201,10 +201,10 @@ def test_now_page_survives_extremes(seconds, pickups):
 @pytest.mark.parametrize(
     "page",
     [
-        TodayPage(working_seconds=3 * 3600 + 12 * 60, phone_seconds=45 * 60, pickups=14, snacks=2),
-        TodayPage(working_seconds=0, phone_seconds=0, pickups=0, snacks=0),
-        TodayPage(working_seconds=HOURS_99, phone_seconds=HOURS_99, pickups=9999, snacks=9999),
-        TodayPage(working_seconds=math.inf, phone_seconds=math.nan, pickups=10**12, snacks=10**12),
+        TodayPage(working_seconds=3 * 3600 + 12 * 60, phone_seconds=45 * 60, pickups=14),
+        TodayPage(working_seconds=0, phone_seconds=0, pickups=0),
+        TodayPage(working_seconds=HOURS_99, phone_seconds=HOURS_99, pickups=9999),
+        TodayPage(working_seconds=math.inf, phone_seconds=math.nan, pickups=10**12),
     ],
 )
 def test_today_page_renders(page):
@@ -225,7 +225,7 @@ def test_summary_page_renders(page):
 
 @pytest.mark.parametrize("icon", sorted(sign_glyphs.ICONS))
 def test_callout_page_renders_every_icon(icon):
-    assert_is_frame(render_page(CalloutPage(text="Snack time!", icon=icon, color=PINK)))
+    assert_is_frame(render_page(CalloutPage(text="Back to it!", icon=icon, color=PINK)))
 
 
 def test_callout_with_an_unknown_icon_shows_the_question_mark():
@@ -236,13 +236,13 @@ def test_callout_with_an_unknown_icon_shows_the_question_mark():
 
 def test_callout_width_is_the_width_of_the_scrolling_text():
     assert measure_callout("") == 0
-    assert measure_callout("Snack time") == measure_text("Snack time", sign.CALLOUT_TEXT_SCALE)
+    assert measure_callout("Back to it") == measure_text("Back to it", sign.CALLOUT_TEXT_SCALE)
 
 
 def test_callout_text_is_gone_once_scrolled_by_callout_width():
-    text = "Snack time"
-    almost_gone = render_page(CalloutPage(text, "food", PINK, scroll_px=measure_callout(text) - 1))
-    gone = render_page(CalloutPage(text, "food", PINK, scroll_px=measure_callout(text)))
+    text = "Back to it"
+    almost_gone = render_page(CalloutPage(text, "check", PINK, scroll_px=measure_callout(text) - 1))
+    gone = render_page(CalloutPage(text, "check", PINK, scroll_px=measure_callout(text)))
     assert crop_text_area(almost_gone).any()
     assert not crop_text_area(gone).any()
 
@@ -250,8 +250,8 @@ def test_callout_text_is_gone_once_scrolled_by_callout_width():
 @pytest.mark.parametrize("scroll_px", [-10**12, -500, -40, 0, 7, 100, 10**12, math.inf, math.nan])
 def test_callout_text_never_spills_into_the_icon_area(scroll_px):
     long_text = "W" * 10_000
-    with_text = render_page(CalloutPage(long_text, "food", (200, 200, 200), scroll_px=scroll_px))
-    icon_only = render_page(CalloutPage("", "food", (200, 200, 200)))
+    with_text = render_page(CalloutPage(long_text, "check", (200, 200, 200), scroll_px=scroll_px))
+    icon_only = render_page(CalloutPage("", "check", (200, 200, 200)))
     assert_is_frame(with_text)
     assert np.array_equal(crop_icon_area(with_text), crop_icon_area(icon_only))
 
@@ -281,7 +281,7 @@ def test_brightness_zero_or_bad_is_dark(brightness):
 
 
 def test_brightness_above_one_is_full():
-    page = TodayPage(3600, 60, 2, 1)
+    page = TodayPage(3600, 60, 2)
     assert np.array_equal(render_page(page, brightness=7), render_page(page))
 
 
@@ -292,7 +292,7 @@ def test_render_page_rejects_things_that_are_not_pages():
 
 @pytest.mark.parametrize("scale", [1, 3, 6])
 def test_preview_png_decodes_to_the_scaled_size(scale):
-    image = decode_png(render_preview_png(render_page(TodayPage(3600, 60, 2, 1)), scale))
+    image = decode_png(render_preview_png(render_page(TodayPage(3600, 60, 2)), scale))
     assert image.shape == (32 * scale, 128 * scale, 3)
 
 
@@ -450,7 +450,7 @@ def test_panel_output_copies_each_frame_in_then_shows_it(fake_piomatter):
     matrix = fake_piomatter.matrices[0]
     framebuffer = matrix.framebuffer
     first = render_page(NowPage("working", 60, 0))
-    second = render_page(TodayPage(3600, 60, 2, 1))
+    second = render_page(TodayPage(3600, 60, 2))
 
     panel.show(first)
     panel.show(second)
@@ -458,6 +458,6 @@ def test_panel_output_copies_each_frame_in_then_shows_it(fake_piomatter):
 
     assert len(matrix.shown) == 2
     assert np.array_equal(matrix.shown[0], first)
-    assert np.array_equal(matrix.shown[1], render_page(TodayPage(3600, 60, 2, 1)))
+    assert np.array_equal(matrix.shown[1], render_page(TodayPage(3600, 60, 2)))
     assert matrix.framebuffer is framebuffer
     assert framebuffer.any()

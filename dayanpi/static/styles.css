@@ -715,12 +715,6 @@ ol {
   transition: background-color 0.6s var(--ease);
 }
 
-/* Food and drink boxes are always light, so their labels need dark text in both themes. */
-.box.is-food .box-label,
-.box.is-drink .box-label {
-  color: #111113;
-}
-
 /* A box touching the top edge would push its label off the frame, so it goes inside. */
 .box.label-inside .box-label {
   top: 6px;
