@@ -74,7 +74,7 @@ class DayTotals:
 
 @dataclass
 class Callout:
-    """Something worth telling Dayan. speak=False means log/sign only (nobody's in the room)."""
+    """Something worth telling Dayan. speak=False means log only (nobody's in the room)."""
 
     name: str
     text: str
@@ -542,7 +542,7 @@ class FocusTracker:
         return text
 
     def _track_break(self, now: float) -> list[Callout]:
-        """Flags a break that's run long during a work block (logged + sign; the phone ping hooks in here later)."""
+        """Flags a break that's run long during a work block (logged only; the phone ping hooks in here later)."""
         callouts: list[Callout] = []
         if (
             self._block_active
