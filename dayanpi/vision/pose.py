@@ -1,7 +1,8 @@
 """Finds people's body points (shoulders, wrists and so on) in one camera frame.
 
 models/yolo11n-pose_480x640.onnx is Ultralytics' YOLO11 nano pose model, exported at the
-camera's 640x480 size and run through plain OpenCV, same as detector.py. Each hit is a person
+webcam's 640x480 and run through plain OpenCV, same as detector.py (other frame sizes get
+padded to fit the same way). Each hit is a person
 box plus 17 COCO keypoints. Left and right are the person's own sides, so with the camera
 facing you, your right wrist shows up on the left half of the image.
 """

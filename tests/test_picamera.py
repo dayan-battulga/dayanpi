@@ -155,7 +155,7 @@ def run_stream(stream: CameraStream):
         stream.stop()
 
 
-def test_pi_stream_serves_640x480_jpegs_in_the_right_colors(cameras):
+def test_pi_stream_serves_768x432_jpegs_in_the_right_colors(cameras):
     with run_stream(PiCameraStream()) as stream:
         result = stream.frame_after(-1, timeout=FRAME_TIMEOUT_S)
         assert stream.latest_frame() is not None
@@ -164,8 +164,8 @@ def test_pi_stream_serves_640x480_jpegs_in_the_right_colors(cameras):
     assert frame_id >= 1
     assert jpeg[:2] == b"\xff\xd8"
     image = decode_jpeg(jpeg)
-    assert image.shape == (480, 640, 3)
-    assert np.abs(image[240, 320].astype(int) - BLUE).max() <= 3
+    assert image.shape == (432, 768, 3)
+    assert np.abs(image[216, 384].astype(int) - BLUE).max() <= 3
 
 
 def test_pi_stream_asks_for_rgb888_at_15fps_with_autofocus_and_the_full_view(cameras):
@@ -173,7 +173,7 @@ def test_pi_stream_asks_for_rgb888_at_15fps_with_autofocus_and_the_full_view(cam
         assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
     opened = cameras.opened[0]
     assert opened.configuration == {
-        "main": {"size": (640, 480), "format": "RGB888"},
+        "main": {"size": (768, 432), "format": "RGB888"},
         "sensor": {"output_size": (2304, 1296), "bit_depth": 10},
         "controls": {"FrameDurationLimits": (66667, 66667)},
     }
@@ -215,6 +215,7 @@ def test_rotation_180_has_the_camera_flip_the_picture(cameras, monkeypatch, sett
     with run_stream(create()) as stream:
         assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
     assert cameras.opened[0].configuration["transform"] == types.SimpleNamespace(hflip=1, vflip=1)
+    assert cameras.opened[0].configuration["main"]["size"] == (768, 432)
 
 
 @pytest.mark.parametrize("setting", [None, "", "0", " 0 "])
@@ -224,6 +225,7 @@ def test_no_rotation_leaves_the_transform_out(cameras, monkeypatch, setting):
     with run_stream(PiCameraStream()) as stream:
         assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
     assert "transform" not in cameras.opened[0].configuration
+    assert cameras.opened[0].configuration["main"]["size"] == (768, 432)
 
 
 @pytest.mark.parametrize("setting", ["90", "upside down"])

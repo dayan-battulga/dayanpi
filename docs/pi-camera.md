@@ -2,7 +2,7 @@
 
 Part of the dayanpi docs. Setting up and running the Pi is in the [manual](MANUAL.md).
 
-The app can use the ribbon-cable Pi camera, the USB webcam, or [both at once](#using-both-cameras). By default (`DAYANPI_CAMERA=auto`) it uses the Pi camera whenever it finds one and falls back to the webcam otherwise. Nothing else changes: same 640x480 picture, same `/video` stream, same detector.
+The app can use the ribbon-cable Pi camera, the USB webcam, or [both at once](#using-both-cameras). By default (`DAYANPI_CAMERA=auto`) it uses the Pi camera whenever it finds one and falls back to the webcam otherwise. Nothing else changes: same `/video` stream, same detector. The only difference is the picture's shape: the webcam gives 640x480 (4:3) and the Pi camera 768x432 (16:9), so you get the Wide lens's whole width.
 
 ## 1. Plug it in
 
@@ -175,7 +175,8 @@ INFO dayanpi.hardware.camera: side camera: USB webcam at /dev/v4l/by-id/usb-...-
 
 ## What's different about the Pi camera
 
-- **Wider view.** The Wide sees about 102° across and 67° top to bottom. The app reads the whole sensor and trims the sides to make the 4:3 picture, which comes out to roughly 85° across. Left to its default, Picamera2 would only read the middle of the sensor at this size (roughly 63° by 48°).
+- **Wider view.** The Wide sees about 102° across and 67° top to bottom, and the app keeps all of it: it reads the whole sensor and asks for a 768x432 picture, which is 16:9 like the sensor. A 4:3 picture like 640x480 would make the camera trim the sides, down to roughly 85° across. Left to its default, Picamera2 would only read the middle of the sensor (roughly 79° by 48°).
+- **16:9 all the way through.** 768x432 is about as many pixels as 640x480, so it costs the Pi about the same. The detector shrinks it to 640x360 and pads the top and bottom to fit its 640x480 input, then maps the boxes back. The dashboard's Camera card takes the shape of each feed, so the boxes still land on the right spot. One catch: the full-frame pass sees you about 25% smaller than with the old 4:3 picture, since the same input now covers a wider view. If `person` drops a lot in the sample lines, that's why. The zoomed phone pass crops the 768x432 frame itself, so it only has about 10% less detail to work with.
 - **Autofocus** runs the whole time, so it stays sharp whether you lean in or sit back. It can focus as close as about 5 cm.
 - **15 frames a second.** The webcam hands over ready-made JPEGs, but the Pi camera's frames get turned into JPEGs on the Pi, so it runs a bit slower to leave CPU for the detector.
 - **Picture upside down?** One line in `/etc/dayanpi.env` fixes it. See [Upside-down picture](#upside-down-picture).
@@ -210,6 +211,7 @@ These live at the top of `dayanpi/hardware/camera.py`. Change them on the Mac, p
 | Knob | Default | What it does |
 | --- | --- | --- |
 | `PICAMERA_FPS` | `15` | Frames per second from the Pi camera. Higher is smoother but costs more CPU. |
+| `PICAMERA_WIDTH`, `PICAMERA_HEIGHT` | `768`, `432` | The Pi camera's picture size. Keep it 16:9 or the camera trims the sides. Bigger costs more CPU for the JPEGs and the zoomed phone pass, but the full-frame pass always shrinks it to 640 wide anyway. The webcam stays at 640x480 (`FRAME_WIDTH`, `FRAME_HEIGHT`). |
 | `PICAMERA_JPEG_QUALITY` | `80` | JPEG quality, from 0 to 100. Higher means sharper but bigger frames. |
 | `PICAMERA_FULL_VIEW` | `True` | `True` is the whole wide view. `False` lets Picamera2 use its faster mode, which crops the middle, so it looks zoomed in and you're bigger in the frame. Worth a try if the phone check gets worse with the wide view. |
 

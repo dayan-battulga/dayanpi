@@ -11,7 +11,7 @@ import numpy as np
 # Tunables — change these in one place only.
 DEVICE_PATH = "/dev/video0"
 USB_BY_ID_PATTERN = "/dev/v4l/by-id/*-video-index0"
-FRAME_WIDTH = 640
+FRAME_WIDTH = 640  # the USB webcam; the Pi camera has its own size below
 FRAME_HEIGHT = 480
 FRAME_SKIP = 2  # keep 1 of every N frames when streaming
 RECONNECT_SLEEP_S = 1.0
@@ -23,6 +23,10 @@ STOP_JOIN_TIMEOUT_S = 2.0
 PICAMERA_INDEX = 0  # which Pi camera if two are plugged in; USB webcams don't count
 PICAMERA_FORMAT = "RGB888"  # despite the name, Picamera2's RGB888 is B, G, R in memory: OpenCV's order
 PICAMERA_FPS = 15
+# 16:9 like the sensor, so the Wide lens keeps its full width (a 4:3 size makes the ISP crop the sides).
+# About as many pixels as 640x480, so it costs about the same.
+PICAMERA_WIDTH = 768
+PICAMERA_HEIGHT = 432
 PICAMERA_JPEG_QUALITY = 80
 PICAMERA_FULL_VIEW = True  # read the whole sensor; False lets Picamera2 pick a mode that crops the middle
 PICAMERA_CAPTURE_TIMEOUT_S = 1.0  # keep under STOP_JOIN_TIMEOUT_S so stop() can join the capture thread
@@ -254,7 +258,7 @@ class PiCameraCapture:
 
             flip = {"transform": Transform(hflip=1, vflip=1)}
         configuration = self._camera.create_video_configuration(
-            main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": PICAMERA_FORMAT},
+            main={"size": (PICAMERA_WIDTH, PICAMERA_HEIGHT), "format": PICAMERA_FORMAT},
             sensor=sensor,
             controls={"FrameDurationLimits": (frame_duration_us, frame_duration_us)},
             **flip,

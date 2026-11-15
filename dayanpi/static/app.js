@@ -339,6 +339,11 @@ function handleFeedError(feed) {
 function handleFeedLoad(feed) {
   if (feed.state !== "off") {
     setFeedState(feed, "live");
+    // focus.js also does this from each overlay, but the focus tracker can be off, and
+    // the 4:3 placeholder would crop a 16:9 picture (the img is drawn with object-fit: cover).
+    if (feed.image.naturalWidth > 0) {
+      feed.frame.style.aspectRatio = `${feed.image.naturalWidth} / ${feed.image.naturalHeight}`;
+    }
   }
 }
 

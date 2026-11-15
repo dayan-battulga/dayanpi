@@ -188,12 +188,52 @@ def test_scanner_skips_the_zoom_without_a_clear_person():
     assert reading.phones == []
 
 
+class ColorPatchNet:
+    """Stands in for the YOLO net: white pixels are a person and pure red ones a phone, boxed in model-input pixels."""
+
+    def setInput(self, blob: np.ndarray) -> None:
+        self.blob = blob
+
+    def forward(self) -> np.ndarray:
+        red, green, blue = self.blob[0]  # make_blob hands over RGB
+        masks = {
+            detector.PERSON_CLASS_ID: (red > 0.9) & (green > 0.9) & (blue > 0.9),
+            detector.PHONE_CLASS_ID: (red > 0.9) & (green < 0.1) & (blue < 0.1),
+        }
+        anchors = []
+        for class_id, mask in masks.items():
+            rows, columns = np.nonzero(mask)
+            if len(rows) > 0:
+                left, right, top, bottom = columns.min(), columns.max() + 1, rows.min(), rows.max() + 1
+                center_box = ((left + right) / 2, (top + bottom) / 2, right - left, bottom - top)
+                anchors.append({"box": center_box, "scores": {class_id: 0.9}})
+        output = make_output(anchors)
+        return output
+
+
+def test_a_16_9_frame_gets_its_boxes_back_where_they_were_drawn(monkeypatch):
+    # The Pi camera's 768x432 reaches the model shrunk to 640x360, with 60 px of padding above and below.
+    monkeypatch.setattr(detector.cv2.dnn, "readNetFromONNX", lambda path: ColorPatchNet())
+    frame = np.zeros((432, 768, 3), np.uint8)
+    frame[60:400, 420:760] = (255, 255, 255)
+    frame[300:340, 690:740] = (0, 0, 255)  # BGR red, out past where a 4:3 crop would have cut the frame off
+
+    reading = DeskScanner(face_detector=FakeFaceDetector()).scan(frame)
+
+    assert len(reading.people) == 1
+    assert len(reading.phones) == 1
+    person, phone = reading.people[0].box, reading.phones[0].box
+    assert [person.x1, person.y1, person.x2, person.y2] == pytest.approx([420, 60, 760, 400], abs=2)
+    assert [phone.x1, phone.y1, phone.x2, phone.y2] == pytest.approx([690, 300, 740, 340], abs=2)
+
+
 @pytest.mark.skipif(
     not (detector.OBJECT_MODEL_PATH.exists() and detector.FACE_MODEL_PATH.exists()),
     reason="model files not in models/",
 )
-def test_real_models_find_nothing_in_a_blank_frame():
-    reading = DeskScanner().scan(np.full((480, 640, 3), 128, np.uint8))
+@pytest.mark.parametrize("shape", [(480, 640, 3), (432, 768, 3)])
+def test_real_models_find_nothing_in_a_blank_frame(shape):
+    reading = DeskScanner().scan(np.full(shape, 128, np.uint8))
     assert reading.people == []
     assert reading.phones == []
     assert reading.faces == []

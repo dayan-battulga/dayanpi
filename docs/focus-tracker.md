@@ -59,7 +59,7 @@ If it says **No camera frames**, the service is still running. Run `sudo systemc
 ## Where the models come from
 
 - `models/face_detection_yunet_2023mar.onnx` is YuNet from OpenCV's model zoo (github.com/opencv/opencv_zoo, MIT license).
-- `models/yolo26n_480x640.onnx` is Ultralytics' YOLO26 nano (AGPL-3.0), converted to ONNX at the camera's 640x480 size. The original weights are a PyTorch file, so the conversion happens on the Mac, not the Pi. To redo it (`-U` matters if you're reusing an old `/tmp/yolo-export`: older Ultralytics doesn't know `yolo26n`):
+- `models/yolo26n_480x640.onnx` is Ultralytics' YOLO26 nano (AGPL-3.0), converted to ONNX at 640x480 (the webcam's size; the Pi camera's 768x432 gets padded to fit). The original weights are a PyTorch file, so the conversion happens on the Mac, not the Pi. To redo it (`-U` matters if you're reusing an old `/tmp/yolo-export`: older Ultralytics doesn't know `yolo26n`):
 
 ```bash
 python3 -m venv /tmp/yolo-export

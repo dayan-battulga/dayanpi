@@ -2,7 +2,8 @@
 
 Two small ONNX models run through plain OpenCV, so the Pi needs nothing new:
 - models/yolo26n_480x640.onnx: YOLO26 nano trained on COCO, exported at the
-  camera's own 640x480 size. COCO already has "person" and "cell phone".
+  webcam's 640x480. Other sizes, like the Pi camera's 16:9 768x432, get shrunk
+  and padded to fit (fit_to_input). COCO already has "person" and "cell phone".
 - models/face_detection_yunet_2023mar.onnx: OpenCV's YuNet face detector. It
   gives 5 face points (eyes, nose tip, mouth corners), which is enough for a
   rough "facing the screen vs. looking down or away".
