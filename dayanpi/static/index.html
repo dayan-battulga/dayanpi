@@ -106,13 +106,21 @@
               <h2 class="label">Camera</h2>
               <span id="camera-status" class="mono muted small">hidden · nothing saved</span>
             </div>
-            <button type="button" id="peek-toggle" class="button button-ghost button-small" aria-pressed="false">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              <span id="peek-label">Peek</span>
-            </button>
+            <div class="head-buttons">
+              <button type="button" id="camera-flip" class="button button-ghost button-small" hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 8h13l-3-3M20 16H7l3 3"></path>
+                </svg>
+                <span id="camera-flip-label">Side</span>
+              </button>
+              <button type="button" id="peek-toggle" class="button button-ghost button-small" aria-pressed="false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span id="peek-label">Peek</span>
+              </button>
+            </div>
           </div>
           <div class="camera-body">
             <div class="feeds">

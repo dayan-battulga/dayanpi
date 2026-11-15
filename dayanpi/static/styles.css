@@ -612,22 +612,9 @@ ol {
   background: var(--sunken);
 }
 
-.camera.has-side .feeds {
-  flex-basis: 100%;
-}
-
-/* Stretching a frame to match its neighbor would crop its picture and throw off its boxes. */
-.camera.has-side .feed-frame {
-  align-self: flex-start;
-}
-
-.camera.has-side .reading-rows {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.camera.has-side .readings-foot {
-  margin-top: 18px;
+.head-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 .feed-label {

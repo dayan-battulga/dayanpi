@@ -42,6 +42,8 @@ const els = {
   cameraStatus: document.getElementById("camera-status"),
   peekToggle: document.getElementById("peek-toggle"),
   peekLabel: document.getElementById("peek-label"),
+  cameraFlip: document.getElementById("camera-flip"),
+  cameraFlipLabel: document.getElementById("camera-flip-label"),
 };
 
 const feeds = Array.from(document.querySelectorAll(".feed-frame")).map((frame) => ({
@@ -52,6 +54,8 @@ const feeds = Array.from(document.querySelectorAll(".feed-frame")).map((frame) =
   retryTimer: null,
 }));
 const sideFeed = feeds[1];
+let sidePresent = false;
+let cameraView = readStored("camera", "front") === "side" ? "side" : "front";
 
 let events = null;
 let themeFadeTimer = null;
@@ -318,14 +322,34 @@ function setPeek(peeking) {
   feeds.forEach((feed) => syncFeed(feed));
 }
 
-// Every snapshot calls this, so it only acts on a change. It opens a stream only while peeking.
-function setSideCamera(present) {
-  const showing = !sideFeed.frame.hidden;
-  if (present !== showing) {
-    sideFeed.frame.hidden = !present;
-    els.camera.classList.toggle("has-side", present);
-    syncFeed(sideFeed);
+// One feed at a time: the hidden one's stream stays closed, and a feed only reconnects when it changes.
+function showCameraView() {
+  const onSide = sidePresent && cameraView === "side";
+  for (const feed of feeds) {
+    const hidden = feed === sideFeed ? !onSide : onSide;
+    if (feed.frame.hidden !== hidden) {
+      feed.frame.hidden = hidden;
+      syncFeed(feed);
+    }
   }
+  els.camera.classList.toggle("has-side", sidePresent);
+  els.cameraFlip.hidden = !sidePresent;
+  els.cameraFlipLabel.textContent = onSide ? "Front" : "Side";
+  els.cameraFlip.setAttribute("aria-label", onSide ? "Show the front camera" : "Show the side camera");
+}
+
+// Every snapshot calls this, so it only acts on a change.
+function setSideCamera(present) {
+  if (present !== sidePresent) {
+    sidePresent = present;
+    showCameraView();
+  }
+}
+
+function flipCamera() {
+  cameraView = cameraView === "side" ? "front" : "side";
+  writeStored("camera", cameraView);
+  showCameraView();
 }
 
 function handleFeedError(feed) {
@@ -360,6 +384,7 @@ for (const feed of feeds) {
   feed.image.addEventListener("error", () => handleFeedError(feed));
   feed.image.addEventListener("load", () => handleFeedLoad(feed));
 }
+els.cameraFlip.addEventListener("click", flipCamera);
 els.peekToggle.addEventListener("click", () => {
   const peeking = !feedWanted;
   writeStored("peek", peeking ? "1" : "0");
