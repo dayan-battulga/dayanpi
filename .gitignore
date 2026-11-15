@@ -10,3 +10,5 @@ test.jpg
 *.pt
 focus_check/
 data/
+web/node_modules/
+web/.env.local

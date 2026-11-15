@@ -176,7 +176,7 @@ curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json,
 
 ## To-do list
 
-The card next to the camera, where the LED sign preview used to be, is one running to-do list. It carries over between work blocks and days.
+The card next to the camera is one running to-do list (the LED sign preview moved to a smaller card below it). It carries over between work blocks and days.
 
 - **Add** with the box at the top (Enter or **Add**). **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels. **Delete** with the ×.
 - **Check it off** and it moves down to **Done today**, ticked and crossed out. Uncheck it and it goes back to where it was.

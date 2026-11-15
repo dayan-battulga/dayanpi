@@ -33,7 +33,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
              ├─ vision/     → detector (people, phones, faces), pose, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
              ├─ sign/       → the LED sign renderer, font and icons, page controller
-             └─ static/     → the dashboard page (app.js for stats, theme and camera, focus.js for the Focus card, todos.js for the to-do list)
+             └─ static/     → the dashboard, built from web/ (React); never edited by hand
 ```
 
 - **The app only listens on localhost.** Your home network can't reach it directly. Tailscale is the only way in, and it handles HTTPS for you.
@@ -72,6 +72,12 @@ python3 -m venv .venv
 
 They cover the focus state machine (driven with fake clocks), the detector decoding, the sign renderer, the worker thread, the API routes (login and validation), and startup without a camera. `pyproject.toml` tells pytest where the tests and the package are, so plain `pytest` from the repo root works too.
 
+The dashboard has its own tests (Vitest), for the time and box math, the timeline, the to-do card and the whole page on a fake stream:
+
+```bash
+cd web && npm ci && npm test
+```
+
 ---
 
 ## What's in the repo
@@ -87,7 +93,8 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check), `todos.py` (the to-do list and its time) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
-| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and the page's motion), `ui.js` (helpers the scripts share, including the small replayable text animations), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, Today list), `todos.js` (the to-do list) |
+| `dayanpi/static/` | The built dashboard (`npm run build` in `web/` writes it); committed so the Pi needs no Node |
+| `web/` | The dashboard's source: React + TypeScript + Vite + Tailwind + shadcn/ui, one folder per card in `src/components/`. See "Working on the dashboard" in the manual |
 | `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest) |

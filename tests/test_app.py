@@ -39,12 +39,18 @@ def test_dashboard_runs_without_camera(caplog):
 
 
 def test_dashboard_serves_every_file_it_links():
+    """dayanpi/static/ is web/'s build: index.html, then hashed JS and CSS, and the fonts the CSS names."""
     with TestClient(app.app) as client:
         page = client.get("/", auth=AUTH)
         assert page.status_code == 200
-        linked = re.findall(r'(?:src|href)="(/[^"#?]+)"', page.text)
-        assert {"/styles.css", "/ui.js", "/app.js", "/focus.js", "/todos.js"} <= set(linked)
-        for path in linked:
+        linked = re.findall(r'(?:src|href)="([^"#?]+)"', page.text)
+        assert {path.rsplit(".", 1)[-1] for path in linked} == {"js", "css"}
+        stylesheets = [client.get(path, auth=AUTH).text for path in linked if path.endswith(".css")]
+        fonts = [path for css in stylesheets for path in re.findall(r"url\(([^)]+)\)", css)]
+        assert any(path.endswith(".woff2") for path in fonts)
+        for path in linked + fonts:
+            # Nothing from the internet: the Pi serves every file the page needs.
+            assert path.startswith("/assets/"), path
             response = client.get(path, auth=AUTH)
             assert response.status_code == 200, path
             assert response.headers["cache-control"] == "no-cache", path
@@ -345,12 +351,14 @@ def test_status_says_when_there_is_a_side_camera(monkeypatch):
 
 
 def test_the_dashboard_feeds_match_the_server():
-    """No JS tests here, so a typo in one of these would just be a dead feed or no boxes."""
+    """The built page's feeds (FEEDS in web/src/components/camera/CameraCard.tsx) against the server:
+    a typo in one would just be a dead feed or no boxes."""
     with TestClient(app.app) as client:
         page = client.get("/", auth=AUTH).text
+        bundle = "".join(client.get(path, auth=AUTH).text for path in re.findall(r'src="([^"]+\.js)"', page))
         status = client.get("/api/focus", auth=AUTH).json()
-    feed_paths = re.findall(r'data-feed="([^"]+)"', page)
-    overlay_keys = re.findall(r'data-overlay-key="([^"]+)"', page)
+    feed_paths = re.findall(r"src:[`\"'](/video[^`\"']*)", bundle)
+    overlay_keys = re.findall(r"overlayKey:[`\"']([^`\"']+)", bundle)
     assert len(feed_paths) == len(overlay_keys) == 2
     assert set(feed_paths) <= {route.path for route in app.app.routes}
     assert set(overlay_keys) <= set(status)

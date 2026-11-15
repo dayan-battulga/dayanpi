@@ -162,6 +162,48 @@ sudo systemctl daemon-reload
 sudo systemctl restart dayanpi
 ```
 
+## Working on the dashboard
+
+The page is a React app in `web/` (TypeScript, Vite, Tailwind CSS and shadcn/ui). `npm run build` turns it into plain files in `dayanpi/static/`, and those get committed, so the Pi just serves them: no Node on the Pi, nothing new to install there. Never edit `dayanpi/static/` by hand, because the next build wipes it.
+
+**Once, on the Mac.** Install Node (the current LTS, for example `brew install node`), then:
+
+```bash
+cd ~/Desktop/code/projects/site-page/web
+npm ci
+cp .env.example .env.local
+nano .env.local        # the Pi's address, plus the same login as /etc/dayanpi.env
+```
+
+`.env.local` is gitignored. Only the dev server reads it, to log in to the Pi for you, and it never ends up in the page.
+
+**Working on it with live data:**
+
+```bash
+npm run dev
+```
+
+Open http://localhost:5173. The page is your local copy, but `/api` and `/video` go to the Pi, so you see the real numbers and the real camera. Save a file and the page updates right away.
+
+**Tests:**
+
+```bash
+npm test
+```
+
+**Shipping it:**
+
+```bash
+npm run build          # type-checks, then rewrites dayanpi/static/
+cd ..
+.venv/bin/python -m pytest tests/test_app.py -q
+git add web dayanpi/static
+git commit -m "describe the change"
+git push origin main
+```
+
+On the Pi, `git pull` is all a page-only change needs (restart too if Python changed). A normal reload picks it up, since the Pi tells browsers to check for new files every time.
+
 ---
 
 ## Start / stop the app (systemd)
@@ -320,14 +362,14 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 ## The dashboard
 
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes. Under them, a smaller LED sign card: the sign's preview, which page it's on, and **Flip sign page**.
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
 - **Two cameras.** With `DAYANPI_CAMERA=both`, the Camera card shows one feed at a time, front first, labeled Front or Side with its own boxes. The flip button next to Peek switches between them, and your browser remembers which one you picked. Only the feed you're looking at streams. "What the Pi sees" shows the best of the two cameras either way, since the detector keeps checking both. With one camera there's no flip button and the card looks the way it always has.
 - **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
 - **Animations** turn themselves off if your device is set to reduce motion.
-- Hard-refresh if the page looks old after an update: `Cmd+Shift+R`.
+- After an update a normal reload is enough: the Pi tells the browser to check for new files every time.
 
 ---
 
