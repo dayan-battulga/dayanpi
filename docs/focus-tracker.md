@@ -174,6 +174,25 @@ curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json,
 
 **Timing.** A scan takes about 185 ms on the Pi, so two come to about 370 ms, and a stuck camera adds up to 0.2 s while it waits for a frame. `ms` in the sample lines and "~X ms each" on the card are both scans added together. Checks still run once a second as long as a check stays under 1 s. If it reaches about 1.5 s (a hot Pi slowing itself down, say), the boxes over the video start flickering, because the page hides boxes older than 3 s. The scans use all four cores, so keep an eye on the Temp tile too.
 
+## To-do list
+
+The card next to the camera, where the LED sign preview used to be, is one running to-do list. It carries over between work blocks and days.
+
+- **Add** with the box at the top (Enter or **Add**). **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels. **Delete** with the ×.
+- **Check it off** and it moves down to **Done today**, ticked and crossed out. Uncheck it and it goes back to where it was.
+- **The current one.** The round button on an item makes it the one you're on (press it again to stop). It only collects time while you're **focused during a work block**, so phone time, away time and time outside a block don't count. Only one item is current at a time, and checking it off stops its clock. The time shows next to every item, in both lists.
+- **Midnight.** Done shows what you finished today. At local midnight those items leave the list (the calendar step will write them into that day's page). Unfinished ones stay put.
+- **Where it lives.** `data/todos.json` on the Pi (or in `DAYANPI_DATA_DIR`). Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
+- **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
+
+The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the card keeps up.
+
+```bash
+curl -s -u YOURUSER:YOURPASS localhost:8000/api/todos | python3 -m json.tool
+cat data/todos.json
+grep '"todo"' data/focus_log/$(date +%F).jsonl
+```
+
 ## Gestures
 
 You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).

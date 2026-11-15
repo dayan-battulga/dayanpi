@@ -78,7 +78,6 @@
           <p id="focus-caption" class="muted">Waiting for the first snapshot</p>
           <div class="focus-buttons">
             <button type="button" id="focus-block" class="button button-primary" disabled>Start block</button>
-            <button type="button" id="sign-flip" class="button button-ghost" disabled>Flip sign page</button>
           </div>
         </div>
 
@@ -167,22 +166,20 @@
           </div>
         </section>
 
-        <section class="card sign rise" style="--d: 3" aria-label="LED sign and today">
+        <section class="card todo rise" style="--d: 3" aria-label="To-do and today">
           <div class="card-head">
             <div class="card-title">
-              <h2 class="label">LED sign</h2>
-              <span id="sign-page" class="mono muted small"></span>
-            </div>
-            <div id="sign-dots" class="sign-dots" role="img" aria-label="Sign page">
-              <span class="sign-dot"></span>
-              <span class="sign-dot"></span>
-              <span class="sign-dot"></span>
+              <h2 class="label">To-do</h2>
+              <span id="todo-count" class="mono muted small"></span>
             </div>
           </div>
-          <div class="led">
-            <img id="sign-image" alt="What the LED sign is showing" width="768" height="192" hidden />
-            <p id="sign-empty" class="led-empty mono">Waiting for the sign…</p>
-          </div>
+          <form id="todo-form" class="todo-form">
+            <input id="todo-input" class="todo-input" type="text" maxlength="200" placeholder="Add a to-do" aria-label="New to-do" autocomplete="off" />
+            <button type="submit" class="button button-ghost button-small">Add</button>
+          </form>
+          <ul id="todo-open" class="todo-list" aria-label="To-do"></ul>
+          <h3 id="todo-done-title" class="label todo-done-title" hidden>Done today</h3>
+          <ul id="todo-done" class="todo-list" aria-label="Done today"></ul>
           <h2 class="label today-title">Today</h2>
           <ol id="today-list" class="today-list">
             <li class="today-empty muted">Nothing yet today.</li>
@@ -257,5 +254,6 @@
     <script src="/ui.js"></script>
     <script src="/app.js"></script>
     <script src="/focus.js"></script>
+    <script src="/todos.js"></script>
   </body>
 </html>

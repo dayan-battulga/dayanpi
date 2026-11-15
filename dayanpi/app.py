@@ -12,14 +12,15 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from dayanpi.hardware import collector
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
+from dayanpi.focus.todos import TEXT_MAX, TodoList, find_todo_path
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
@@ -50,6 +51,7 @@ side_stream = create_side_stream()
 latest_snapshot: dict | None = None
 focus_log = FocusLog(FOCUS_LOG_DIR)
 tracker = FocusTracker(focus_log, started_at=time.time())
+todos = TodoList(find_todo_path(), focus_log)
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
 SIGN_MODE = os.environ.get("DAYANPI_SIGN", "preview").strip().lower() or "preview"  # preview | panel | off
@@ -98,6 +100,7 @@ def build_focus_status() -> dict:
     status["overlay"] = stamp_overlay_age(None if worker is None else worker.last_overlay, now)
     status["side_overlay"] = stamp_overlay_age(None if worker is None else worker.last_side_overlay, now)
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
+    status["todos"] = todos.snapshot(now)
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
     return status
@@ -127,6 +130,7 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
             voice.say(callout.text)
         if sign_controller is not None:
             sign_controller.show_callout(callout)
+    todos.track(update.state == "working" and update.block_active, now)
 
 
 def handle_gesture(name: str, now: float) -> None:
@@ -200,6 +204,7 @@ async def lifespan(app: FastAPI):
     if sign_controller is not None:
         sign_controller.stop()
         sign_controller = None
+    todos.save(time.time())
     voice.stop()
     stream.stop()
     if side_stream is not None:
@@ -228,6 +233,8 @@ async def basic_auth_middleware(request: Request, call_next):
         response = await call_next(request)
     # The browser reuses the saved login inside frames, so another page could frame the dashboard.
     response.headers["X-Frame-Options"] = "DENY"
+    # Without it a browser can keep last week's focus.js against today's index.html after a git pull.
+    response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
 
@@ -302,6 +309,47 @@ def focus_block(command: BlockCommand):
         active = command.action == "start"
         changed = tracker.set_block(active, now, source="api")
     return {"status": "ok", "active": active, "changed": changed}
+
+
+TodoText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TEXT_MAX)]
+
+
+class TodoNew(BaseModel):
+    text: TodoText
+
+
+class TodoChange(BaseModel):
+    text: TodoText | None = None
+    done: bool | None = None
+    current: bool | None = None
+
+
+@app.get("/api/todos")
+def list_todos():
+    return todos.snapshot(time.time())
+
+
+@app.post("/api/todos")
+def add_todo(new: TodoNew):
+    now = time.time()
+    item = todos.add(new.text, now)
+    return {"status": "ok", "item": item, "todos": todos.snapshot(now)}
+
+
+@app.patch("/api/todos/{item_id}")
+def change_todo(item_id: str, change: TodoChange):
+    now = time.time()
+    if not todos.change(item_id, now, text=change.text, done=change.done, current=change.current):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such to-do")
+    return {"status": "ok", "todos": todos.snapshot(now)}
+
+
+@app.delete("/api/todos/{item_id}")
+def delete_todo(item_id: str):
+    now = time.time()
+    if not todos.delete(item_id, now):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such to-do")
+    return {"status": "ok", "todos": todos.snapshot(now)}
 
 
 class SignPageCommand(BaseModel):

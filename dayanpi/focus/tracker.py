@@ -46,11 +46,14 @@ DAY_FORMAT = "%Y-%m-%d"
 DATA_DIR_ENV = "DAYANPI_DATA_DIR"
 
 
+def find_data_dir() -> Path:
+    """DAYANPI_DATA_DIR, or data/ at the repo root."""
+    data_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR)
+    return data_dir
+
+
 def find_focus_log_dir() -> Path:
-    """focus_log/ inside DAYANPI_DATA_DIR, or inside data/ at the repo root."""
-    log_dir = (
-        Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR) / "focus_log"
-    )
+    log_dir = find_data_dir() / "focus_log"
     return log_dir
 
 
@@ -101,6 +104,7 @@ class CheckSummary:
 class FocusUpdate:
     state: str
     callouts: list[Callout] = field(default_factory=list)
+    block_active: bool = False
 
 
 @dataclass
@@ -398,7 +402,7 @@ class FocusTracker:
         if not is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR):
             # The window runs 22:00-05:00 across midnight, so re-arm by daylight, not at the day rollover.
             self._day_done_fired = False
-        update = FocusUpdate(state=self._state, callouts=callouts)
+        update = FocusUpdate(state=self._state, callouts=callouts, block_active=self._block_active)
         return update
 
     def _state_without_frame(self, now: float) -> str:

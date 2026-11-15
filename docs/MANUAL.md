@@ -36,6 +36,8 @@ Always use the **`main`** branch on both machines.
 | `/api/focus` | Focus state, today's totals and timeline |
 | `/api/focus/block` | Start/stop a work block (POST) |
 | `/api/mac/app` | The Mac helper reports the front app (POST) |
+| `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
+| `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/sign/page` | Flip the LED sign to the next or previous page (POST `{"step": 1}` or `-1`) |
 | `/docs` | Disabled (404 on purpose) |
 
@@ -318,7 +320,7 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 ## The dashboard
 
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the LED sign preview (the dots show which page it's on) and a list of today's last few changes.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes.
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.

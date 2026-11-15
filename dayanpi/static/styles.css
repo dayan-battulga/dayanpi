@@ -838,9 +838,9 @@ ol {
   border-top: 1px solid var(--line);
 }
 
-/* ---------- sign + today ---------- */
+/* ---------- to-do + today ---------- */
 
-.sign {
+.todo {
   display: flex;
   flex: 1 1 400px;
   flex-direction: column;
@@ -848,49 +848,124 @@ ol {
   padding: 20px;
 }
 
-/* The sign is a physical dark panel, so its frame stays dark in both themes. */
-.led {
-  position: relative;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 4 / 1;
-  overflow: hidden;
-  border-radius: 14px;
-  background: #070708;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%);
+.todo-form {
+  display: flex;
+  gap: 8px;
 }
 
-.led img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  animation: fade-in 0.6s var(--ease) both;
+.todo-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--ink);
+  font: 400 14px var(--font-ui);
 }
 
-.led-empty {
-  color: #8e8e96;
+.todo-input::placeholder {
+  color: var(--muted);
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  animation: rise 0.7s var(--ease) both;
+}
+
+.todo-item:last-child {
+  border-bottom: 0;
+}
+
+.todo-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--work);
+  cursor: pointer;
+}
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.todo-item .todo-input {
+  min-height: 36px;
+}
+
+.todo-item.is-current .todo-text {
+  font-weight: 600;
+}
+
+.todo-item.is-done .todo-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.todo-time {
+  flex: none;
+  color: var(--muted);
   font-size: 12px;
 }
 
-.sign-dots {
-  display: flex;
-  gap: 6px;
+.todo-item.is-current .todo-time {
+  color: var(--work);
 }
 
-.sign-dot {
-  width: 6px;
-  height: 6px;
+.todo-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
   border-radius: 999px;
-  background: var(--line-strong);
-  transition:
-    width 0.5s var(--ease),
-    background-color 0.5s var(--ease);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.sign-dot.is-on {
-  width: 18px;
-  background: var(--ink);
+.todo-icon:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+
+.todo-icon[aria-pressed="true"] {
+  color: var(--work);
+}
+
+.todo-empty {
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.todo-done-title {
+  margin-top: 18px;
 }
 
 .today-title {

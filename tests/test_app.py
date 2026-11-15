@@ -43,9 +43,11 @@ def test_dashboard_serves_every_file_it_links():
         page = client.get("/", auth=AUTH)
         assert page.status_code == 200
         linked = re.findall(r'(?:src|href)="(/[^"#?]+)"', page.text)
-        assert {"/styles.css", "/ui.js", "/app.js", "/focus.js"} <= set(linked)
+        assert {"/styles.css", "/ui.js", "/app.js", "/focus.js", "/todos.js"} <= set(linked)
         for path in linked:
-            assert client.get(path, auth=AUTH).status_code == 200, path
+            response = client.get(path, auth=AUTH)
+            assert response.status_code == 200, path
+            assert response.headers["cache-control"] == "no-cache", path
         assert client.get("/", headers={}).status_code == 401
 
 
@@ -125,6 +127,49 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch):
         app.handle_gesture("toggle_block", time.time())
         assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is False
     assert said == ["Block started.", "Block stopped."]
+
+
+def test_todo_routes_add_edit_check_current_and_delete():
+    with TestClient(app.app) as client:
+        assert client.get("/api/todos").status_code == 401
+        assert client.post("/api/todos", json={"text": "sneaky"}).status_code == 401
+        added = client.post("/api/todos", json={"text": "  finish the report  "}, auth=AUTH).json()
+        item_id = added["item"]["id"]
+        assert added["item"]["text"] == "finish the report"
+        path = f"/api/todos/{item_id}"
+        assert client.patch(path, json={"done": True}).status_code == 401
+        assert client.delete(path).status_code == 401
+        assert client.patch(path, json={"text": "finish the big report"}, auth=AUTH).status_code == 200
+        listed = client.patch(path, json={"current": True}, auth=AUTH).json()["todos"]
+        assert listed["current"] == item_id
+        listed = client.patch(path, json={"done": True}, auth=AUTH).json()["todos"]
+        assert [item["text"] for item in listed["done"] if item["id"] == item_id] == ["finish the big report"]
+        assert listed["current"] is None
+        listed = client.patch(path, json={"done": False}, auth=AUTH).json()["todos"]
+        assert item_id in [item["id"] for item in listed["open"]]
+        assert client.get("/api/todos", auth=AUTH).json() == listed
+        assert client.get("/api/focus", auth=AUTH).json()["todos"] == listed
+        assert client.delete(path, auth=AUTH).status_code == 200
+        assert client.delete(path, auth=AUTH).status_code == 404
+        assert client.patch(path, json={"done": True}, auth=AUTH).status_code == 404
+        assert client.post("/api/todos", json={"text": "   "}, auth=AUTH).status_code == 422
+        assert client.post("/api/todos", json={"text": "x" * 201}, auth=AUTH).status_code == 422
+        assert client.patch(path, json={"text": ""}, auth=AUTH).status_code == 422
+
+
+def test_working_in_a_block_counts_time_for_the_current_todo():
+    from dayanpi.focus.tracker import FocusUpdate
+
+    now = time.time()
+    item_id = app.todos.add("hook test", now)["id"]
+    app.todos.change(item_id, now, current=True)
+    for second in range(4):
+        app.handle_focus_update(FocusUpdate(state="working", block_active=True), now + second)
+    for second in range(4, 8):
+        app.handle_focus_update(FocusUpdate(state="working", block_active=False), now + second)
+    open_items = app.todos.snapshot(now + 8)["open"]
+    assert [item["seconds"] for item in open_items if item["id"] == item_id] == [4]
+    app.todos.delete(item_id, now + 9)
 
 
 def test_sign_preview_renders_and_the_status_says_when_it_changes():

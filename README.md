@@ -33,7 +33,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
              ├─ vision/     → detector (people, phones, faces), pose, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
              ├─ sign/       → the LED sign renderer, font and icons, page controller
-             └─ static/     → the dashboard page (app.js for stats, theme and camera, focus.js for the Focus card)
+             └─ static/     → the dashboard page (app.js for stats, theme and camera, focus.js for the Focus card, todos.js for the to-do list)
 ```
 
 - **The app only listens on localhost.** Your home network can't reach it directly. Tailscale is the only way in, and it handles HTTPS for you.
@@ -84,10 +84,10 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/paths.py` | Where `static/`, `models/`, `data/` and `focus_check/` live, so no module counts parent folders |
 | `dayanpi/hardware/` | Things attached to the Pi: `collector.py` (stats), `camera.py` (one thread owns the webcam, many viewers), `voice.py` (the USB speaker) |
 | `dayanpi/vision/` | The models: `detector.py` (people, phones and faces), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
-| `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check) |
+| `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check), `todos.py` (the to-do list and its time) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
-| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and the page's motion), `ui.js` (helpers the scripts share, including the small replayable text animations), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, sign, Today list) |
+| `dayanpi/static/` | The dashboard: `index.html`, `styles.css` (both palettes and the page's motion), `ui.js` (helpers the scripts share, including the small replayable text animations), `app.js` (stats, theme toggle, camera), `focus.js` (Focus card, detector readings, Today list), `todos.js` (the to-do list) |
 | `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest) |

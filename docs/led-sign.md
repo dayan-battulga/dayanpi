@@ -237,7 +237,7 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 
 ## How the app drives it
 
-`DAYANPI_SIGN` in `/etc/dayanpi.env` picks where the sign goes. With `preview` (the default) or `panel`, the app renders it a few times a second and the dashboard shows the preview in the LED sign card next to the camera:
+`DAYANPI_SIGN` in `/etc/dayanpi.env` picks where the sign goes. With `preview` (the default) or `panel`, the app renders it a few times a second. The dashboard doesn't show the preview anymore (the to-do list took its spot), but `GET /api/sign.png` still serves it:
 
 | Value | What |
 | --- | --- |
@@ -245,4 +245,4 @@ The first page should be a fire icon on the far left, then `FOCUSED` over a big 
 | `panel` | Website preview **and** the real panels through the Matrix Bonnet |
 | `off` | Nothing, not even the preview |
 
-What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures or the **Flip sign page** button on the dashboard (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
+What it shows is decided in `dayanpi/sign/controller.py`: the **Now** page by default, **Today** and **Day done** as you flip pages with the one-hand gestures or `POST /api/sign/page` (they fall back to **Now** after 20 s), callouts scrolling across whatever page is up, the **Day done** page by itself for 15 minutes after the day-done callout, and a dimmer "ambient" sign during a work block and at night (11 pm to 7 am). `GET /api/sign.png` is the preview image on its own.
