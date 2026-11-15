@@ -1,4 +1,4 @@
-// The Focus card, the detector readings and the Today list.
+// The Focus card, the detector readings, the LED sign and the Today list.
 // State, totals and the latest check arrive with every stats snapshot (app.js
 // re-broadcasts them as "dayanpi:snapshot"); the segments behind the timeline and
 // the Today list come from /api/focus on load, on every state change, and once a minute.
@@ -20,6 +20,8 @@ const STATE_COPY = {
   away: { chip: "Away", label: "Stepped away" },
   unknown: { chip: "Unknown", label: "Waiting" },
 };
+const SIGN_PAGES = { now: "Now", today: "Today", summary: "Day done" };
+const SIGN_PAGE_ORDER = ["now", "today", "summary"];
 
 const focusEls = {
   card: document.getElementById("focus-card"),
@@ -39,6 +41,12 @@ const focusEls = {
   free: document.getElementById("focus-free"),
   best: document.getElementById("focus-best"),
   checkMs: document.getElementById("check-ms"),
+  signImage: document.getElementById("sign-image"),
+  signEmpty: document.getElementById("sign-empty"),
+  signPage: document.getElementById("sign-page"),
+  signDots: document.getElementById("sign-dots"),
+  signFlip: document.getElementById("sign-flip"),
+  signMode: document.getElementById("sign-mode"),
   voice: document.getElementById("voice"),
   mac: document.getElementById("mac"),
   todayList: document.getElementById("today-list"),
@@ -62,6 +70,10 @@ let latestFocus = null;
 let latestFocusAt = 0;
 let lastState = null;
 let lastPickups = null;
+let lastSignPage = null;
+let lastSignVersion = null;
+let signPictureLoading = false;
+let signBusy = false;
 let todaySegments = [];
 let timelineDrawn = false;
 let timelineStartHour = null;
@@ -395,6 +407,38 @@ function renderOverlay(view, focus) {
   }
 }
 
+function setSignPage(page) {
+  if (page !== lastSignPage) {
+    if (lastSignPage != null && !focusEls.signImage.hidden) {
+      replayAnimation(focusEls.signImage, "slide");
+    }
+    lastSignPage = page;
+    const index = SIGN_PAGE_ORDER.indexOf(page);
+    focusEls.signPage.textContent = SIGN_PAGES[page] ?? "";
+    Array.from(focusEls.signDots.children).forEach((dot, dotIndex) => {
+      dot.classList.toggle("is-on", dotIndex === index);
+    });
+    focusEls.signDots.setAttribute("aria-label", index >= 0 ? `Sign page ${index + 1} of 3: ${SIGN_PAGES[page]}` : "Sign page");
+  }
+}
+
+function renderSign(focus) {
+  const sign = focus.sign ?? { mode: "off", page: null };
+  focusEls.signMode.textContent = sign.mode;
+  focusEls.signFlip.disabled = sign.mode === "off" || signBusy;
+  setSignPage(sign.page);
+  if (sign.mode === "off") {
+    focusEls.signImage.hidden = true;
+    focusEls.signEmpty.hidden = false;
+    focusEls.signEmpty.textContent = "The sign is off";
+  } else if (sign.version !== lastSignVersion && !signPictureLoading) {
+    // A new src cancels the one still loading, so asking every second on a slow connection would never finish one.
+    lastSignVersion = sign.version;
+    signPictureLoading = true;
+    focusEls.signImage.src = `/api/sign.png?v=${sign.version}`;
+  }
+}
+
 function renderFocus(focus) {
   const copy = STATE_COPY[focus.state] ?? STATE_COPY.unknown;
   const today = focus.today;
@@ -425,6 +469,7 @@ function renderFocus(focus) {
   renderReadings(focus);
   cameraCard.dataset.state = focus.state;
   overlayViews.forEach((view) => renderOverlay(view, focus));
+  renderSign(focus);
 }
 
 function tick() {
@@ -439,7 +484,7 @@ function tick() {
   moveTimelineNow(now);
 }
 
-// A disabled button fires no clicks, so these can't overlap; the busy flag keeps renderFocus from re-enabling it mid-request.
+// A disabled button fires no clicks, so these can't overlap; the busy flags keep renderFocus from re-enabling it mid-request.
 async function toggleBlock() {
   blockBusy = true;
   focusEls.block.disabled = true;
@@ -471,7 +516,38 @@ window.addEventListener("dayanpi:snapshot", (event) => {
   }
 });
 
+async function flipSignPage() {
+  signBusy = true;
+  focusEls.signFlip.disabled = true;
+  try {
+    const response = await fetch("/api/sign/page", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: 1 }),
+    });
+    if (response.ok) {
+      const body = await response.json();
+      setSignPage(body.page);
+    }
+  } catch (error) {
+    // The next snapshot shows the real page either way.
+  } finally {
+    signBusy = false;
+    focusEls.signFlip.disabled = latestFocus == null || latestFocus.sign?.mode === "off";
+  }
+}
+
 focusEls.block.addEventListener("click", toggleBlock);
+focusEls.signFlip.addEventListener("click", flipSignPage);
+focusEls.signImage.addEventListener("load", () => {
+  signPictureLoading = false;
+  focusEls.signImage.hidden = false;
+  focusEls.signEmpty.hidden = true;
+});
+focusEls.signImage.addEventListener("error", () => {
+  signPictureLoading = false;
+  lastSignVersion = null; // the next snapshot tries again, even if the picture hasn't changed
+});
 focusEls.timer.replaceChildren();
 
 tick();

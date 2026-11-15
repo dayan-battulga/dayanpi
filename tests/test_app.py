@@ -127,6 +127,77 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch):
     assert said == ["Block started.", "Block stopped."]
 
 
+def test_sign_preview_renders_and_the_status_says_when_it_changes():
+    with TestClient(app.app) as client:
+        deadline = time.monotonic() + 3
+        body = {"sign": {"version": 0}}
+        while body["sign"]["version"] < 1 and time.monotonic() < deadline:
+            body = client.get("/api/focus", auth=AUTH).json()
+            time.sleep(0.05)
+        assert body["sign"]["mode"] == "preview"
+        assert body["sign"]["page"] == "now"
+        assert body["sign"]["version"] >= 1
+        stats = read_stats_focus(client)
+        assert stats["sign"]["version"] >= 1
+        response = client.get("/api/sign.png", auth=AUTH)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        # The version starts over when the service restarts, so an old picture must never come from cache.
+        assert response.headers["cache-control"] == "no-store"
+        assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
+        assert client.get("/api/sign.png").status_code == 401
+
+
+def test_the_site_can_flip_the_sign_page():
+    with TestClient(app.app) as client:
+        assert client.post("/api/sign/page", json={"step": 1}).status_code == 401
+        assert client.post("/api/sign/page", json={"step": 1}, auth=AUTH).json() == {"status": "ok", "page": "today"}
+        assert client.post("/api/sign/page", json={"step": 1}, auth=AUTH).json()["page"] == "summary"
+        assert client.post("/api/sign/page", json={"step": -1}, auth=AUTH).json()["page"] == "today"
+        assert client.post("/api/sign/page", json={"step": 2}, auth=AUTH).status_code == 422
+        assert client.get("/api/focus", auth=AUTH).json()["sign"]["page"] == "today"
+
+
+def test_flipping_an_off_sign_says_so(monkeypatch):
+    monkeypatch.setattr(app, "SIGN_MODE", "off")
+    with TestClient(app.app) as client:
+        response = client.post("/api/sign/page", json={"step": 1}, auth=AUTH)
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Sign is off"
+
+
+def test_callouts_and_gestures_reach_the_sign(monkeypatch):
+    from dayanpi.focus import tracker as focus
+
+    monkeypatch.setattr(app.voice, "say", lambda text: True)
+    with TestClient(app.app):
+        controller = app.sign_controller
+        assert controller is not None
+        app.handle_focus_update(
+            focus.FocusUpdate(state="phone", callouts=[focus.Callout("break_over", "Break's over. Back to it.", speak=False)]),
+            time.time(),
+        )
+        assert controller._queue or controller._active is not None
+        app.handle_gesture("next_page", time.time())
+        assert controller.page == "today"
+        app.handle_gesture("previous_page", time.time())
+        assert controller.page == "now"
+    assert app.sign_controller is None
+
+
+def test_panels_that_cannot_start_leave_the_preview_running(monkeypatch, caplog):
+    import logging
+    from dayanpi.sign import renderer as sign
+
+    caplog.set_level(logging.INFO, logger="dayanpi.app")
+    monkeypatch.setattr(app, "SIGN_MODE", "panel")
+    monkeypatch.setattr(sign, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
+    monkeypatch.setattr(app, "PanelOutput", lambda: (_ for _ in ()).throw(ImportError("no piomatter")))
+    with TestClient(app.app):
+        assert app.sign_controller is not None
+    assert "panels unavailable, preview only" in caplog.text
+
+
 def test_worker_runs_when_a_scanner_exists(monkeypatch):
     class FakeScanner:
         def scan(self, image):

@@ -97,7 +97,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6), today's totals and a **Start block** button. A work block is just a flag for now: while it's on, a break longer than 15 minutes gets flagged (and logged) as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
+**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6), today's totals and a **Start block** button. A work block is just a flag for now: while it's on, the sign dims to ambient and a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
@@ -176,7 +176,7 @@ curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json,
 
 ## Gestures
 
-Hold both arms up in front of the camera to start or stop a work block, right from your chair. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
+You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
 
 ### Getting the pose model
 
@@ -217,15 +217,15 @@ Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' mod
 
 | Gesture | What it does | Hold it for |
 | --- | --- | --- |
-| Right hand up | Nothing for now, just logged (it flipped the LED sign's pages) | 1 s |
-| Left hand up | Same | 1 s |
+| Right hand up | Next page on the sign | 1 s |
+| Left hand up | Previous page | 1 s |
 | Both hands up | Start or stop a work block | 2 s |
 
 - Right and left are **your** right and left. On the camera picture, your right hand is on the left side.
 - "Up" means your wrist is clearly above your shoulder, by about a third of your shoulder width. Head height is plenty.
 - Each hold fires once. To do it again, drop your hands for a second or two, then raise them again.
 - After anything fires, nothing else fires until your hands come down. No chaining gestures with your hands still up.
-- Going for both hands? Raise them together. One hand that's up alone for a full second fires a one-hand gesture, which does nothing now but still uses up the hold. Getting the second hand up before then cancels it.
+- Going for both hands? Raise them together. One hand that's up alone for a full second counts as a page flip. Getting the second hand up before then cancels the flip.
 - If the camera loses your wrist for one check, the hold keeps going. Two bad checks in a row and it starts over.
 - Stretching with both arms up for 2 seconds counts as both hands up. If that keeps toggling your blocks, make the both-hands hold longer (see Tuning).
 

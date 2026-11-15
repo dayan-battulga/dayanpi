@@ -1,10 +1,10 @@
-"""Turns arm positions from the pose model into gestures.
+"""Turns arm positions from the pose model into gestures for the LED sign.
 
 They're holds, not swipes: the detector only checks about once a second, which is
 too slow to catch a swipe.
 
-- next_page: right wrist up, left hand down, held 1 s. Flipped the LED sign's pages; only logged now.
-- previous_page: left wrist up, right hand down, held 1 s. Same.
+- next_page: right wrist up, left hand down, held 1 s.
+- previous_page: left wrist up, right hand down, held 1 s.
 - toggle_block: both wrists up, held 2 s. Starts or stops a work block.
 
 "Up" means the wrist is above its own shoulder by at least RAISE_MARGIN shoulder widths.

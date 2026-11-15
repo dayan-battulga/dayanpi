@@ -8,31 +8,15 @@ can run while the service is up.
 """
 
 import argparse
-import math
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from dayanpi.focus.tracker import DAY_FORMAT, DayReplay, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
+from dayanpi.sign.renderer import format_duration
 
 HOURS = 24
-DURATION_MAX_S = 999 * 3600 + 59 * 60
-
-
-def format_duration(seconds: float) -> str:
-    """Short and glanceable: "45s", "12m", "1h05", "10h30". Negative or NaN shows as "0s"."""
-    # Clamp before isnan: isnan converts to float, which overflows on huge ints.
-    clamped = min(max(seconds, 0), DURATION_MAX_S)
-    whole_seconds = 0 if math.isnan(clamped) else int(clamped)
-    hours, remainder = divmod(whole_seconds, 3600)
-    minutes = remainder // 60
-    duration = f"{hours}h{minutes:02d}"
-    if whole_seconds < 60:
-        duration = f"{whole_seconds}s"
-    elif whole_seconds < 3600:
-        duration = f"{minutes}m"
-    return duration
 
 
 @dataclass

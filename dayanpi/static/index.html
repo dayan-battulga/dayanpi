@@ -78,6 +78,7 @@
           <p id="focus-caption" class="muted">Waiting for the first snapshot</p>
           <div class="focus-buttons">
             <button type="button" id="focus-block" class="button button-primary" disabled>Start block</button>
+            <button type="button" id="sign-flip" class="button button-ghost" disabled>Flip sign page</button>
           </div>
         </div>
 
@@ -166,10 +167,23 @@
           </div>
         </section>
 
-        <section class="card today rise" style="--d: 3" aria-label="Today">
+        <section class="card sign rise" style="--d: 3" aria-label="LED sign and today">
           <div class="card-head">
-            <h2 class="label">Today</h2>
+            <div class="card-title">
+              <h2 class="label">LED sign</h2>
+              <span id="sign-page" class="mono muted small"></span>
+            </div>
+            <div id="sign-dots" class="sign-dots" role="img" aria-label="Sign page">
+              <span class="sign-dot"></span>
+              <span class="sign-dot"></span>
+              <span class="sign-dot"></span>
+            </div>
           </div>
+          <div class="led">
+            <img id="sign-image" alt="What the LED sign is showing" width="768" height="192" hidden />
+            <p id="sign-empty" class="led-empty mono">Waiting for the sign…</p>
+          </div>
+          <h2 class="label today-title">Today</h2>
           <ol id="today-list" class="today-list">
             <li class="today-empty muted">Nothing yet today.</li>
           </ol>
@@ -229,6 +243,7 @@
             <div><dt class="label">Power</dt><dd id="power" class="mono" data-level="nominal">--</dd></div>
             <div><dt class="label">Voice</dt><dd id="voice" class="mono">--</dd></div>
             <div><dt class="label">Mac</dt><dd id="mac" class="mono">--</dd></div>
+            <div><dt class="label">Sign</dt><dd id="sign-mode" class="mono">--</dd></div>
           </dl>
         </div>
       </section>
