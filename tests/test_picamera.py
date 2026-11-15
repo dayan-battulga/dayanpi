@@ -124,6 +124,7 @@ def quick_retries_and_no_camera_settings(monkeypatch, tmp_path):
     monkeypatch.delenv(camera.CAMERA_SETTING_ENV, raising=False)
     monkeypatch.delenv(camera.USB_DEVICE_ENV, raising=False)
     monkeypatch.delenv(camera.PICAMERA_ROTATION_ENV, raising=False)
+    monkeypatch.delenv(camera.FRONT_CAMERA_ENV, raising=False)
 
 
 @pytest.fixture
@@ -199,9 +200,17 @@ def test_full_view_can_be_turned_off(cameras, monkeypatch):
     assert cameras.opened[0].configuration["sensor"] == {}
 
 
-@pytest.mark.parametrize("setting, create", [("picamera", camera.create_stream), ("both", camera.create_side_stream)])
-def test_rotation_180_has_the_camera_flip_the_picture(cameras, monkeypatch, setting, create):
+@pytest.mark.parametrize(
+    "setting, front, create",
+    [
+        ("picamera", "", camera.create_stream),
+        ("both", "", camera.create_side_stream),
+        ("both", "picamera", camera.create_stream),
+    ],
+)
+def test_rotation_180_has_the_camera_flip_the_picture(cameras, monkeypatch, setting, front, create):
     monkeypatch.setenv(camera.CAMERA_SETTING_ENV, setting)
+    monkeypatch.setenv(camera.FRONT_CAMERA_ENV, front)
     monkeypatch.setenv(camera.PICAMERA_ROTATION_ENV, "180")
     with run_stream(create()) as stream:
         assert stream.frame_after(-1, timeout=FRAME_TIMEOUT_S) is not None
@@ -376,9 +385,11 @@ def test_a_bad_setting_warns_once_across_both_streams(cameras, monkeypatch, capl
     assert caplog.text.count("isn't one of") == 1
 
 
-@pytest.mark.parametrize("setting", ["both", " Both "])
-def test_both_puts_the_webcam_in_front_and_the_pi_camera_on_the_side(cameras, monkeypatch, setting):
+@pytest.mark.parametrize("setting, front_setting", [("both", None), (" Both ", ""), ("both", "usb"), ("both", " USB ")])
+def test_both_puts_the_webcam_in_front_and_the_pi_camera_on_the_side(cameras, monkeypatch, caplog, setting, front_setting):
     monkeypatch.setenv(camera.CAMERA_SETTING_ENV, setting)
+    if front_setting is not None:
+        monkeypatch.setenv(camera.FRONT_CAMERA_ENV, front_setting)
     monkeypatch.setenv(camera.USB_DEVICE_ENV, USB_WEBCAM_BY_ID)
     front = camera.create_stream()
     side = camera.create_side_stream()
@@ -387,6 +398,43 @@ def test_both_puts_the_webcam_in_front_and_the_pi_camera_on_the_side(cameras, mo
     assert isinstance(side, PiCameraStream)
     assert cameras.listing_calls == 0
     assert cameras.opened == []
+    assert "isn't one of" not in caplog.text
+
+
+@pytest.mark.parametrize("front_setting", ["picamera", " PiCamera "])
+def test_front_picamera_puts_the_pi_camera_in_front_and_the_webcam_on_the_side(cameras, monkeypatch, caplog, front_setting):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, "both")
+    monkeypatch.setenv(camera.FRONT_CAMERA_ENV, front_setting)
+    monkeypatch.setenv(camera.USB_DEVICE_ENV, USB_WEBCAM_BY_ID)
+    caplog.set_level(logging.INFO, logger=camera.logger.name)
+    front = camera.create_stream()
+    side = camera.create_side_stream()
+    assert isinstance(front, PiCameraStream)
+    assert type(side) is CameraStream
+    assert side._device == USB_WEBCAM_BY_ID
+    assert cameras.listing_calls == 0
+    assert cameras.opened == []
+    assert "camera: Pi camera through picamera2 (DAYANPI_CAMERA=both, DAYANPI_FRONT_CAMERA=picamera)" in caplog.text
+    assert f"side camera: USB webcam at {USB_WEBCAM_BY_ID}" in caplog.text
+
+
+def test_a_bad_front_camera_warns_once_and_puts_the_webcam_in_front(cameras, monkeypatch, caplog):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, "both")
+    monkeypatch.setenv(camera.FRONT_CAMERA_ENV, "side")
+    front = camera.create_stream()
+    side = camera.create_side_stream()
+    assert type(front) is CameraStream
+    assert isinstance(side, PiCameraStream)
+    assert caplog.text.count("DAYANPI_FRONT_CAMERA='side' isn't one of usb, picamera") == 1
+
+
+@pytest.mark.parametrize("front_setting", ["picamera", "side"])
+def test_front_camera_does_nothing_with_one_camera(no_picamera2, monkeypatch, caplog, front_setting):
+    monkeypatch.setenv(camera.CAMERA_SETTING_ENV, "usb")
+    monkeypatch.setenv(camera.FRONT_CAMERA_ENV, front_setting)
+    assert type(camera.create_stream()) is CameraStream
+    assert camera.create_side_stream() is None
+    assert "isn't one of" not in caplog.text
 
 
 @pytest.mark.parametrize("setting", [None, "", "auto", "usb", "picamera", "webcam"])

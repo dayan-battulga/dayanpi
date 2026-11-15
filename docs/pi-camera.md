@@ -127,13 +127,21 @@ Each run clears out `focus_check/frames/`, so if you want to keep the webcam's f
 
 ## Using both cameras
 
-You can run both at once: the webcam faces you straight on (the **front** camera) and the Pi camera watches from the side.
+You can run both at once. One camera faces you straight on (the **front** camera) and the other watches from the side. By default the webcam is in front and the Pi camera is on the side.
 
 Add this to `/etc/dayanpi.env` with `sudo nano /etc/dayanpi.env`, on its own line:
 
 ```
 DAYANPI_CAMERA=both
 ```
+
+Pi camera in front and the webcam on the side? Add this line too:
+
+```
+DAYANPI_FRONT_CAMERA=picamera
+```
+
+It's `usb` (webcam in front) when it isn't there. Anything other than `usb` or `picamera` logs a warning and puts the webcam in front. It only matters with `both`.
 
 Then restart and check the app found both:
 
@@ -142,19 +150,27 @@ sudo systemctl restart dayanpi
 journalctl -u dayanpi -n 30 --no-pager | grep -i camera
 ```
 
-You want these two lines:
+You want these two lines (the first one is the front camera). With the webcam in front:
 
 ```text
-INFO dayanpi.hardware.camera: camera: USB webcam at /dev/v4l/by-id/usb-...-video-index0 (DAYANPI_CAMERA=both)
+INFO dayanpi.hardware.camera: camera: USB webcam at /dev/v4l/by-id/usb-...-video-index0 (DAYANPI_CAMERA=both, DAYANPI_FRONT_CAMERA=usb)
 INFO dayanpi.hardware.camera: side camera: Pi camera through picamera2 (DAYANPI_CAMERA=both)
 ```
 
+With `DAYANPI_FRONT_CAMERA=picamera`:
+
+```text
+INFO dayanpi.hardware.camera: camera: Pi camera through picamera2 (DAYANPI_CAMERA=both, DAYANPI_FRONT_CAMERA=picamera)
+INFO dayanpi.hardware.camera: side camera: USB webcam at /dev/v4l/by-id/usb-...-video-index0 (DAYANPI_CAMERA=both)
+```
+
+- **Front means front, whichever camera it is.** Faces, gestures and `/video` come from the front camera, and the `side_` numbers in the log and `/video/side` come from the side one. Swap the cameras and the setting, and everything follows.
 - **The webcam finds itself.** The app takes the first name in `/dev/v4l/by-id/` ending in `-video-index0`. You only need `DAYANPI_USB_DEVICE` if you have two webcams and it picks the wrong one.
 - **Arducam camera?** Official cameras get detected on their own, but an Arducam one needs a line in `config.txt`, like `dtoverlay=imx708,cam0` for the `CAM/DISP 0` connector.
 - **The feeds.** `/video` is the front camera and `/video/side` is the side one. Each allows 2 viewers at a time, so a side feed left open somewhere can't lock you out of the front. With any other `DAYANPI_CAMERA` setting, `/video/side` is a 404.
 - **The detector runs on both.** Every check scans a new frame from each camera, and the tracker gets one combined reading. Faces and gestures only use the front camera. [With both cameras](focus-tracker.md#with-both-cameras) in the focus tracker guide has what that means day to day and how to tell which camera caught a phone.
 - **The dashboard.** The Camera card shows both feeds, labeled Front and Side, each with its own boxes. See [The dashboard](MANUAL.md#the-dashboard).
-- **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the side camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
+- **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the Pi camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
 - **The detector check.** `dayanpi.focus.check` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
 
 ## What's different about the Pi camera
@@ -182,7 +198,7 @@ journalctl -u dayanpi -n 30 --no-pager | grep -i "turning the picture"
 You want `Pi camera: turning the picture 180 degrees (DAYANPI_PICAMERA_ROTATION)`.
 
 - **It's free.** The camera flips the picture itself before the app ever sees it, so the Pi's CPU doesn't do any extra work.
-- **Only the Pi camera.** It works however the Pi camera's being used: `picamera`, `auto` when it picks the Pi camera, or as the side camera with `both`. The webcam never gets flipped.
+- **Only the Pi camera.** It works however the Pi camera's being used: `picamera`, `auto` when it picks the Pi camera, or in front or on the side with `both`. The webcam never gets flipped.
 - **Only 0 or 180.** `0` is the default. The camera can only flip, not turn sideways, so there's no 90. Anything else logs a warning and leaves the picture alone.
 - **The `rpicam-*` tools don't know about it.** They don't read `/etc/dayanpi.env`, so they'll still show it upside down. Give them `--rotation 180` yourself, like `rpicam-hello --rotation 180`.
 - **The detector check doesn't either.** Put it in front of the command, like the camera setting: `DAYANPI_CAMERA=picamera DAYANPI_PICAMERA_ROTATION=180 .venv/bin/python -m dayanpi.focus.check`.

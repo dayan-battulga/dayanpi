@@ -147,7 +147,7 @@ Then open the site: the Focus card should flip to **focused** within a couple of
 
 ## With both cameras
 
-With `DAYANPI_CAMERA=both` (setup is in [Using both cameras](pi-camera.md#using-both-cameras)) the webcam faces you straight on and the Pi camera watches from the side, so it can catch what the front misses, like a phone in your lap. With one camera none of this applies, and the log lines stay the same as ever.
+With `DAYANPI_CAMERA=both` (setup is in [Using both cameras](pi-camera.md#using-both-cameras)) one camera faces you straight on and the other watches from the side (the webcam in front unless `DAYANPI_FRONT_CAMERA=picamera`), so it can catch what the front misses, like a phone in your lap. With one camera none of this applies, and the log lines stay the same as ever.
 
 Every check grabs a new frame from each camera and gives each one its own full scan, so each camera's zoomed phone pass is around the person that camera sees. The two results then become one reading for the tracker:
 
@@ -231,7 +231,7 @@ Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' mod
 
 ### Tips
 
-- Face the camera and sit like you normally do. With both cameras on, gestures only use the front one (the webcam).
+- Face the camera and sit like you normally do. With both cameras on, gestures only use the front one (the webcam unless `DAYANPI_FRONT_CAMERA=picamera`).
 - Keep both shoulders in the shot. No shoulders, no gestures.
 - Keep the raised hand in the shot too. The camera looks down at your desk, so a hand straight up can go off the top of the picture. Head height works better.
 - Hold still. The tracker only checks about once a second, so quick waves and swipes won't register.

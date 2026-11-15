@@ -340,7 +340,7 @@ def test_a_frozen_side_camera_counts_as_no_frame_for_that_camera():
     for second in range(1, 4):
         worker.run_once(NOON + second)
     assert tracker.status(NOON + 3)["last_check"]["side_person"] == 0.9
-    side.frozen = True  # the Pi camera hangs and keeps serving the same frame
+    side.frozen = True  # the side camera hangs and keeps serving the same frame
     for second in range(4, 40):
         worker.run_once(NOON + second)
     assert scanner.scans == {"front": 39, "side": 3}, "a stale side frame must not be re-scanned"

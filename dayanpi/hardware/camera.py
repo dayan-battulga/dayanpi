@@ -39,6 +39,8 @@ CAMERA_USB = "usb"
 CAMERA_PICAMERA = "picamera"
 CAMERA_BOTH = "both"
 CAMERA_SETTINGS = (CAMERA_AUTO, CAMERA_USB, CAMERA_PICAMERA, CAMERA_BOTH)
+FRONT_CAMERA_ENV = "DAYANPI_FRONT_CAMERA"  # only read with both
+FRONT_CAMERAS = (CAMERA_USB, CAMERA_PICAMERA)
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +339,12 @@ def read_camera_setting() -> str:
     return setting
 
 
+def read_front_camera() -> str:
+    """DAYANPI_FRONT_CAMERA, which camera faces you with both: usb (the default) or picamera."""
+    setting = os.environ.get(FRONT_CAMERA_ENV, "").strip().lower() or CAMERA_USB
+    return setting
+
+
 def read_picamera_rotation() -> int:
     """DAYANPI_PICAMERA_ROTATION in degrees: 0 (the default) or 180 for a Pi camera mounted upside down."""
     setting = os.environ.get(PICAMERA_ROTATION_ENV, "").strip() or PICAMERA_ROTATIONS[0]
@@ -361,33 +369,48 @@ def find_usb_device() -> str:
     return device
 
 
+def build_stream(role: str, choice: CameraChoice) -> CameraStream:
+    """The stream for choice.backend, logged as "<role>: <which camera> (<reason>)"."""
+    if choice.backend == CAMERA_PICAMERA:
+        stream = PiCameraStream()
+        logger.info("%s: Pi camera through picamera2 (%s)", role, choice.reason)
+    else:
+        usb_device = find_usb_device()
+        stream = CameraStream(usb_device)
+        logger.info("%s: USB webcam at %s (%s)", role, usb_device, choice.reason)
+    return stream
+
+
 def create_stream() -> CameraStream:
     """The main camera, picked by DAYANPI_CAMERA: auto (the default), usb, picamera or both.
 
-    With both, this is the USB webcam (the front camera) and create_side_stream() is the Pi camera.
+    With both, this is the front camera (DAYANPI_FRONT_CAMERA: usb, the default, or picamera)
+    and create_side_stream() is the other one.
     """
     setting = read_camera_setting()
     if setting not in CAMERA_SETTINGS:
         logger.warning("%s=%r isn't one of %s, so using auto", CAMERA_SETTING_ENV, setting, ", ".join(CAMERA_SETTINGS))
         setting = CAMERA_AUTO
-    backend = CAMERA_USB if setting == CAMERA_BOTH else setting
-    choice = detect_camera() if setting == CAMERA_AUTO else CameraChoice(backend, f"{CAMERA_SETTING_ENV}={setting}")
-
-    if choice.backend == CAMERA_PICAMERA:
-        stream = PiCameraStream()
-        logger.info("camera: Pi camera through picamera2 (%s)", choice.reason)
+    if setting == CAMERA_AUTO:
+        choice = detect_camera()
+    elif setting == CAMERA_BOTH:
+        front = read_front_camera()
+        if front not in FRONT_CAMERAS:
+            logger.warning("%s=%r isn't one of %s, so using usb", FRONT_CAMERA_ENV, front, ", ".join(FRONT_CAMERAS))
+            front = CAMERA_USB
+        choice = CameraChoice(front, f"{CAMERA_SETTING_ENV}={setting}, {FRONT_CAMERA_ENV}={front}")
     else:
-        usb_device = find_usb_device()
-        stream = CameraStream(usb_device)
-        logger.info("camera: USB webcam at %s (%s)", usb_device, choice.reason)
+        choice = CameraChoice(setting, f"{CAMERA_SETTING_ENV}={setting}")
+    stream = build_stream("camera", choice)
     return stream
 
 
 def create_side_stream() -> CameraStream | None:
-    """The second camera: the Pi camera when DAYANPI_CAMERA=both, and None for every other setting."""
+    """The second camera when DAYANPI_CAMERA=both (whichever one isn't in front), and None for every other setting."""
     stream = None
     if read_camera_setting() == CAMERA_BOTH:
-        stream = PiCameraStream()
-        logger.info("side camera: Pi camera through picamera2 (%s=%s)", CAMERA_SETTING_ENV, CAMERA_BOTH)
+        # Anything but picamera puts the webcam in front, and create_stream() already warned about a bad value.
+        backend = CAMERA_USB if read_front_camera() == CAMERA_PICAMERA else CAMERA_PICAMERA
+        stream = build_stream("side camera", CameraChoice(backend, f"{CAMERA_SETTING_ENV}={CAMERA_BOTH}"))
     return stream
 
