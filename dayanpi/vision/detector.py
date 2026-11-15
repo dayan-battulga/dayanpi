@@ -1,7 +1,7 @@
 """Finds people, phones and faces in one camera frame.
 
 Two small ONNX models run through plain OpenCV, so the Pi needs nothing new:
-- models/yolo11n_480x640.onnx: YOLO11 nano trained on COCO, exported at the
+- models/yolo26n_480x640.onnx: YOLO26 nano trained on COCO, exported at the
   camera's own 640x480 size. COCO already has "person" and "cell phone".
 - models/face_detection_yunet_2023mar.onnx: OpenCV's YuNet face detector. It
   gives 5 face points (eyes, nose tip, mouth corners), which is enough for a
@@ -9,8 +9,9 @@ Two small ONNX models run through plain OpenCV, so the Pi needs nothing new:
 
 Phones are found in a second, zoomed-in pass: crop around the person, run YOLO
 again on the crop. At desk distance the phone is too small for the full-frame
-pass (it scored 0.00-0.37 on a phone in hand); the zoomed pass scored 0.26-0.72
-on the same frames and 0.00 on every frame of real work.
+pass. Measured with YOLO11n on real desk frames, the full-frame pass scored
+0.00-0.37 on a phone in hand, the zoomed pass 0.26-0.72 on the same frames and
+0.00 on every frame of real work. YOLO26n hasn't been measured on the desk yet.
 """
 
 import math
@@ -22,7 +23,7 @@ import numpy as np
 
 from dayanpi.paths import MODELS_DIR
 
-OBJECT_MODEL_PATH = MODELS_DIR / "yolo11n_480x640.onnx"
+OBJECT_MODEL_PATH = MODELS_DIR / "yolo26n_480x640.onnx"
 FACE_MODEL_PATH = MODELS_DIR / "face_detection_yunet_2023mar.onnx"
 
 INPUT_WIDTH = 640

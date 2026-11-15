@@ -59,17 +59,26 @@ If it says **No camera frames**, the service is still running. Run `sudo systemc
 ## Where the models come from
 
 - `models/face_detection_yunet_2023mar.onnx` is YuNet from OpenCV's model zoo (github.com/opencv/opencv_zoo, MIT license).
-- `models/yolo11n_480x640.onnx` is Ultralytics' YOLO11 nano (AGPL-3.0), converted to ONNX at the camera's 640x480 size. The original weights are a PyTorch file, so the conversion happens on the Mac, not the Pi. To redo it:
+- `models/yolo26n_480x640.onnx` is Ultralytics' YOLO26 nano (AGPL-3.0), converted to ONNX at the camera's 640x480 size. The original weights are a PyTorch file, so the conversion happens on the Mac, not the Pi. To redo it (`-U` matters if you're reusing an old `/tmp/yolo-export`: older Ultralytics doesn't know `yolo26n`):
 
 ```bash
 python3 -m venv /tmp/yolo-export
-/tmp/yolo-export/bin/pip install ultralytics onnx onnxslim onnxruntime
+/tmp/yolo-export/bin/pip install -U ultralytics onnx onnxslim onnxruntime
 cd /tmp
-/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
-mv /tmp/yolo11n.onnx ~/Desktop/code/projects/site-page/models/yolo11n_480x640.onnx
+/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo26n.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
+mv /tmp/yolo26n.onnx ~/Desktop/code/projects/site-page/models/yolo26n_480x640.onnx
 ```
 
 `opset=12` keeps it loadable by OpenCV's DNN module, and `imgsz=(480, 640)` means the camera frame goes in as-is, with no padding.
+
+Quick check before you push. This should print `(1, 84, 6300)`:
+
+```bash
+cd ~/Desktop/code/projects/site-page
+/tmp/yolo-export/bin/python -c "import cv2, numpy as np; net = cv2.dnn.readNetFromONNX('models/yolo26n_480x640.onnx'); net.setInput(np.zeros((1, 3, 480, 640), np.float32)); print(net.forward().shape)"
+```
+
+That's 84 numbers (a box, then a score for each of the 80 COCO classes) for each of the 6300 spots the model checks. YOLO26 can also export "NMS-free" (`nms=False`, end-to-end), which gives `(1, 300, 6)` instead. The detector can't read that one, so stick with the plain export above.
 
 ## Steps 2 to 4: the tracker runs inside the site
 
