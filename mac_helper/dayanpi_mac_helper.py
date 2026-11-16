@@ -1,8 +1,11 @@
 """Tells the dayanpi dashboard which app is in front on this Mac.
 
-Every 2 seconds it asks macOS for the name of the frontmost app. It sends that
-name to the Pi when it changes, plus a heartbeat every 60 seconds. App names are
-all it ever sends: no window titles, no screenshots, nothing from inside apps.
+Every 2 seconds it asks macOS for the name of the frontmost app, and when that's a
+browser it can ask (Chrome, Brave, Edge, Arc), the site of the active tab: just the
+host name without www., like youtube.com. It sends both to the Pi when either changes,
+plus a heartbeat every 60 seconds. Never a full URL, a path, a query or a page title,
+and nothing at all from incognito/private windows. Safari and Firefox send no site:
+Safari can't tell a script which windows are private, and Firefox has no tabs to ask.
 
     python3 dayanpi_mac_helper.py --once      # print the app in front and quit
     python3 dayanpi_mac_helper.py --dry-run   # keep watching, only print what it would send
@@ -25,6 +28,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -49,6 +53,39 @@ LSAPPINFO = "/usr/bin/lsappinfo"
 OSASCRIPT = "/usr/bin/osascript"
 SECURITY = "/usr/bin/security"
 FRONT_APP_SCRIPT = 'tell application "System Events" to get name of first application process whose frontmost is true'
+# Each prints the active tab's URL, or nothing for a private window, no window, or a browser that just quit
+# ("is running" first, so the script can't start it again). Anything they can't confirm is a normal window
+# fails closed: no site.
+CHROMIUM_URL_SCRIPT = """
+if application "{app}" is running then
+    tell application "{app}"
+        if (count of windows) > 0 and mode of front window is "normal" then return URL of active tab of front window
+    end tell
+end if
+return ""
+"""
+ARC_URL_SCRIPT = """
+if application "Arc" is running then
+    tell application "Arc"
+        if (count of windows) > 0 and not (incognito of front window) then return URL of active tab of front window
+    end tell
+end if
+return ""
+"""
+BROWSER_URL_SCRIPTS = {
+    "Google Chrome": CHROMIUM_URL_SCRIPT.format(app="Google Chrome"),
+    "Brave Browser": CHROMIUM_URL_SCRIPT.format(app="Brave Browser"),
+    "Microsoft Edge": CHROMIUM_URL_SCRIPT.format(app="Microsoft Edge"),
+    "Arc": ARC_URL_SCRIPT,
+}
+UNREADABLE_BROWSERS = {
+    "Safari": "Safari can't tell a script which windows are private",
+    "Firefox": "Firefox has no AppleScript for its tabs",
+}
+WEB_SCHEMES = ("http", "https")
+MAX_SITE_LENGTH = 253
+# A plain host name, the same check the Pi makes: lowercase labels of letters, digits and inner hyphens.
+SITE_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
 USER_AGENT = "dayanpi-mac-helper"
 
 NO_APP_EXIT = 1
@@ -71,6 +108,12 @@ class SetupError(Exception):
 class AppDetection:
     app_name: str | None = None
     problem: str = ""
+
+
+@dataclass
+class SiteDetection:
+    site: str | None = None
+    problem: str = ""  # why a browser gave no site (not private windows: those are just no site)
 
 
 @dataclass
@@ -191,6 +234,36 @@ def detect_front_app(run: CommandRunner) -> AppDetection:
     return detection
 
 
+def find_site(url: str) -> str | None:
+    """The host name of a web page's URL without www., like youtube.com. None for anything that isn't an
+    http(s) page with a plain host name: file://, chrome://, about:blank, an empty tab, an IP v6 address."""
+    try:
+        parts = urllib.parse.urlsplit(url.strip())
+        host = (parts.hostname or "").rstrip(".").encode("idna").decode("ascii").removeprefix("www.")
+        scheme = parts.scheme
+    except (ValueError, UnicodeError):
+        host = scheme = ""
+    is_site = scheme in WEB_SCHEMES and len(host) <= MAX_SITE_LENGTH and SITE_PATTERN.match(host) is not None
+    site = host if is_site else None
+    return site
+
+
+def detect_site(run: CommandRunner, app_name: str) -> SiteDetection:
+    """Asks the browser in front for its active tab's URL and keeps only the site. Other apps have no site."""
+    script = BROWSER_URL_SCRIPTS.get(app_name)
+    detection = SiteDetection(problem=UNREADABLE_BROWSERS.get(app_name, ""))
+    if script is not None:
+        output = run([OSASCRIPT, "-e", script])
+        problem = "" if output.returncode == 0 else f"osascript: {summarize_output(output)}"
+        detection = SiteDetection(site=find_site(output.stdout) if output.returncode == 0 else None, problem=problem)
+    return detection
+
+
+def describe_front(app_name: str, site: str | None) -> str:
+    text = app_name if site is None else f"{app_name} · {site}"
+    return text
+
+
 def read_keychain_password(run: CommandRunner, user: str) -> str:
     """Reads the dashboard password from the login Keychain. Raises SetupError when it isn't there."""
     output = run([SECURITY, "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", user, "-w"])
@@ -224,8 +297,8 @@ def read_user() -> str:
     return user
 
 
-def encode_app(app_name: str) -> bytes:
-    body = json.dumps({"app": app_name}).encode("utf-8")
+def encode_app(app_name: str, site: str | None = None) -> bytes:
+    body = json.dumps({"app": app_name, "site": site}).encode("utf-8")
     return body
 
 
@@ -255,11 +328,11 @@ class PiClient:
     def load_password(self) -> None:
         self.password = read_keychain_password(self.run, self.user)
 
-    def build_request(self, app_name: str) -> urllib.request.Request:
+    def build_request(self, app_name: str, site: str | None = None) -> urllib.request.Request:
         token = base64.b64encode(f"{self.user}:{self.password}".encode("utf-8")).decode("ascii")
         request = urllib.request.Request(
             self.app_url,
-            data=encode_app(app_name),
+            data=encode_app(app_name, site),
             method="POST",
             headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
         )
@@ -267,13 +340,13 @@ class PiClient:
         request.add_unredirected_header("Authorization", f"Basic {token}")
         return request
 
-    def send_app(self, app_name: str) -> SendResult:
+    def send_app(self, app_name: str, site: str | None = None) -> SendResult:
         """One POST. After a 401 the Keychain is read again on the next try, so fixing it there is enough."""
         status = 0
         try:
             if self.password is None:
                 self.load_password()
-            status = self.send(self.build_request(app_name), HTTP_TIMEOUT_S)
+            status = self.send(self.build_request(app_name, site), HTTP_TIMEOUT_S)
             result = describe_status(status, self.user)
         except SetupError as error:
             result = SendResult(delivered=False, problem=str(error))
@@ -288,35 +361,36 @@ class PiClient:
 
 
 class AppReporter:
-    """Sends the front app whenever it changes, plus a heartbeat. Failed sends back off, and only the
-    newest app is ever retried, so nothing piles up while the Pi is out of reach."""
+    """Sends the front app and site whenever either changes, plus a heartbeat. Failed sends back off, and
+    only the newest app is ever retried, so nothing piles up while the Pi is out of reach."""
 
-    def __init__(self, deliver: Callable[[str], SendResult], clock: Callable[[], float]) -> None:
+    def __init__(self, deliver: Callable[[str, str | None], SendResult], clock: Callable[[], float]) -> None:
         self.deliver = deliver
         self.clock = clock
-        self.seen_app: str | None = None
-        self.sent_app: str | None = None
+        self.seen_front: str | None = None  # "app · site", what the log last said
+        self.sent_front: str | None = None
         self.sent_at = 0.0
         self.retry_at = 0.0
         self.backoff_s = 0.0
         self.failures = 0
 
-    def report(self, app_name: str) -> None:
+    def report(self, app_name: str, site: str | None = None) -> None:
         now = self.clock()
-        if app_name != self.seen_app:
-            logger.info("front app: %s", app_name)
-            self.seen_app = app_name
-        changed = app_name != self.sent_app
+        front = describe_front(app_name, site)
+        if front != self.seen_front:
+            logger.info("front app: %s", front)
+            self.seen_front = front
+        changed = front != self.sent_front
         heartbeat_due = now - self.sent_at >= HEARTBEAT_INTERVAL_S
         if (changed or heartbeat_due) and now >= self.retry_at:
-            self.send(app_name, now)
+            self.send(app_name, site, now)
 
-    def send(self, app_name: str, now: float) -> None:
-        result = self.deliver(app_name)
+    def send(self, app_name: str, site: str | None, now: float) -> None:
+        result = self.deliver(app_name, site)
         if result.delivered:
             if self.failures:
                 logger.info("reached the Pi again after %d failed tries", self.failures)
-            self.sent_app = app_name
+            self.sent_front = describe_front(app_name, site)
             self.sent_at = now
             self.failures = 0
             self.backoff_s = 0.0
@@ -326,13 +400,17 @@ class AppReporter:
             self.backoff_s = min(max(self.backoff_s * 2, FIRST_BACKOFF_S), MAX_BACKOFF_S)
             self.retry_at = now + self.backoff_s
             logger.warning(
-                "couldn't send %r, trying again in %.0f s: %s", app_name, self.backoff_s, result.problem
+                "couldn't send %r, trying again in %.0f s: %s",
+                describe_front(app_name, site),
+                self.backoff_s,
+                result.problem,
             )
 
 
 def watch_front_app(tools: HelperTools, reporter: AppReporter) -> None:
     """Checks the front app every POLL_INTERVAL_S until Ctrl+C or launchd stops it."""
     detection_failing = False
+    site_problems: dict[str, str] = {}  # the last no-site reason logged per browser, so each is said once
     while True:
         started = tools.clock()
         detection = detect_front_app(tools.run)
@@ -346,7 +424,11 @@ def watch_front_app(tools: HelperTools, reporter: AppReporter) -> None:
             if detection_failing:
                 logger.info("can tell which app is in front again")
             detection_failing = False
-            reporter.report(detection.app_name)
+            site_detection = detect_site(tools.run, detection.app_name)
+            if site_detection.problem and site_problems.get(detection.app_name) != site_detection.problem:
+                logger.info("no site from %s: %s", detection.app_name, site_detection.problem)
+                site_problems[detection.app_name] = site_detection.problem
+            reporter.report(detection.app_name, site_detection.site)
         tools.sleep(max(0.0, POLL_INTERVAL_S - (tools.clock() - started)))
 
 
@@ -366,8 +448,8 @@ def run_dry_run(tools: HelperTools) -> None:
     app_url = read_app_url()
     logger.info("dry run: nothing gets sent. Switch apps to see what would go to the Pi (Ctrl+C stops).")
 
-    def pretend_to_send(app_name: str) -> SendResult:
-        logger.info("dry run, would POST %s to %s", encode_app(app_name).decode("utf-8"), app_url)
+    def pretend_to_send(app_name: str, site: str | None) -> SendResult:
+        logger.info("dry run, would POST %s to %s", encode_app(app_name, site).decode("utf-8"), app_url)
         result = SendResult(delivered=True)
         return result
 

@@ -1,7 +1,8 @@
 """One markdown page per finished day, data/days/YYYY-MM-DD.md, for the calendar card and for reading anywhere.
 
 Each page is built from that day's focus log: the totals (the same replay as the restart
-and the stats tool), the work blocks, and the to-dos checked off. The numbers also go in
+and the stats tool), the work blocks, the to-dos checked off, and the sites the Mac had in
+front while you were at the desk. The numbers also go in
 the frontmatter, which Obsidian shows as properties and the calendar reads back. Pages are
 written once: at startup for every past day that has a log and no page, then just after
 each local midnight. Today never gets a file; the routes build its page live from the log.
@@ -12,13 +13,16 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, FocusLog, find_data_dir, format_day, replay_day, total_day
+from dayanpi.focus.tracker import DAY_FORMAT, SAMPLE_LOG_INTERVAL_S, FocusLog, find_data_dir, format_day, replay_day, total_day
 from dayanpi.sign.renderer import format_duration
 from dayanpi.utils.files import write_atomically
 
 DAYS_DIR_NAME = "days"
 DAY_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MONTH_PATTERN = r"^\d{4}-\d{2}$"
+TOP_SITES = 10
+AT_DESK_STATES = ("working", "phone")
+LOCKED_APP = "Locked"
 
 
 def find_days_dir() -> Path:
@@ -66,6 +70,22 @@ def find_finished_todos(lines: list[dict], day: str) -> list[dict]:
     return todos
 
 
+def count_site_seconds(lines: list[dict], day: str) -> dict[str, float]:
+    """The TOP_SITES sites by time at the desk, most first.
+
+    From the sample lines: each one stands for the SAMPLE_LOG_INTERVAL_S before it, and
+    counts when you were working or on your phone (not away or unknown) and the Mac wasn't
+    locked. Older logs have no site on their samples and count nothing.
+    """
+    totals: dict[str, float] = {}
+    for line in list_day_lines(lines, day):
+        site = line.get("site")
+        if line.get("event") == "sample" and site and line.get("state") in AT_DESK_STATES and line.get("app") != LOCKED_APP:
+            totals[site] = totals.get(site, 0.0) + SAMPLE_LOG_INTERVAL_S
+    top = dict(sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:TOP_SITES])
+    return top
+
+
 def read_midnight(day: str) -> float:
     midnight = datetime.strptime(day, DAY_FORMAT).timestamp()
     return midnight
@@ -86,6 +106,7 @@ def build_day_page(lines: list[dict], day: str) -> str:
     totals = total_day(replay)
     blocks = find_blocks(lines, day)
     todos = find_finished_todos(lines, day)
+    sites = count_site_seconds(lines, day)
     date = datetime.strptime(day, DAY_FORMAT)
     parts = [
         "---",
@@ -124,6 +145,10 @@ def build_day_page(lines: list[dict], day: str) -> str:
             "## To-dos done",
             *[f"- {' '.join(str(todo.get('text', '')).split())} ({format_duration(todo.get('seconds', 0))})" for todo in todos],
             *([] if todos else ["- None"]),
+            "",
+            "## Sites",
+            *[f"- {site}: {format_duration(seconds)}" for site, seconds in sites.items()],
+            *([] if sites else ["- None"]),
         ]
     page = "\n".join(parts) + "\n"
     return page

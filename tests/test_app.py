@@ -94,6 +94,43 @@ def test_mac_app_route_records_the_front_app():
         assert client.post("/api/mac/app", json={"app": "x" * 101}, auth=AUTH).status_code == 422
 
 
+@pytest.mark.parametrize(
+    "site",
+    [
+        "https://youtube.com/watch?v=1",
+        "youtube.com/watch",
+        "YouTube.com",
+        "my page title",
+        "-bad.com",
+        "bad-.com",
+        "youtube..com",
+        "",
+        "a" * 254,
+        "y" * 64 + ".com",
+        123,
+    ],
+)
+def test_the_mac_app_route_rejects_anything_but_a_plain_host_name(site):
+    with TestClient(app.app) as client:
+        assert client.post("/api/mac/app", json={"app": "Google Chrome", "site": site}, auth=AUTH).status_code == 422
+
+
+def test_the_mac_app_route_takes_a_site_or_none_and_logs_it(monkeypatch, tmp_path):
+    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    with TestClient(app.app) as client:
+        chrome = client.post("/api/mac/app", json={"app": "Google Chrome", "site": "youtube.com"}, auth=AUTH)
+        status = client.get("/api/focus", auth=AUTH).json()
+        code = client.post("/api/mac/app", json={"app": "Code"}, auth=AUTH)
+        local = client.post("/api/mac/app", json={"app": "Arc", "site": "localhost"}, auth=AUTH)
+    assert [chrome.status_code, code.status_code, local.status_code] == [200, 200, 200]
+    assert (status["app"], status["site"]) == ("Google Chrome", "youtube.com")
+    lines = [(line["app"], line["site"]) for line in log.read_day(format_day(time.time())) if line["event"] == "mac_app"]
+    assert lines == [("Google Chrome", "youtube.com"), ("Code", None), ("Arc", "localhost")]
+
+
 def test_block_route_starts_stops_and_toggles():
     with TestClient(app.app) as client:
         assert client.post("/api/focus/block", json={"action": "stop"}, auth=AUTH).json()["active"] is False

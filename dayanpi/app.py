@@ -445,13 +445,20 @@ def flip_sign_page(command: SignPageCommand):
     return {"status": "ok", "page": page}
 
 
+# A plain host name like youtube.com: lowercase labels of letters, digits and inner hyphens. The Mac helper
+# makes the same check, so a full URL, a path or a page title can't get through either end.
+SITE_PATTERN = r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+SITE_MAX = 253
+
+
 class AppReport(BaseModel):
     app: str = Field(min_length=1, max_length=100)
+    site: Annotated[str, StringConstraints(max_length=SITE_MAX, pattern=SITE_PATTERN)] | None = None
 
 
 @app.post("/api/mac/app")
 def mac_app(report: AppReport):
-    changed = tracker.record_app(report.app.strip(), time.time())
+    changed = tracker.record_app(report.app.strip(), time.time(), site=report.site)
     return {"status": "ok", "changed": changed}
 
 

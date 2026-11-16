@@ -242,7 +242,7 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
     assert samples[0]["state"] == "working"
 
 
-SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "turn", "tilt", "ms", "block", "app", "streak_s"}
+SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "turn", "tilt", "ms", "block", "app", "site", "streak_s"}
 
 
 def read_samples(log: FocusLog) -> list[dict]:
@@ -376,6 +376,28 @@ def test_record_app_logs_changes_only(tmp_path):
     assert tracker.record_app("Slack", NOON + 2) is True
     assert [event["app"] for event in log.read_day("2026-10-29")] == ["Code", "Slack"]
     assert tracker.status(NOON + 3)["app"] == "Slack"
+
+
+def test_a_new_site_in_the_same_browser_is_a_change(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    tracker = FocusTracker(log=log, started_at=NOON)
+    assert tracker.record_app("Google Chrome", NOON, site="youtube.com") is True
+    assert tracker.record_app("Google Chrome", NOON + 1, site="youtube.com") is False
+    assert tracker.record_app("Google Chrome", NOON + 2, site="github.com") is True
+    assert tracker.record_app("Google Chrome", NOON + 3) is True, "a private window: same app, no site"
+    lines = [(event["app"], event["site"]) for event in log.read_day("2026-10-29")]
+    assert lines == [("Google Chrome", "youtube.com"), ("Google Chrome", "github.com"), ("Google Chrome", None)]
+    assert tracker.status(NOON + 4)["site"] is None
+
+
+def test_the_site_goes_on_the_samples_next_to_the_app(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(log=log)
+    desk.tracker.record_app("Google Chrome", desk.now, site="youtube.com")
+    desk.tick(make_reading(), 31)
+    sample = read_samples(log)[0]
+    assert (sample["app"], sample["site"]) == ("Google Chrome", "youtube.com")
+    assert desk.tracker.status(desk.now)["site"] == "youtube.com"
 
 
 def test_status_has_the_fields_the_dashboard_needs():

@@ -131,7 +131,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 Gestures get a `gesture` line in the log too, and the both-hands gesture says "Block started." / "Block stopped."
 
-**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, block starts/stops, the Mac's front app, a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks; the restart and the stats tool just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, block starts/stops, the Mac's front app (and the site, for a browser), a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks; the restart and the stats tool just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
 
 Check it's filling up:
 
@@ -150,11 +150,20 @@ If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your
 | --- | --- |
 | `GET /api/focus` | Current state, today's totals, the block, the last check's numbers, and today's timeline segments |
 | `POST /api/focus/block` | `{"action": "start" \| "stop" \| "toggle"}` |
-| `POST /api/mac/app` | `{"app": "Code"}`, sent by the Mac helper when the front app changes |
+| `POST /api/mac/app` | `{"app": "Google Chrome", "site": "youtube.com"}` (site optional, a plain host name or nothing), sent by the Mac helper when the front app or site changes |
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
 
-**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, so "focused" can later be split into coding / docs / browser / Slack. App names only, nothing else. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **Mac** entry in the status bar at the bottom of the page shows the current app.
+**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, and when that's a browser, which website, so "focused" can later be split into coding / docs / browsing / Slack. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **Mac** entry in the status bar at the bottom of the page shows the current app, like `Google Chrome · youtube.com`.
+
+What it records, and what it never does:
+
+- **The app's name**, like `Code` or `Google Chrome`. A locked screen is `Locked`.
+- **The site, only for Google Chrome, Brave, Edge and Arc**, and only the host name without `www.`: `youtube.com`, `mail.google.com`, `localhost`. That's what goes on the `mac_app` line and every `sample` line in the focus log, next to the app.
+- **Never** a full URL, a path, a query string, a page title or a window title. The helper strips everything but the host name before anything leaves the Mac, and the Pi turns away anything that isn't a plain host name.
+- **Never anything from incognito or private windows.** The helper asks the browser first, and if it can't confirm the window is a normal one, it sends no site. Safari can't tell a script which windows are private, so Safari never sends a site. Firefox has nothing a script can ask, so it doesn't either.
+
+Logs from before sites existed just have no `site`, and everything still reads them fine.
 
 **Deploy it:**
 
@@ -223,6 +232,7 @@ Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in
 - **Totals:** the same numbers, readable.
 - **Focus blocks:** each block's start and end time and how long it ran. A block still on at midnight shows up in both days: one ends "still on at the end of the day", the next starts at 00:00.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
+- **Sites:** the top 10 websites by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site). Only time at the desk counts: you're working or on your phone, not away, and the Mac isn't locked. It's counted from the 30-second sample lines, so it's accurate to about half a minute. Days from before sites existed just say "None".
 
 It's all built from that day's focus log (the to-dos come from its `todo` lines), with the same math the restart and the stats tool use.
 

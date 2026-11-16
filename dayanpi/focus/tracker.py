@@ -309,6 +309,7 @@ class FocusTracker:
         self._streak_start: float | None = None
         self._block_active = False
         self._current_app: str | None = None
+        self._current_site: str | None = None
         self._last_sample_at = started_at
         self._last_check: CheckSummary | None = None
         self._totals = DayTotals(day=format_day(started_at))
@@ -321,12 +322,14 @@ class FocusTracker:
             update = self._update_locked(reading, now)
         return update
 
-    def record_app(self, app: str, now: float) -> bool:
+    def record_app(self, app: str, now: float, site: str | None = None) -> bool:
+        """The Mac's front app, and the site when it's a browser. A line in the log when either changes."""
         with self._lock:
-            changed = app != self._current_app
+            changed = (app, site) != (self._current_app, self._current_site)
             if changed:
                 self._current_app = app
-                self._write({"event": "mac_app", "app": app}, now)
+                self._current_site = site
+                self._write({"event": "mac_app", "app": app, "site": site}, now)
         return changed
 
     def record_gesture(self, name: str, now: float, **details) -> None:
@@ -619,6 +622,7 @@ class FocusTracker:
                 "ms": round(check.elapsed_ms),
                 "block": self._block_active,
                 "app": self._current_app,
+                "site": self._current_site,
                 "streak_s": (
                     None
                     if self._streak_start is None
@@ -659,6 +663,7 @@ class FocusTracker:
             "today": self._totals_dict(),
             "block": {"active": self._block_active},
             "app": self._current_app,
+            "site": self._current_site,
             "camera_ok": frame_age is not None and frame_age < NO_FRAME_UNKNOWN_S,
             "last_check": (
                 None if self._last_check is None else asdict(self._last_check)

@@ -1,8 +1,8 @@
-# Mac helper: which app is in front
+# Mac helper: which app (and website) is in front
 
 A tiny script for the focus tracker. The Pi's camera can tell whether I'm working, on my phone, or away. This script adds *what* I'm doing on the Mac (Code, Slack, Google Chrome...), so "working" can be split into coding, docs, browsing and so on.
 
-Every 2 seconds it asks macOS for the name of the app in front. When that changes, it sends the name to the Pi (`POST /api/mac/app`). It also re-sends the current app every 60 seconds as a heartbeat, so the Pi knows the Mac is still there. A locked screen shows up as `Locked`.
+Every 2 seconds it asks macOS for the name of the app in front. When that's a browser it can ask (Google Chrome, Brave Browser, Microsoft Edge or Arc), it also asks for the site of the active tab: just the host name, like `youtube.com`. When either changes, it sends both to the Pi (`POST /api/mac/app`). It also re-sends them every 60 seconds as a heartbeat, so the Pi knows the Mac is still there. A locked screen shows up as `Locked`.
 
 If the Pi can't be reached (Tailscale off, Pi rebooting), it doesn't crash. It waits and tries again (2 s, 4 s, 8 s... up to a minute between tries), and it only ever sends whatever app is in front *by then*, so nothing piles up.
 
@@ -10,7 +10,14 @@ It's plain Python with nothing to install, so macOS's own `/usr/bin/python3` run
 
 ## Privacy
 
-It only sends the app's name, like `{"app": "Slack"}`. No window titles, no tab names or URLs, no screenshots, no keystrokes, nothing about what's inside the app. It goes to your Pi over Tailscale and nowhere else. The log on the Mac (`~/Library/Logs/dayanpi-mac-helper.log`) has the same app names and nothing more. Your password stays in the Keychain and never shows up in the log.
+It sends the app's name, and for a browser the site, like `{"app": "Google Chrome", "site": "youtube.com"}`. Outside a browser the site is just `null`.
+
+- **The site is only the host name**, with `www.` taken off: `https://www.youtube.com/watch?v=abc&t=42` becomes `youtube.com`. Subdomains stay (`mail.google.com`), ports and logins go. Never the full URL, the path, the query or the page title. Pages that aren't websites (`file://`, `chrome://` settings, an empty tab) send no site.
+- **Incognito and private windows send no site.** It asks the browser whether the front window is private first, and anything it can't confirm counts as private.
+- **Safari and Firefox send no site at all.** Safari doesn't let a script tell which windows are private, so it isn't asked. Firefox has nothing for scripts to ask. The log says so once.
+- No window titles, no screenshots, no keystrokes, nothing else from inside any app.
+
+The Pi checks it too: it only takes a site that's a plain host name (letters, digits, dots and hyphens) and turns away anything else. It all goes to your Pi over Tailscale and nowhere else. The log on the Mac (`~/Library/Logs/dayanpi-mac-helper.log`) has the same app names and sites and nothing more. Your password stays in the Keychain and never shows up in the log.
 
 ## What you need
 
@@ -58,7 +65,7 @@ Then the dry run. It keeps watching but only prints what it *would* send:
 /usr/bin/python3 dayanpi_mac_helper.py --dry-run
 ```
 
-Click between a few apps. You should see a `would POST {"app": ...}` line for each switch, plus the same app again after a minute (the heartbeat). `Ctrl+C` to stop.
+Click between a few apps, and between a few tabs in Chrome. You should see a `would POST {"app": ..., "site": ...}` line for each switch, plus the same again after a minute (the heartbeat). `Ctrl+C` to stop.
 
 Last, the real thing, still in the foreground:
 
@@ -68,7 +75,12 @@ DAYANPI_USER=yourname /usr/bin/python3 dayanpi_mac_helper.py
 
 Switch apps a few times. A `front app: ...` line per switch and no warnings means the Pi is taking them. `Ctrl+C` to stop.
 
-**Permission pop-up:** the script asks `lsappinfo` first, which needs no permission. Only if that fails does it fall back to AppleScript (`osascript` asking System Events). The first time that happens, macOS asks whether Terminal (or `python3`, when it runs in the background) may control System Events. Click OK. Missed it or said no? System Settings → Privacy & Security → Automation.
+**Permission pop-ups:** macOS asks before one app may control another (that's AppleScript), so expect one or two of these:
+
+- **The browser:** the first time a supported browser is in front, macOS asks whether Terminal (or `python3`, when it runs in the background) may control Google Chrome (or Brave, Edge, Arc). Click **OK**, or that browser just sends no site. Each browser asks once, and the background job asks again on its own the first time it runs, as `python3`.
+- **System Events:** the script finds the front app with `lsappinfo`, which needs no permission. Only if that fails does it fall back to asking System Events, which pops up the same kind of question.
+
+Said no, or missed it? **System Settings → Privacy & Security → Automation**, find Terminal or `python3`, and switch the browser (or System Events) on. If the browser isn't listed there, it was never asked: put it in front for a few seconds while the helper runs.
 
 ## 4. Run it in the background (LaunchAgent)
 
@@ -100,6 +112,7 @@ You want `state = running`. The log gets a line per app switch, plus warnings wh
 
 ```text
 2026-10-29 10:14:02 INFO front app: Code
+2026-10-29 10:14:21 INFO front app: Google Chrome · github.com
 2026-10-29 10:14:40 INFO front app: Slack
 2026-10-29 10:20:11 WARNING couldn't send 'Slack', trying again in 2 s: can't reach the Pi (...). Is Tailscale connected and the dayanpi service running?
 2026-10-29 10:20:15 INFO reached the Pi again after 2 failed tries
@@ -148,6 +161,8 @@ The last line deletes the saved password too; skip it if you want to keep it.
 | `can't reach the Pi` | Is Tailscale connected? Does https://dayoon.tail279594.ts.net/ open in the browser? Is the `dayanpi` service running? |
 | `the Pi answered HTTP 404` | The Pi's code doesn't have `/api/mac/app` yet. Pull and restart the service there |
 | `can't tell which app is in front` | Run `--once` in Terminal to see why. Usually it's the System Events permission above |
+| `no site from Google Chrome: osascript: ... Not authorized to send Apple events` | You said no to the browser pop-up. System Settings → Privacy & Security → Automation, then switch the browser on under Terminal or `python3` |
+| `no site from Safari` / `no site from Firefox` | Expected. Safari can't tell which windows are private and Firefox can't be asked, so they never send a site |
 | `Bootstrap failed: 5: Input/output error` | Usually means it's already loaded. Boot it out, then bootstrap again |
 | `Operation not permitted` in the log | The plist points into `~/Desktop` or `~/Documents`. Use the `~/dayanpi-mac-helper` copy |
 | The same error every 10 seconds in the log | On setup problems the helper quits and launchd restarts it. Fix what the error names and it carries on by itself |

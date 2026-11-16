@@ -56,6 +56,7 @@ it("draws every card from one stream", async () => {
   expect(document.getElementById("cpu-cores")?.children).toHaveLength(4);
   expect(document.getElementById("net")).toHaveTextContent("↓ 120 kb/s · ↑ 1.5 Mb/s");
   expect(document.getElementById("sign-mode")).toHaveTextContent("preview");
+  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
 
   await waitFor(() => expect(document.querySelector(".segment.is-working.is-live")).not.toBeNull());
   expect(screen.getByText("Sat down to work")).toBeInTheDocument();
@@ -95,4 +96,10 @@ it("shows the last gesture or hand sign for a few seconds", () => {
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 4.5 } })));
 
   expect(screen.getByRole("status")).toBeEmptyDOMElement();
+});
+
+it("shows the browser's site next to the Mac app", () => {
+  render(<App />);
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: "Google Chrome", site: "youtube.com" })));
+  expect(document.getElementById("mac")).toHaveTextContent("Google Chrome · youtube.com");
 });

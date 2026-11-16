@@ -130,7 +130,7 @@ export function PiSection({ stats }: { stats: Snapshot | null }) {
           <div>
             <dt className="label">Mac</dt>
             <dd id="mac" className="mono">
-              {focus == null ? "--" : focus.app || "—"}
+              {focus == null ? "--" : focus.app && focus.site ? `${focus.app} · ${focus.site}` : focus.app || "—"}
             </dd>
           </div>
           <div>

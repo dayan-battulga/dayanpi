@@ -68,6 +68,9 @@ todos_done: 2
 ## To-dos done
 - finish the report (1h12)
 - reply to emails (10m)
+
+## Sites
+- None
 """
 
 
@@ -167,3 +170,38 @@ def test_a_month_reads_only_its_own_pages(tmp_path):
     assert sorted(month) == ["2026-11-02", "2026-11-14"]
     assert month["2026-11-02"]["focus_minutes"] == 140
     assert month["2026-11-14"] == {}
+
+
+def sample(hour: int, minute: int, second: int, state: str, app: str | None, site: str | None = None) -> dict:
+    line = {"ts": at(hour, minute) + second, "day": DAY, "event": "sample", "state": state, "app": app, "site": site}
+    return line
+
+
+def test_minutes_per_site_only_count_time_at_the_desk():
+    lines = [line(9, 0, "state", state="working")]
+    lines += [sample(9, minute, second, "working", "Google Chrome", "github.com") for minute in range(10) for second in (0, 30)]  # 10 min
+    lines += [sample(10, minute, second, "phone", "Google Chrome", "youtube.com") for minute in range(4) for second in (0, 30)]  # 4 min
+    lines += [sample(11, minute, 0, "away", "Google Chrome", "youtube.com") for minute in range(30)]  # not at the desk
+    lines += [sample(12, minute, 0, "unknown", "Google Chrome", "youtube.com") for minute in range(30)]  # camera down
+    lines += [sample(13, minute, 0, "working", "Locked", "youtube.com") for minute in range(30)]  # screen locked
+    lines += [sample(14, minute, 0, "working", "Code") for minute in range(30)]  # no site
+    page = build_day_page(lines, DAY)
+    assert "## Sites\n- github.com: 10m\n- youtube.com: 4m\n" in page
+
+
+def test_only_the_top_ten_sites_make_the_page():
+    lines = [sample(9, index, 0, "working", "Arc", f"site{index:02d}.com") for index in range(12) for _ in range(index + 1)]
+    sites_part = build_day_page(lines, DAY).split("## Sites\n")[1]
+    listed = [entry.split(":")[0].removeprefix("- ") for entry in sites_part.strip().splitlines()]
+    assert listed == [f"site{index:02d}.com" for index in range(11, 1, -1)]
+
+
+def test_an_old_log_without_sites_still_makes_a_page():
+    old_lines = [
+        line(9, 0, "state", state="working"),
+        line(9, 0, "mac_app", app="Google Chrome"),
+        {**line(9, 30, "sample", state="working", app="Google Chrome", person=0.9)},
+    ]
+    page = build_day_page(old_lines, DAY)
+    assert "- Focus: 30m" in page
+    assert page.endswith("## Sites\n- None\n")

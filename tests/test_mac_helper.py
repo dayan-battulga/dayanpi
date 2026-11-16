@@ -56,7 +56,8 @@ class LoopStopped(Exception):
 class FakeMac:
     """Answers like lsappinfo, osascript and security would. None in front_apps means nothing is in front."""
 
-    def __init__(self, front_apps=("Code",), lsappinfo_works=True, osascript_app=None, password=PASSWORD):
+    def __init__(self, front_apps=("Code",), lsappinfo_works=True, osascript_app=None, password=PASSWORD, tab_urls=("",)):
+        self.tab_urls = list(tab_urls)  # what the browser URL script prints, one per ask; "" is a private window
         self.front_apps = list(front_apps)
         self.lsappinfo_works = lsappinfo_works
         self.osascript_app = osascript_app
@@ -69,6 +70,8 @@ class FakeMac:
         tool = Path(args[0]).name
         if tool == "security":
             output = self.answer_security()
+        elif tool == "osascript" and "active tab" in args[-1]:
+            output = make_output(0, (self.tab_urls.pop(0) if len(self.tab_urls) > 1 else self.tab_urls[0]) + "\n", "")
         elif tool == "osascript":
             output = self.answer_osascript()
         elif args[1] == "front":
@@ -121,6 +124,10 @@ class FakePi:
         sent_apps = [json.loads(request.data)["app"] for request in self.requests]
         return sent_apps
 
+    def read_sent_bodies(self):
+        bodies = [json.loads(request.data) for request in self.requests]
+        return bodies
+
 
 class FakeClock:
     """time.monotonic and time.sleep in one. Sleeping moves the clock, and the Nth sleep ends the loop."""
@@ -150,8 +157,8 @@ class FakeDelivery:
         self.attempted_apps = []
         self.attempt_times = []
 
-    def send_app(self, app_name):
-        self.attempted_apps.append(app_name)
+    def send_app(self, app_name, site=None):
+        self.attempted_apps.append(app_name if site is None else f"{app_name} · {site}")
         self.attempt_times.append(self.clock())
         delivered = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
         result = helper.SendResult(delivered=delivered, problem="" if delivered else "Pi unplugged")
@@ -332,7 +339,7 @@ def test_client_posts_the_app_as_json_with_basic_auth():
     assert result.delivered
     assert request.full_url == "https://dayoon.tail279594.ts.net/api/mac/app"
     assert request.get_method() == "POST"
-    assert json.loads(request.data) == {"app": "Code"}
+    assert json.loads(request.data) == {"app": "Code", "site": None}
     assert request.get_header("Content-type") == "application/json"
     assert request.get_header("Authorization") == make_auth_header(PASSWORD)
     assert pi.timeouts == [5.0]
@@ -499,9 +506,9 @@ def test_dry_run_prints_what_it_would_send_and_sends_nothing(monkeypatch, caplog
     run_until_stopped(["--dry-run"], mac, pi, FakeClock(stop_after_sleeps=40))
     would_send = [message for message in caplog.messages if message.startswith("dry run, would POST")]
     assert would_send == [
-        f'dry run, would POST {{"app": "Code"}} to {APP_URL}',
-        f'dry run, would POST {{"app": "Slack"}} to {APP_URL}',
-        f'dry run, would POST {{"app": "Slack"}} to {APP_URL}',
+        f'dry run, would POST {{"app": "Code", "site": null}} to {APP_URL}',
+        f'dry run, would POST {{"app": "Slack", "site": null}} to {APP_URL}',
+        f'dry run, would POST {{"app": "Slack", "site": null}} to {APP_URL}',
     ]
     assert pi.requests == []
     assert mac.count_runs("security") == 0
@@ -569,3 +576,99 @@ def test_the_password_never_follows_a_redirect():
     redirected = urllib.request.HTTPRedirectHandler().redirect_request(request, None, 302, "Found", {}, "http://elsewhere.example/")
     assert request.get_header("Authorization") == make_auth_header(PASSWORD)
     assert redirected.get_header("Authorization") is None
+
+
+# ----- the site of the browser tab in front -----
+
+
+@pytest.mark.parametrize(
+    ("url", "site"),
+    [
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42", "youtube.com"),
+        ("https://mail.google.com/mail/u/0/#inbox", "mail.google.com"),
+        ("http://localhost:5173/dashboard", "localhost"),
+        ("https://user:secret@www.Example.COM:8443/private/path?q=1", "example.com"),
+        ("https://example.com./", "example.com"),
+        ("https://bücher.de/", "xn--bcher-kva.de"),
+        ("http://192.168.1.20:8000/", "192.168.1.20"),
+        ("file:///Users/dayan/notes.html", None),
+        ("chrome://settings/", None),
+        ("chrome-extension://abcdef/popup.html", None),
+        ("about:blank", None),
+        ("", None),
+        ("https://[::1]:8080/", None),
+        ("https://exa mple.com/", None),
+        ("missing value", None),
+    ],
+)
+def test_only_the_host_name_of_a_web_page_is_kept(url, site):
+    assert helper.find_site(url) == site
+
+
+@pytest.mark.parametrize("browser", ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc"])
+def test_a_browser_in_front_gives_the_site_of_its_active_tab(browser):
+    mac = FakeMac(tab_urls=["https://www.youtube.com/watch?v=abc"])
+    detection = helper.detect_site(mac.run, browser)
+    assert (detection.site, detection.problem) == ("youtube.com", "")
+    script = mac.commands[-1][-1]
+    assert f'application "{browser}" is running' in script
+    assert ("incognito of front window" if browser == "Arc" else 'mode of front window is "normal"') in script
+
+
+def test_a_private_window_gives_no_site_and_nothing_to_log():
+    detection = helper.detect_site(FakeMac(tab_urls=[""]).run, "Google Chrome")
+    assert (detection.site, detection.problem) == (None, "")
+
+
+@pytest.mark.parametrize("browser", ["Safari", "Firefox"])
+def test_safari_and_firefox_give_no_site_and_say_why(browser):
+    mac = FakeMac(tab_urls=["https://www.youtube.com/"])
+    detection = helper.detect_site(mac.run, browser)
+    assert detection.site is None and detection.problem
+    assert mac.count_runs("osascript") == 0, "never asked, so nothing from a private window can leak"
+
+
+def test_other_apps_have_no_site_and_ask_nothing():
+    mac = FakeMac()
+    assert helper.detect_site(mac.run, "Code") == helper.SiteDetection()
+    assert mac.commands == []
+
+
+def test_a_denied_automation_prompt_is_a_problem_not_a_crash():
+    mac = FakeMac()
+    mac.tab_urls = None
+    mac.run = lambda args: make_output(1, "", "execution error: Not authorized to send Apple events to Google Chrome. (-1743)")
+    detection = helper.detect_site(mac.run, "Google Chrome")
+    assert detection.site is None
+    assert "Not authorized" in detection.problem
+
+
+def test_the_request_body_has_the_app_and_only_the_site():
+    pi = FakePi()
+    helper.PiClient(APP_URL, USER, FakeMac().run, pi.send).send_app("Google Chrome", "youtube.com")
+    assert pi.read_sent_bodies() == [{"app": "Google Chrome", "site": "youtube.com"}]
+
+
+def test_live_run_sends_a_new_site_without_a_new_app():
+    pi = FakePi()
+    mac = FakeMac(
+        front_apps=["Google Chrome"] * 6 + ["Code"],
+        tab_urls=["https://www.youtube.com/watch?v=1"] * 3 + ["https://github.com/me/repo/pull/7"] * 2 + [""],
+    )
+    run_until_stopped([], mac, pi, FakeClock(stop_after_sleeps=8))
+    assert pi.read_sent_bodies() == [
+        {"app": "Google Chrome", "site": "youtube.com"},
+        {"app": "Google Chrome", "site": "github.com"},
+        {"app": "Google Chrome", "site": None},
+        {"app": "Code", "site": None},
+    ]
+    sent = " ".join(request.data.decode() for request in pi.requests)
+    assert "watch" not in sent and "pull" not in sent and "repo" not in sent, "never a path or query"
+
+
+def test_firefox_says_once_that_it_sends_no_site(caplog):
+    caplog.set_level(logging.INFO)
+    pi = FakePi()
+    run_until_stopped([], FakeMac(front_apps=["Firefox"]), pi, FakeClock(stop_after_sleeps=10))
+    assert caplog.text.count("no site from Firefox") == 1
+    assert pi.read_sent_bodies()[0] == {"app": "Firefox", "site": None}
