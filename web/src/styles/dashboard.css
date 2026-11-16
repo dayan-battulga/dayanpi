@@ -685,6 +685,10 @@ ol {
   --box: var(--phone);
 }
 
+.box.is-hand .box-label {
+  color: #000;
+}
+
 .box.is-leaving {
   opacity: 0;
 }
