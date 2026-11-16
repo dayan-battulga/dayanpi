@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from dayanpi.vision import gestures
-from dayanpi.vision.gestures import GestureTracker, read_open_fingers, read_sign
+from dayanpi.vision.gestures import GestureTracker, read_hand_shape, read_sign
 from dayanpi.vision.hands import Hand
 
 SIGN_CHECK_S = 1.0  # the worker checks about once a second
@@ -10,19 +10,22 @@ FINGER_X = {"index": -24.0, "middle": -8.0, "ring": 8.0, "pinky": 24.0}
 FINGER_BASES = {"index": 5, "middle": 9, "ring": 13, "pinky": 17}
 
 
-def make_hand(open_fingers: set[str], degrees: float = 0.0, scale: float = 1.0, thumb_out: bool = True) -> Hand:
+def make_hand(
+    open_fingers: set[str], degrees: float = 0.0, scale: float = 1.0, thumb_out: bool = True, fanned: bool = True
+) -> Hand:
     """A hand-made hand, wrist at the origin, fingers pointing up (image y grows downward).
 
-    An open finger runs straight out; a closed one curls back so its tip lands below its
-    middle joint. Then the whole hand is turned, scaled and moved, since the rule should
-    only care about distances.
+    An open finger runs out, its tip fanned away from the hand's middle (or straight up when
+    not fanned); a closed one curls back so its tip lands below its middle joint. Then the
+    whole hand is turned, scaled and moved, since the rule should only care about distances.
     """
     joints = np.zeros((21, 3))
     thumb = [(-30, -20), (-50, -40), (-65, -55), (-80, -70)] if thumb_out else [(-25, -25), (-30, -50), (-15, -70), (0, -75)]
     joints[1:5, :2] = thumb
     for finger, base in FINGER_BASES.items():
         x = FINGER_X[finger]
-        tip_side = [(x, -150), (x, -175)] if finger in open_fingers else [(x, -100), (x, -70)]
+        tip_x = x * 2.5 if fanned else x
+        tip_side = [(x, -150), (tip_x, -175)] if finger in open_fingers else [(x, -100), (x, -70)]
         joints[base : base + 4, :2] = [(x, -80), (x, -120), *tip_side]
     turn = np.radians(degrees)
     rotation = np.array([[np.cos(turn), -np.sin(turn)], [np.sin(turn), np.cos(turn)]])
@@ -44,7 +47,13 @@ def run_sign_checks(shown: list[list[Hand]]) -> list[str | None]:
 
 
 def test_a_finger_is_open_when_its_tip_is_farther_from_the_wrist_than_its_middle_joint():
-    assert read_open_fingers(make_hand({"index", "ring"}).joints) == {"index": True, "middle": False, "ring": True, "pinky": False}
+    shape = read_hand_shape(make_hand({"index", "ring"}).joints)
+    assert {"index": True, "middle": False, "ring": True, "pinky": False}.items() <= shape.items()
+
+
+def test_peace_needs_a_v_not_two_fingers_side_by_side():
+    assert read_sign([make_hand({"index", "middle"}, fanned=False)]) is None, "like a hand on a mouse"
+    assert read_hand_shape(PEACE_HAND.joints)["v"]
 
 
 @pytest.mark.parametrize("degrees", [0, 35, 90, -60, 180])

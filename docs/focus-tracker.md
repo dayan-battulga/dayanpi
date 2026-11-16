@@ -278,8 +278,9 @@ It runs on two small hand models (see [Where the models come from](#where-the-mo
 
 ### Making the sign
 
-- **Peace** = index and middle fingers up, ring and pinky folded. The thumb doesn't matter.
+- **Peace** = index and middle fingers up and spread into a V, ring and pinky folded. The thumb doesn't matter.
 - A finger counts as **open** when its tip is farther from your wrist than its middle knuckle. That's distances, not directions, so a tilted hand still counts.
+- The **V** matters: the two fingertips have to be at least 1.8 times as far apart as the two knuckles they grow from. Two fingers side by side, like on a mouse or resting on your cheek, don't count.
 - Hold it for about a second. It fires once, and you have to drop it (two checks without the sign, so about two seconds) before it fires again. One check that misses your hand doesn't break a hold.
 - Palm toward the camera, around chest or face height, works best.
 
@@ -307,4 +308,5 @@ Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (whic
 | `PALM_MIN_CONFIDENCE` | `vision/hands.py` | `0.6` | How sure the palm finder has to be before the hand model even looks |
 | `NEAR_HAND_MARGIN` | `vision/hands.py` | `0.25` | How close a phone has to be to a hand to count, in hand lengths. Raise it if phone time stops counting while you're holding it; lower it if a phone next to your keyboard counts. |
 | `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |
+| `V_SPREAD` | `vision/gestures.py` | `1.8` | How wide the V has to be (fingertip gap over knuckle gap). Raise it if it still goes off by accident; lower it if a real peace sign gets no `peace` box. |
 | `SPOKEN_MAX` | `focus/coach.py` | `5` | How many to-dos of each list it reads before "and N more" |
