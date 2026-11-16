@@ -296,6 +296,8 @@ class DeskScanner:
     Phones only come from the zoomed pass, so no person means no zoomed pass.
     """
 
+    has_pose = False  # PoseDeskScanner says True: its readings carry keypoints
+
     def __init__(
         self,
         object_detector: ObjectDetector | None = None,

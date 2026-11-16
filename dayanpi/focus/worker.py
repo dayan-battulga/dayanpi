@@ -201,7 +201,7 @@ class FocusWorker(LoopThread):
         self.last_update = update
         # Swapped in whole, so the stream thread never sees a half-built overlay.
         if front_reading is not None:
-            self.last_overlay = build_overlay(front_reading, self.front.frame_size, now)
+            self.last_overlay = build_overlay(front_reading, self.front.frame_size, now, with_pose=getattr(self._scanner, "has_pose", False))
         if side_reading is not None:
             # No sign boxes on the side feed: signs only fire from the front camera.
             self.last_side_overlay = build_overlay(replace(side_reading, hands=[]), self.side.frame_size, now)

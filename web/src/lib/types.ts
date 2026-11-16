@@ -18,12 +18,16 @@ export interface OverlayBox {
   height: number;
 }
 
+// One COCO keypoint: x and y as 0-1 fractions of the frame, then the model's confidence.
+export type PosePoint = [number, number, number];
+
 export interface Overlay {
   at: number;
   age_s: number;
   frame_width: number;
   frame_height: number;
   boxes: OverlayBox[];
+  pose?: PosePoint[] | null; // only with the pose model loaded (front feed); null when nobody's clear
 }
 
 export interface TodoItem {

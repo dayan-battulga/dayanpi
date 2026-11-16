@@ -1,9 +1,9 @@
 """Finds people's body points (shoulders, wrists and so on) in one camera frame.
 
-models/yolo11n-pose_480x640.onnx is Ultralytics' YOLO11 nano pose model, exported at the
+models/yolo26n-pose_480x640.onnx is Ultralytics' YOLO26 nano pose model, exported at the
 webcam's 640x480 and run through plain OpenCV, same as detector.py (other frame sizes get
-padded to fit the same way). Each hit is a person
-box plus 17 COCO keypoints. Left and right are the person's own sides, so with the camera
+padded to fit the same way). Each hit is a person box plus 17 COCO keypoints; the output
+has the same (1, 56, 6300) shape YOLO11 nano pose had, and decode_poses() reads both. Left and right are the person's own sides, so with the camera
 facing you, your right wrist shows up on the left half of the image.
 """
 
@@ -32,7 +32,7 @@ from dayanpi.vision.detector import (
     pick_boxes,
 )
 
-POSE_MODEL_PATH = MODELS_DIR / "yolo11n-pose_480x640.onnx"
+POSE_MODEL_PATH = MODELS_DIR / "yolo26n-pose_480x640.onnx"
 
 KEYPOINT_NAMES = (
     "nose",
@@ -141,6 +141,8 @@ class PoseDeskScanner(DeskScanner):
 
     The zoomed pass for phones and the face pass are unchanged.
     """
+
+    has_pose = True
 
     def __init__(self) -> None:
         super().__init__()

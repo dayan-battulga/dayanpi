@@ -1,6 +1,7 @@
 import { useEffect, useState, type SyntheticEvent } from "react";
 import { useOverlayBoxes } from "@/hooks/useOverlayBoxes";
 import { isOverlayFresh } from "@/lib/boxes";
+import { buildSkeleton } from "@/lib/pose";
 import type { FeedState } from "@/lib/feeds";
 import type { Overlay } from "@/lib/types";
 
@@ -17,11 +18,12 @@ interface FeedProps {
   cameraOk: boolean;
   hidden: boolean;
   wanted: boolean;
+  showPose: boolean;
   onState: (name: string, state: FeedState) => void;
 }
 
-// One camera feed with its boxes. It streams only while wanted (peeking) and not hidden.
-export function Feed({ name, src, label, alt, overlay, cameraOk, hidden, wanted, onState }: FeedProps) {
+// One camera feed with its boxes, and the skeleton when showPose. It streams only while wanted (peeking) and not hidden.
+export function Feed({ name, src, label, alt, overlay, cameraOk, hidden, wanted, showPose, onState }: FeedProps) {
   const open = wanted && !hidden;
   const [state, setState] = useState<FeedState>("off");
   const [stamp, setStamp] = useState(0);
@@ -30,6 +32,8 @@ export function Feed({ name, src, label, alt, overlay, cameraOk, hidden, wanted,
   const fresh = isOverlayFresh(overlay, cameraOk);
   const frameWidth = overlay?.frame_width;
   const frameHeight = overlay?.frame_height;
+  const pose = overlay?.pose;
+  const skeleton = showPose && fresh && pose && frameWidth && frameHeight ? buildSkeleton(pose, frameWidth, frameHeight) : null;
 
   useEffect(() => {
     setState(open ? "connecting" : "off");
@@ -80,6 +84,16 @@ export function Feed({ name, src, label, alt, overlay, cameraOk, hidden, wanted,
             <span className="box-label">{box.placed.text}</span>
           </div>
         ))}
+        {skeleton && frameWidth && (
+          <svg className="pose" viewBox={`0 0 ${frameWidth} ${frameHeight}`} preserveAspectRatio="none">
+            {skeleton.lines.map((line) => (
+              <line key={line.key} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} />
+            ))}
+            {skeleton.dots.map((dot) => (
+              <circle key={dot.key} cx={dot.x} cy={dot.y} r={frameWidth / 160} />
+            ))}
+          </svg>
+        )}
       </div>
       <div className="scan" aria-hidden="true"></div>
       <span className="feed-label label">{label}</span>

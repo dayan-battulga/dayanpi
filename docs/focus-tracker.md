@@ -251,16 +251,18 @@ curl -s -u YOURUSER:YOURPASS "localhost:8000/api/days?month=$(date +%Y-%m)" | py
 
 ## Gestures
 
-You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO11 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
+You can boss the LED sign around from your chair: hold an arm up in front of the camera to flip pages, or hold both up to start or stop a work block. This uses a third model, YOLO26 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
 
 ### Getting the pose model
 
-Same story as the object model: the weights are a PyTorch file, so the conversion happens on the Mac. If `/tmp/yolo-export` is still around from last time, reuse it:
+It's in the repo: `models/yolo26n-pose_480x640.onnx` comes with `git pull`, so there's nothing to do. Without it, gestures and Show pose are off (the journal says `no pose model`), and everything else works.
+
+To export it again, same story as the object model: the weights are a PyTorch file, so the conversion happens on the Mac. If `/tmp/yolo-export` is still around from last time, reuse it (Ultralytics 8.4.213 is known to work):
 
 ```bash
 cd /tmp
-/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
-mv /tmp/yolo11n-pose.onnx ~/Desktop/code/projects/site-page/models/yolo11n-pose_480x640.onnx
+/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo26n-pose.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
+mv /tmp/yolo26n-pose.onnx ~/Desktop/code/projects/site-page/models/yolo26n-pose_480x640.onnx
 ```
 
 `/tmp` gets wiped when the Mac restarts. If `/tmp/yolo-export` is gone, make it again first, then run the commands above:
@@ -273,20 +275,26 @@ Quick check before you push. This should print `(1, 56, 6300)`:
 
 ```bash
 cd ~/Desktop/code/projects/site-page
-/tmp/yolo-export/bin/python -c "import cv2, numpy as np; net = cv2.dnn.readNetFromONNX('models/yolo11n-pose_480x640.onnx'); net.setInput(np.zeros((1, 3, 480, 640), np.float32)); print(net.forward().shape)"
+/tmp/yolo-export/bin/python -c "import cv2, numpy as np; net = cv2.dnn.readNetFromONNX('models/yolo26n-pose_480x640.onnx'); net.setInput(np.zeros((1, 3, 480, 640), np.float32)); print(net.forward().shape)"
 ```
 
-That's 56 numbers (a box, a person score, then x, y and confidence for each of the 17 points) for each of the 6300 spots the model checks. Anything else means the export went sideways. Then push it like any other change:
+That's 56 numbers (a box, a person score, then x, y and confidence for each of the 17 points) for each of the 6300 spots the model checks, the same shape the older YOLO11 nano pose had, so the same code reads both. On Ultralytics' own sample photos, the app's decoding gives exactly the keypoints Ultralytics does from the same file, and it loads on OpenCV 4.12 and 5.0. Anything other than that shape means the export went sideways. Then push it like any other change:
 
 ```bash
 cd ~/Desktop/code/projects/site-page
 git pull origin main
-git add models/yolo11n-pose_480x640.onnx
-git commit -m "Add the YOLO11 nano pose model"
+git add models/yolo26n-pose_480x640.onnx
+git commit -m "Re-export the YOLO26 nano pose model"
 git push origin main
 ```
 
-Like the other YOLO file, `models/yolo11n-pose_480x640.onnx` is Ultralytics' model (AGPL-3.0).
+Like the other YOLO file, `models/yolo26n-pose_480x640.onnx` is Ultralytics' model (AGPL-3.0).
+
+### Show pose
+
+With the pose model loaded, the Camera card gets a **Show pose** button next to Peek. It draws what the model sees as a stick figure over the front feed: dots on your joints and lines between them (the usual COCO skeleton), in the same color as your person box. Points the model isn't sure about (under 0.5) are left out, with the lines that end at them, so a hand off the edge of the picture just isn't drawn. It's only for the front camera, it follows the main person (the strongest one), and it hides after 3 s without a fresh check, like the boxes. The browser remembers whether it's on.
+
+Only numbers leave the Pi: the 17 points come with each check's boxes as fractions of the frame plus a confidence, and they're never logged. Without the pose model, the button doesn't show.
 
 ### The gestures
 

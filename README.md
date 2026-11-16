@@ -95,7 +95,7 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
 | `dayanpi/static/` | The built dashboard (`npm run build` in `web/` writes it); committed so the Pi needs no Node |
 | `web/` | The dashboard's source: React + TypeScript + Vite + Tailwind + shadcn/ui, one folder per card in `src/components/`. See "Working on the dashboard" in the manual |
-| `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), MediaPipe palm and hand pose (hand signs), and YOLO11 nano pose once it's exported |
+| `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), MediaPipe palm and hand pose (hand signs), and YOLO26 nano pose (gestures and Show pose) |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest) |
 | `deploy/` | `dayanpi.service` (the systemd unit) and `dayanpi.env.example` (template for the login file) |

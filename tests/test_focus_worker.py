@@ -553,3 +553,25 @@ def test_a_missing_hand_model_turns_signs_off_with_one_log_line(monkeypatch, tmp
     assert [record.getMessage() for record in caplog.records] == ["no hand models (hand.onnx): hand signs are off and phones count anywhere in the picture"]
     (tmp_path / "hand.onnx").write_bytes(b"x")
     assert focus_worker.build_hand_scanner() == "hand-scanner"
+
+
+class PoseModelScanner(PoseScanner):
+    has_pose = True
+
+
+@pytest.mark.parametrize(("scanner", "has_pose"), [(PoseModelScanner(right_up=False), True), (FakeScanner(), False)])
+def test_the_front_overlay_carries_the_pose_only_with_the_pose_model(scanner, has_pose):
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, FocusTracker(started_at=NOON))
+    worker.run_once(NOON + 1)
+    assert ("pose" in worker.last_overlay) == has_pose
+    if has_pose:
+        assert len(worker.last_overlay["pose"]) == 17
+
+
+def test_the_side_overlay_never_carries_a_pose():
+    scanner = TwoCameraScanner(side=make_view(SIDE_BOX, poses=(raised_pose(left_up=False, right_up=False),)))
+    scanner.has_pose = True
+    worker = FocusWorker(FakeStream(fake_jpeg()), scanner, FocusTracker(started_at=NOON), side_stream=FakeStream(side_jpeg()))
+    worker.run_once(NOON + 1)
+    assert worker.last_overlay["pose"] is None, "the front saw nobody with keypoints"
+    assert "pose" not in worker.last_side_overlay
