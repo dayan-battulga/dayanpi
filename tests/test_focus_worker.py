@@ -264,6 +264,11 @@ def side_jpeg() -> bytes:
     return encoded
 
 
+def find_camera(image: np.ndarray) -> str:
+    camera = "side" if image.mean() > (FRONT_BRIGHTNESS + SIDE_BRIGHTNESS) / 2 else "front"
+    return camera
+
+
 def make_view(box: Box, phone: float = 0.0, poses: tuple = (), faces: tuple = ()) -> FrameReading:
     phones = [Detection("phone", phone, box)] if phone else []
     view = FrameReading([Detection("person", 0.9, box)], phones, list(faces), 100.0, poses=list(poses))
@@ -279,7 +284,7 @@ class TwoCameraScanner:
         self.scans = {"front": 0, "side": 0}
 
     def scan(self, image: np.ndarray) -> FrameReading:
-        camera = "side" if image.mean() > (FRONT_BRIGHTNESS + SIDE_BRIGHTNESS) / 2 else "front"
+        camera = find_camera(image)
         self.scans[camera] += 1
         if camera == self.failing:
             raise RuntimeError(f"{camera} model exploded")
@@ -421,7 +426,9 @@ def test_one_camera_failing_leaves_the_other_working_and_the_log_quiet(caplog, f
     assert f"on the {failing} camera" in caplog.text
 
 
-# ----- hand signs -----
+# ----- hands: the signs and the phone-in-hand check -----
+
+FRONT_PHONE = Box(200, 300, 240, 360)
 
 
 def make_peace_hand() -> Hand:
@@ -435,47 +442,100 @@ def make_peace_hand() -> Hand:
     return hand
 
 
-class FakeHandScanner:
-    """Notes how bright each frame it got was, so a test can tell the front camera from the side."""
+def make_hand_over(box: Box) -> Hand:
+    """A hand whose box is exactly box, making no sign: the wrist and the thumb's base sit on two corners, the rest in the middle."""
+    joints = np.zeros((21, 3))
+    joints[:, :2] = ((box.x1 + box.x2) / 2, (box.y1 + box.y2) / 2)
+    joints[0, :2] = (box.x1, box.y1)
+    joints[1, :2] = (box.x2, box.y2)
+    hand = Hand(confidence=0.95, joints=joints)
+    return hand
 
-    def __init__(self, fail: bool = False) -> None:
+
+def make_phone_view(person: Box, phone: Box) -> FrameReading:
+    view = FrameReading([Detection("person", 0.9, person)], [Detection("phone", 0.8, phone)], [], 100.0)
+    return view
+
+
+class FakeHandScanner:
+    """Hands back each camera's own hands, telling the cameras apart like TwoCameraScanner does."""
+
+    def __init__(self, front: list[Hand] = (), side: list[Hand] = (), fail: bool = False) -> None:
+        self.hands = {"front": list(front), "side": list(side)}
         self.fail = fail
-        self.seen: list[float] = []
+        self.scans = {"front": 0, "side": 0}
 
     def scan(self, image: np.ndarray) -> list[Hand]:
-        self.seen.append(float(image.mean()))
+        camera = find_camera(image)
+        self.scans[camera] += 1
         if self.fail:
             raise RuntimeError("hand model exploded")
-        return [make_peace_hand()]
+        return self.hands[camera]
 
 
-def test_a_held_hand_sign_reaches_the_hook_once_and_only_the_front_camera_is_read():
-    hand_scanner = FakeHandScanner()
-    fired = []
+def make_hand_worker(scanner, hand_scanner: FakeHandScanner, on_gesture=None) -> FocusWorker:
     worker = FocusWorker(
         FakeStream(fake_jpeg()),
-        TwoCameraScanner(),
+        scanner,
         FocusTracker(started_at=NOON),
-        on_gesture=lambda name, now: fired.append((name, now)),
+        on_gesture=on_gesture,
         side_stream=FakeStream(side_jpeg()),
         hand_scanner=hand_scanner,
     )
+    return worker
+
+
+@pytest.mark.parametrize(("camera", "fired"), [("front", [("peace", NOON + 2)]), ("side", [])])
+def test_only_the_front_cameras_hands_make_signs(camera, fired):
+    hand_scanner = FakeHandScanner(**{camera: [make_peace_hand()]})
+    seen = []
+    worker = make_hand_worker(TwoCameraScanner(), hand_scanner, on_gesture=lambda name, now: seen.append((name, now)))
     for second in range(1, 6):
         worker.run_once(NOON + second)
-    assert fired == [("peace", NOON + 2)]
-    assert worker.last_gesture == {"name": "peace", "at": NOON + 2}
-    assert hand_scanner.seen == pytest.approx([FRONT_BRIGHTNESS] * 5, abs=2)
-    front_hands = [(box["label"], box["confidence"]) for box in worker.last_overlay["boxes"] if box["kind"] == "hand"]
-    assert front_hands == [("peace", 0.95)], "the camera peek shows the hand and the sign it makes"
-    assert all(box["kind"] != "hand" for box in worker.last_side_overlay["boxes"])
+    assert seen == fired
+    assert worker.last_gesture == ({"name": "peace", "at": NOON + 2} if fired else None)
+    assert hand_scanner.scans == {"front": 5, "side": 5}, "both cameras look for hands, for the phone check"
+    overlay = worker.last_overlay if camera == "front" else worker.last_side_overlay
+    hand_boxes = [(box["label"], box["confidence"]) for box in overlay["boxes"] if box["kind"] == "hand"]
+    assert hand_boxes == [("peace", 0.95)], "the camera peek shows the hand and the sign it makes"
 
 
-def test_a_broken_hand_model_costs_the_signs_not_the_focus_check(caplog):
-    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(), FocusTracker(started_at=NOON), hand_scanner=FakeHandScanner(fail=True))
+@pytest.mark.parametrize(
+    ("hand", "state"),
+    [
+        (None, "working"),
+        (Box(400, 50, 460, 120), "working"),
+        (Box(230, 340, 290, 420), "phone"),
+        (Box(250, 300, 310, 360), "phone"),
+    ],
+    ids=["no hand", "hand far away", "holding it", "hand right next to it"],
+)
+def test_a_phone_only_counts_in_or_near_a_hand(hand, state):
+    hands = [] if hand is None else [make_hand_over(hand)]
+    worker = make_hand_worker(TwoCameraScanner(front=make_phone_view(FRONT_BOX, FRONT_PHONE)), FakeHandScanner(front=hands))
+    for second in range(1, 7):
+        update = worker.run_once(NOON + second)
+    assert update.state == state
+    phone_boxes = [box for box in worker.last_overlay["boxes"] if box["kind"] == "phone"]
+    assert len(phone_boxes) == (1 if state == "phone" else 0), "the peek only boxes phones that count"
+
+
+@pytest.mark.parametrize(("hand_camera", "state"), [("front", "working"), ("side", "phone")])
+def test_each_camera_matches_its_own_phones_with_its_own_hands(hand_camera, state):
+    side_phone = Box(40, 40, 70, 80)
+    hand_scanner = FakeHandScanner(**{hand_camera: [make_hand_over(side_phone)]})
+    worker = make_hand_worker(TwoCameraScanner(side=make_phone_view(SIDE_BOX, side_phone)), hand_scanner)
+    for second in range(1, 7):
+        update = worker.run_once(NOON + second)
+    assert update.state == state
+
+
+def test_a_broken_hand_model_costs_the_signs_but_not_the_focus_check_or_the_phones(caplog):
+    worker = make_hand_worker(TwoCameraScanner(front=make_phone_view(FRONT_BOX, FRONT_PHONE)), FakeHandScanner(fail=True))
     with caplog.at_level(logging.ERROR):
-        for second in range(1, 5):
+        for second in range(1, 7):
             update = worker.run_once(NOON + second)
-    assert update.state == "working"
+    assert update.state == "phone", "with the hand models broken, a phone counts anywhere, like before"
     assert worker.front.failures == 0
     assert caplog.text.count("hand check failed") == 1
 
@@ -489,6 +549,6 @@ def test_a_missing_hand_model_turns_signs_off_with_one_log_line(monkeypatch, tmp
     (tmp_path / "palm.onnx").write_bytes(b"x")
     with caplog.at_level(logging.INFO, logger="dayanpi.focus.worker"):
         assert focus_worker.build_hand_scanner() is None
-    assert [record.getMessage() for record in caplog.records] == ["no hand models (hand.onnx): hand signs are off"]
+    assert [record.getMessage() for record in caplog.records] == ["no hand models (hand.onnx): hand signs are off and phones count anywhere in the picture"]
     (tmp_path / "hand.onnx").write_bytes(b"x")
     assert focus_worker.build_hand_scanner() == "hand-scanner"

@@ -4,7 +4,7 @@ import pytest
 
 from dayanpi.vision import hands
 from dayanpi.vision.detector import Box, Letterbox
-from dayanpi.vision.hands import HAND_INPUT_SIZE, Palm, build_anchors, decode_hand, decode_palms, find_hand_crop, fit_square
+from dayanpi.vision.hands import HAND_INPUT_SIZE, Palm, build_anchors, decode_hand, decode_palms, find_hand_crop, fit_square, is_near_hand
 
 # The Pi camera's 768x432 shrinks to 192x108 for the palm model, with 42 px of black above.
 PI_LETTERBOX = Letterbox(image=None, scale=0.25, pad_left=0, pad_top=42)
@@ -95,3 +95,11 @@ def test_hand_joints_go_back_to_frame_pixels():
 @pytest.mark.parametrize("shape", [(480, 640, 3), (432, 768, 3)])
 def test_real_hand_models_find_nothing_in_a_blank_frame(shape):
     assert hands.HandScanner().scan(np.full(shape, 128, np.uint8)) == []
+
+
+def test_a_phone_counts_up_to_a_quarter_of_a_hand_away():
+    hand = Box(100, 100, 200, 180)  # longer side 100 px, so the margin is 25 px
+    assert is_near_hand(Box(150, 150, 190, 210), hand), "overlapping"
+    assert is_near_hand(Box(224, 120, 260, 160), hand), "24 px to the right"
+    assert not is_near_hand(Box(226, 120, 260, 160), hand), "26 px to the right"
+    assert not is_near_hand(Box(120, 206, 160, 240), hand), "26 px below"

@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 
 from dayanpi.paths import MODELS_DIR
-from dayanpi.vision.detector import Box, Letterbox, map_row_to_frame, pick_boxes
+from dayanpi.vision.detector import Box, Detection, Letterbox, map_row_to_frame, pick_boxes
 
 PALM_MODEL_PATH = MODELS_DIR / "palm_detection_mediapipe_2023feb.onnx"
 HAND_MODEL_PATH = MODELS_DIR / "handpose_estimation_mediapipe_2023feb.onnx"
@@ -37,6 +37,8 @@ PALM_MIDDLE_BASE = 2
 HAND_CROP_SHIFT = -0.4
 HAND_CROP_SCALE = 3.0
 JOINTS = 21
+# A phone counts when its box touches a hand's box grown by this much of the hand's longer side.
+NEAR_HAND_MARGIN = 0.25
 
 
 @dataclass
@@ -56,6 +58,27 @@ class Hand:
         high = self.joints[:, :2].max(axis=0)
         box = Box(x1=float(low[0]), y1=float(low[1]), x2=float(high[0]), y2=float(high[1]))
         return box
+
+
+def is_near_hand(phone: Box, hand: Box) -> bool:
+    margin = NEAR_HAND_MARGIN * max(hand.x2 - hand.x1, hand.y2 - hand.y1)
+    near = (
+        phone.x1 <= hand.x2 + margin
+        and phone.x2 >= hand.x1 - margin
+        and phone.y1 <= hand.y2 + margin
+        and phone.y2 >= hand.y1 - margin
+    )
+    return near
+
+
+def find_phones_in_hand(phones: list[Detection], hands: list[Hand]) -> list[Detection]:
+    """The phones whose box touches or nearly touches a hand's box, so a phone lying on the desk doesn't count.
+
+    Both lists have to come from the same camera's frame.
+    """
+    hand_boxes = [hand.find_box() for hand in hands]
+    held = [phone for phone in phones if any(is_near_hand(phone.box, hand_box) for hand_box in hand_boxes)]
+    return held
 
 
 def build_anchors() -> np.ndarray:

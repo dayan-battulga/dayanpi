@@ -9,7 +9,7 @@ app's hooks get each FocusUpdate (speaker, sign) and each gesture.
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dayanpi.hardware.camera import CameraStream
@@ -62,11 +62,11 @@ def build_scanner() -> DeskScanner | None:
 
 
 def build_hand_scanner() -> hands.HandScanner | None:
-    """The hand models for the hand signs, or None (signs off) when a file is missing or won't load."""
+    """The hand models for the hand signs and the phone-in-hand check, or None (both off) when a file is missing or won't load."""
     scanner = None
     missing = [path.name for path in (hands.PALM_MODEL_PATH, hands.HAND_MODEL_PATH) if not path.exists()]
     if missing:
-        logger.info("no hand models (%s): hand signs are off", ", ".join(missing))
+        logger.info("no hand models (%s): hand signs are off and phones count anywhere in the picture", ", ".join(missing))
     else:
         try:
             scanner = hands.HandScanner()
@@ -148,15 +148,19 @@ class FocusWorker(LoopThread):
             if image is not None:
                 feed.frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
                 reading = self._scanner.scan(image)
-                if feed is self.front and self._hands is not None:
-                    started = time.perf_counter()
-                    reading.hands = self.find_hands(image)
-                    reading.elapsed_ms += (time.perf_counter() - started) * 1000
+                if self._hands is not None:
+                    reading = self.check_hands(reading, image)
         return reading
 
-    def find_hands(self, image) -> list[hands.Hand]:
-        """The hand models on the front frame. A failure here costs the hand signs this check, never the focus check."""
-        found = []
+    def check_hands(self, reading: FrameReading, image) -> FrameReading:
+        """The hand models on this camera's frame: the hands go into the reading, and only phones near a hand still count.
+
+        The signs only use the front camera's hands (merge_readings keeps those). A hand model
+        that throws costs this check's signs and leaves the phones as they were, so it can't
+        switch phone detection off.
+        """
+        started = time.perf_counter()
+        found = None
         try:
             found = self._hands.scan(image)
             self.hand_failures = 0
@@ -164,7 +168,13 @@ class FocusWorker(LoopThread):
             self.hand_failures += 1
             if self.hand_failures == 1 or self.hand_failures % ERROR_LOG_EVERY == 0:
                 logger.exception("hand check failed (%s in a row)", self.hand_failures)
-        return found
+        checked = replace(
+            reading,
+            hands=found or [],
+            phones=reading.phones if found is None else hands.find_phones_in_hand(reading.phones, found),
+            elapsed_ms=reading.elapsed_ms + (time.perf_counter() - started) * 1000,
+        )
+        return checked
 
     def read_feed(self, feed: CameraFeed) -> FrameReading | None:
         """read_frame, where a failure only costs this camera this check.

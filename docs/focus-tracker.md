@@ -109,11 +109,13 @@ Once the models are in `models/`, the site runs the detector by itself, about on
 | State | Means | Rule |
 | --- | --- | --- |
 | **focused** | At the desk, no phone in sight | You're seen in 2 checks in a row |
-| **on phone** | Phone in hand | Phone spotted in 3 of the last 5 checks. Back to focused after 5 checks without it |
+| **on phone** | Phone in hand | Phone spotted in your hand in 3 of the last 5 checks. Back to focused after 5 checks without it |
 | **away** | Nobody at the desk | 10 seconds without you |
 | **unknown** | Just started, or no camera frames for 30 s | |
 
 The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `dayanpi/focus/tracker.py` if they need tuning.
+
+**Only a phone in your hand counts.** A phone lying on the desk would otherwise count as "on phone" all day, so a phone only counts when its box touches one of your hands, or comes within a quarter of a hand's length of it. The hands come from the same models as the [hand signs](#hand-signs), and each camera checks its own phones against its own hands. If the hand models are missing (or crash), phones count anywhere in the picture, like before. On the camera peek, a phone only gets a box when it counts, so a phone on the desk with no box is working as intended. The margin is `NEAR_HAND_MARGIN` in `dayanpi/vision/hands.py`.
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
@@ -173,13 +175,13 @@ Every check grabs a new frame from each camera and gives each one its own full s
 
 | What | Comes from |
 | --- | --- |
-| People, phones | Both cameras |
-| Face turn and tilt, gestures | The front camera only, because they assume the straight-on view |
+| People, phones | Both cameras (each camera's phones only count near that camera's own view of your hands) |
+| Face turn and tilt, gestures, hand signs | The front camera only, because they assume the straight-on view |
 
 What that means day to day:
 
 - **You count as there if either camera sees you.** So **away** needs both to lose you, and someone walking through the side view can hold it off.
-- **A phone either camera sees counts.** That's the point, but a false alarm from either one counts too. The cutoffs were tuned on front-view frames, so watch for pickups that didn't happen.
+- **A phone in your hand that either camera sees counts.** That's the point, but a false alarm from either one counts too. With the hand models in, the side camera has to see your hand on the phone too. The cutoffs were tuned on front-view frames, so watch for pickups that didn't happen.
 - **The side camera has to see you first.** It only does the zoomed phone pass when it finds a person at 0.5 or above. If it only catches part of you, a phone in your lap never gets looked at. `side_person` in the log tells you.
 - **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people and phones but no face numbers or gestures. With neither, it goes to **unknown** after 30 s.
 - **A dead front camera doesn't look dead.** The tracker keeps running off the side camera and the card looks normal, but gestures stop. What gives it away is the front feed stopping and `camera read failing` in the journal.
@@ -291,7 +293,7 @@ All of these are at the top of `dayanpi/vision/gestures.py`. Change them on the 
 
 Hold up a peace sign ✌️ and the Pi reads your to-do list out loud: "You have 3 things to do: finish the report, reply to emails, and do laundry." Only open items count, it reads the first 5 and says how many more ("…, and 3 more"), and with nothing open it says "Your to-do list is empty." The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off. The arm gestures show one too.
 
-It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Same as everything else, it's the front camera only, about once a second. The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
+It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Signs only come from the front camera, about once a second. (The hand models also look at the side camera's frame, but only for the [phone-in-hand check](#steps-2-to-4-the-tracker-runs-inside-the-site).) The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
 
 ### Making the sign
 
@@ -323,5 +325,6 @@ Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (whic
 | --- | --- | --- | --- |
 | `HAND_MIN_CONFIDENCE` | `vision/hands.py` | `0.8` | How sure the hand model has to be. Lower it if you see no hand box while your hand is clearly up. |
 | `PALM_MIN_CONFIDENCE` | `vision/hands.py` | `0.6` | How sure the palm finder has to be before the hand model even looks |
+| `NEAR_HAND_MARGIN` | `vision/hands.py` | `0.25` | How close a phone has to be to a hand to count, in hand lengths. Raise it if phone time stops counting while you're holding it; lower it if a phone next to your keyboard counts. |
 | `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |
 | `SPOKEN_MAX` | `focus/todos.py` | `5` | How many to-dos it reads before "and N more" |
