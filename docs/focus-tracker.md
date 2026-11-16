@@ -305,7 +305,7 @@ It runs on two small hand models (see [Where the models come from](#where-the-mo
 
 ### Checking it on the Pi
 
-- **Peek** at the camera: every hand it finds gets a gray box, labeled `peace` while you're making the sign and `hand` otherwise. No box around your hand means the models aren't seeing it, so the sign can't fire.
+- **Peek** at the camera: a hand making a sign gets a box labeled `peace` (front camera only, since that's where signs fire). A plain hand gets no box. No `peace` box while you're holding the sign means the models aren't reading it.
 - The journal says whether the models loaded: `hand models found: hand signs are on`, or `no hand models (...): hand signs are off` if a file is missing. Missing files just turn signs off; everything else keeps working.
 - Each sign that fires writes `gesture: peace` to the journal and a `gesture` line with `"name": "peace"` to the focus log, same as the arm gestures.
 - The hand models add to each check. The camera card's "~N ms each" includes them, so you can see what they cost.
@@ -323,7 +323,7 @@ Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (whic
 
 | Knob | Where | Default | What it does |
 | --- | --- | --- | --- |
-| `HAND_MIN_CONFIDENCE` | `vision/hands.py` | `0.8` | How sure the hand model has to be. Lower it if you see no hand box while your hand is clearly up. |
+| `HAND_MIN_CONFIDENCE` | `vision/hands.py` | `0.8` | How sure the hand model has to be. Lower it if there's no `peace` box while you're clearly making the sign, or no phone box while you're holding your phone. |
 | `PALM_MIN_CONFIDENCE` | `vision/hands.py` | `0.6` | How sure the palm finder has to be before the hand model even looks |
 | `NEAR_HAND_MARGIN` | `vision/hands.py` | `0.25` | How close a phone has to be to a hand to count, in hand lengths. Raise it if phone time stops counting while you're holding it; lower it if a phone next to your keyboard counts. |
 | `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |

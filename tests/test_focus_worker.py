@@ -495,9 +495,9 @@ def test_only_the_front_cameras_hands_make_signs(camera, fired):
     assert seen == fired
     assert worker.last_gesture == ({"name": "peace", "at": NOON + 2} if fired else None)
     assert hand_scanner.scans == {"front": 5, "side": 5}, "both cameras look for hands, for the phone check"
-    overlay = worker.last_overlay if camera == "front" else worker.last_side_overlay
-    hand_boxes = [(box["label"], box["confidence"]) for box in overlay["boxes"] if box["kind"] == "hand"]
-    assert hand_boxes == [("peace", 0.95)], "the camera peek shows the hand and the sign it makes"
+    hand_boxes = [(box["label"], box["confidence"]) for box in worker.last_overlay["boxes"] if box["kind"] == "hand"]
+    assert hand_boxes == ([("peace", 0.95)] if camera == "front" else []), "the front peek boxes a hand making a sign"
+    assert all(box["kind"] != "hand" for box in worker.last_side_overlay["boxes"]), "the side can't fire signs, so no sign boxes"
 
 
 @pytest.mark.parametrize(
@@ -518,6 +518,7 @@ def test_a_phone_only_counts_in_or_near_a_hand(hand, state):
     assert update.state == state
     phone_boxes = [box for box in worker.last_overlay["boxes"] if box["kind"] == "phone"]
     assert len(phone_boxes) == (1 if state == "phone" else 0), "the peek only boxes phones that count"
+    assert all(box["kind"] != "hand" for box in worker.last_overlay["boxes"]), "a plain hand gets no box"
 
 
 @pytest.mark.parametrize(("hand_camera", "state"), [("front", "working"), ("side", "phone")])

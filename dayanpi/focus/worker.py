@@ -203,7 +203,8 @@ class FocusWorker(LoopThread):
         if front_reading is not None:
             self.last_overlay = build_overlay(front_reading, self.front.frame_size, now)
         if side_reading is not None:
-            self.last_side_overlay = build_overlay(side_reading, self.side.frame_size, now)
+            # No sign boxes on the side feed: signs only fire from the front camera.
+            self.last_side_overlay = build_overlay(replace(side_reading, hands=[]), self.side.frame_size, now)
         if self._on_update is not None:
             try:
                 self._on_update(update, now)

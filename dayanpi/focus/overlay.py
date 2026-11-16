@@ -48,11 +48,12 @@ def place_box(kind: str, detection: Detection, size: FrameSize) -> dict:
 def build_overlay(reading: FrameReading, size: FrameSize, at: float) -> dict:
     """The strongest few boxes of each kind that clear the focus rules' cutoffs.
 
-    Hands are labeled with the sign they make, or just "hand".
+    A hand only gets a box while it makes a sign, labeled with the sign.
     """
     hands = [
-        Detection(label=read_sign([hand]) or "hand", confidence=hand.confidence, box=hand.find_box())
+        Detection(label=sign, confidence=hand.confidence, box=hand.find_box())
         for hand in reading.hands
+        if (sign := read_sign([hand])) is not None
     ]
     groups = (
         ("person", reading.people, PERSON_MIN),
