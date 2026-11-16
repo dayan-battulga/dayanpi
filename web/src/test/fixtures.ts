@@ -16,7 +16,6 @@ export function makeFocus(changes: Partial<FocusStatus> = {}): FocusStatus {
     since: now - 125,
     seconds_in_state: 125,
     today: { working_seconds: 3900, phone_seconds: 300, pickups: 3, longest_streak_seconds: 2400, first_seen: now - 7200 },
-    block: { active: false },
     app: "Code",
     camera_ok: true,
     last_check: { person: 0.92, phone: 0.04, elapsed_ms: 186 },

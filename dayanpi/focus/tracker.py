@@ -38,7 +38,7 @@ LATE_NIGHT_START_HOUR = 1
 LATE_NIGHT_END_HOUR = 5
 DAY_DONE_START_HOUR = 22
 DAY_DONE_END_HOUR = 5
-BREAK_OVER_S = 15 * 60
+LONG_BREAK_S = 15 * 60
 SAMPLE_LOG_INTERVAL_S = 30.0
 MAX_STEP_S = 5.0  # checks run every second; a bigger gap is a stall or a clock jump, not time at the desk
 MAX_SEGMENTS = 2000
@@ -105,7 +105,6 @@ class CheckSummary:
 class FocusUpdate:
     state: str
     callouts: list[Callout] = field(default_factory=list)
-    block_active: bool = False
 
 
 @dataclass
@@ -115,7 +114,6 @@ class DayReplay:
     day: str
     segments: list[Segment] = field(default_factory=list)
     pickups: int = 0
-    block_active: bool = False
     day_done: bool = False
     last_ts: float | None = None
     events: int = 0
@@ -133,7 +131,7 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
     was down: the open segment closes at the last line before it (a sample at most 30 s
     old), not at the next state change, so an outage never counts as focus time. The
     last open segment closes at the last line of any kind. Kinds it doesn't use, like
-    the "snack" lines in older logs, still count as lines but change nothing else.
+    the "snack" and "block" lines in older logs, still count as lines but change nothing else.
     """
     replay = DayReplay(day=day)
     todays = sorted(
@@ -152,8 +150,6 @@ def replay_day(events: list[dict], day: str) -> DayReplay:
             replay.segments.append(Segment(state="unknown", start=event["ts"]))
         elif kind == "pickup":
             replay.pickups += 1
-        elif kind == "block":
-            replay.block_active = event.get("action") == "start"
         elif kind == "callout" and event.get("name") == "day_done":
             replay.day_done = True
         replay.last_ts = event["ts"]
@@ -322,11 +318,9 @@ class FocusTracker:
         self._phone_hits: deque[bool] = deque(maxlen=PHONE_WINDOW)
         self._returned_at: float | None = None
         self._away_since: float | None = None
-        self._break_over_fired = False
         self._late_night_fired = False
         self._day_done_fired = False
         self._streak_start: float | None = None
-        self._block_active = False
         self._current_app: str | None = None
         self._current_site: str | None = None
         self._mac_tracking = True  # the dashboard's switch; off drops the Mac helper's reports
@@ -373,33 +367,6 @@ class FocusTracker:
         with self._lock:
             self._write({"event": "gesture", "name": name, **details}, now)
 
-    def set_block(self, active: bool, now: float, source: str = "api") -> bool:
-        with self._lock:
-            changed = self._set_block_locked(active, now, source)
-        return changed
-
-    def toggle_block(self, now: float, source: str = "api") -> bool:
-        """Flips the block under the lock, so a gesture and the button at the same moment can't cancel out. Returns the new state."""
-        with self._lock:
-            active = not self._block_active
-            self._set_block_locked(active, now, source)
-        return active
-
-    def _set_block_locked(self, active: bool, now: float, source: str) -> bool:
-        changed = active != self._block_active
-        if changed:
-            self._block_active = active
-            self._break_over_fired = False
-            self._write(
-                {
-                    "event": "block",
-                    "action": "start" if active else "stop",
-                    "source": source,
-                },
-                now,
-            )
-        return changed
-
     def status(self, now: float) -> dict:
         with self._lock:
             status = self._status_locked(now)
@@ -438,11 +405,10 @@ class FocusTracker:
         changed = next_state != previous
         if changed:
             callouts.extend(self._transition(previous, next_state, now))
-        callouts.extend(self._track_break(now))
         if not is_in_night_window(now, DAY_DONE_START_HOUR, DAY_DONE_END_HOUR):
             # The window runs 22:00-05:00 across midnight, so re-arm by daylight, not at the day rollover.
             self._day_done_fired = False
-        update = FocusUpdate(state=self._state, callouts=callouts, block_active=self._block_active)
+        update = FocusUpdate(state=self._state, callouts=callouts)
         return update
 
     def _state_without_frame(self, now: float) -> str:
@@ -500,7 +466,6 @@ class FocusTracker:
             self._returned_at = now
             callouts.extend(self._callouts_on_return(now))
             self._away_since = None
-            self._break_over_fired = False
         if next_state == "away":
             self._away_since = now
             callouts.extend(self._callouts_on_leaving(now))
@@ -559,7 +524,7 @@ class FocusTracker:
 
     def _callouts_on_return(self, now: float) -> list[Callout]:
         callouts: list[Callout] = []
-        if self._away_since is not None and now - self._away_since >= BREAK_OVER_S:
+        if self._away_since is not None and now - self._away_since >= LONG_BREAK_S:
             away_for = format_spoken_duration(now - self._away_since)
             callouts.append(
                 Callout("long_break", f"Welcome back. That break ran {away_for}.")
@@ -584,30 +549,6 @@ class FocusTracker:
             f"longest streak {format_spoken_duration(totals.longest_streak_seconds)}."
         )
         return text
-
-    def _track_break(self, now: float) -> list[Callout]:
-        """Flags a break that's run long during a work block (logged; the phone ping hooks in here later)."""
-        callouts: list[Callout] = []
-        if (
-            self._block_active
-            and self._state == "away"
-            and self._away_since is not None
-            and not self._break_over_fired
-        ):
-            if now - self._away_since >= BREAK_OVER_S:
-                self._break_over_fired = True
-                callouts.append(
-                    Callout("break_over", "Break's over. Back to it.", speak=False)
-                )
-                self._write(
-                    {
-                        "event": "callout",
-                        "name": "break_over",
-                        "text": callouts[-1].text,
-                    },
-                    now,
-                )
-        return callouts
 
     # ----- totals, segments, day rollover -----
 
@@ -658,7 +599,6 @@ class FocusTracker:
                 "turn": None if check.turn is None else round(check.turn, 2),
                 "tilt": None if check.tilt is None else round(check.tilt, 2),
                 "ms": round(check.elapsed_ms),
-                "block": self._block_active,
                 "app": self._current_app,
                 "site": self._current_site,
                 "streak_s": (
@@ -699,7 +639,6 @@ class FocusTracker:
             "since": round(self._state_since, 3),
             "seconds_in_state": round(max(0.0, now - self._state_since), 1),
             "today": self._totals_dict(),
-            "block": {"active": self._block_active},
             "app": self._current_app,
             "site": self._current_site,
             "camera_ok": frame_age is not None and frame_age < NO_FRAME_UNKNOWN_S,
@@ -719,7 +658,6 @@ class FocusTracker:
         self._state = "unknown"
         self._state_since = now
         self._last_update_at = now
-        self._block_active = replay.block_active
         self._day_done_fired = replay.day_done
         if replay.events:
             self._write({"event": "restart", "restored_events": replay.events}, now)

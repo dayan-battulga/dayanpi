@@ -55,7 +55,7 @@ def test_edit_and_delete(tmp_path):
     assert not todos.delete(item, NOON + 6)
 
 
-def test_only_the_current_item_collects_time_and_only_while_working_in_a_block(tmp_path):
+def test_only_the_current_item_collects_time_and_only_while_working(tmp_path):
     todos = make_list(tmp_path)
     report = todos.add("finish the report", NOON)["id"]
     emails = todos.add("reply to emails", NOON)["id"]
@@ -63,7 +63,7 @@ def test_only_the_current_item_collects_time_and_only_while_working_in_a_block(t
     assert find_seconds(todos, report, now) == 0, "nothing is current yet"
     todos.change(report, now, current=True)
     now = run_checks(todos, now, 60, counting=True)
-    now = run_checks(todos, now, 30, counting=False)  # on the phone, away, or no block
+    now = run_checks(todos, now, 30, counting=False)  # on the phone or away
     assert find_seconds(todos, report, now) == 60
     todos.change(emails, now, current=True)
     assert todos.snapshot(now)["current"] == emails

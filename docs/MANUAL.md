@@ -6,7 +6,7 @@ The app is password-protected and bound to **localhost only**. You reach it thro
 
 This manual covers setting up the Pi, shipping code, running the service, Tailscale, power, security and troubleshooting. Each add-on has its own guide next to it:
 
-- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, the to-do list, the calendar, gestures, hand signs
+- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, the to-do list, the calendar, hand signs
 - [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
 - [Voice](voice.md): callouts out loud through a USB speaker
 
@@ -32,8 +32,7 @@ Always use the **`main`** branch on both machines.
 | `/api/health` | Health check |
 | `/video` | MJPEG camera |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
-| `/api/focus` | Focus state, today's totals, timeline, and the last gesture or hand sign (`gesture`) |
-| `/api/focus/block` | Start/stop a work block (POST) |
+| `/api/focus` | Focus state, today's totals, timeline, and the last hand sign (`gesture`) |
 | `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name). While Mac tracking is off it's dropped, still a 200, with `"enabled": false` |
 | `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |

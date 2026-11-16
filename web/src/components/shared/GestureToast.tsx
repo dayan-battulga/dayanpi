@@ -4,9 +4,6 @@ export const TOAST_S = 4;
 
 const GESTURE_COPY: Record<string, string> = {
   peace: "✌️ Peace sign: reading your to-dos",
-  next_page: "Right hand up",
-  previous_page: "Left hand up",
-  toggle_block: "Both hands up: block toggled",
 };
 
 interface GestureToastProps {
@@ -15,7 +12,7 @@ interface GestureToastProps {
   receivedAt: number;
 }
 
-// The last gesture or hand sign, for a few seconds, so it's clear it fired even with the speaker off.
+// The last hand sign, for a few seconds, so it's clear it fired even with the speaker off.
 // The live region stays mounted so screen readers announce each new one.
 export function GestureToast({ gesture, now, receivedAt }: GestureToastProps) {
   const age = gesture == null ? Infinity : gesture.age_s + (now - receivedAt);

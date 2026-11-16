@@ -1,7 +1,7 @@
 """One markdown page per finished day, data/days/YYYY-MM-DD.md, for the calendar card and for reading anywhere.
 
 Each page is built from that day's focus log: the totals (the same replay as the restart
-and the stats tool), the work blocks, the to-dos checked off, and the sites the Mac had in
+and the stats tool), the to-dos checked off, and the sites the Mac had in
 front while you were at the desk. The numbers also go in
 the frontmatter, which Obsidian shows as properties and the calendar reads back. Pages are
 written once: at startup for every past day that has a log and no page, then just after
@@ -9,7 +9,6 @@ each local midnight. Today never gets a file; the routes build its page live fro
 """
 
 import re
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -29,32 +28,9 @@ def find_days_dir() -> Path:
     return path
 
 
-@dataclass
-class Block:
-    start: float
-    end: float
-    still_on: bool = False  # never stopped that day: ran past midnight, or the Pi went down
-
-
 def list_day_lines(lines: list[dict], day: str) -> list[dict]:
     todays = sorted((line for line in lines if line.get("day") == day and "ts" in line), key=lambda line: line["ts"])
     return todays
-
-
-def find_blocks(lines: list[dict], day: str) -> list[Block]:
-    """The day's work blocks. One carried over from the day before starts at midnight; one never stopped ends at the day's last line."""
-    todays = list_day_lines(lines, day)
-    blocks = []
-    started = None
-    for line in todays:
-        if line.get("event") == "block" and line.get("action") == "start" and started is None:
-            started = line["ts"]
-        elif line.get("event") == "block" and line.get("action") == "stop":
-            blocks.append(Block(start=started if started is not None else read_midnight(day), end=line["ts"]))
-            started = None
-    if started is not None:
-        blocks.append(Block(start=started, end=todays[-1]["ts"], still_on=True))
-    return blocks
 
 
 def find_finished_todos(lines: list[dict], day: str) -> list[dict]:
@@ -109,16 +85,6 @@ def count_paused_seconds(lines: list[dict], day: str) -> float:
     return paused
 
 
-def read_midnight(day: str) -> float:
-    midnight = datetime.strptime(day, DAY_FORMAT).timestamp()
-    return midnight
-
-
-def format_clock(moment: float) -> str:
-    clock = datetime.fromtimestamp(moment).strftime("%H:%M")
-    return clock
-
-
 def count_minutes(seconds: float) -> int:
     minutes = round(seconds / 60)
     return minutes
@@ -127,7 +93,6 @@ def count_minutes(seconds: float) -> int:
 def build_day_page(lines: list[dict], day: str) -> str:
     replay = replay_day(lines, day)
     totals = total_day(replay)
-    blocks = find_blocks(lines, day)
     todos = find_finished_todos(lines, day)
     sites = count_site_seconds(lines, day)
     paused = count_paused_seconds(lines, day)
@@ -140,7 +105,6 @@ def build_day_page(lines: list[dict], day: str) -> str:
         f"away_minutes: {count_minutes(totals.away_seconds)}",
         f"pickups: {totals.pickups}",
         f"best_streak_minutes: {count_minutes(totals.longest_streak_seconds)}",
-        f"blocks: {len(blocks)}",
         f"todos_done: {len(todos)}",
         "---",
         "",
@@ -157,14 +121,6 @@ def build_day_page(lines: list[dict], day: str) -> str:
             f"- Away: {format_duration(totals.away_seconds)}",
             f"- Pickups: {totals.pickups}",
             f"- Best streak: {format_duration(totals.longest_streak_seconds)}",
-            "",
-            "## Focus blocks",
-            *[
-                f"- {format_clock(block.start)}–{format_clock(block.end)} ({format_duration(block.end - block.start)})"
-                + (", still on at the end of the day" if block.still_on else "")
-                for block in blocks
-            ],
-            *([] if blocks else ["- None"]),
             "",
             "## To-dos done",
             *[f"- {' '.join(str(todo.get('text', '')).split())} ({format_duration(todo.get('seconds', 0))})" for todo in todos],

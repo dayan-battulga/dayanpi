@@ -4,7 +4,6 @@ import pytest
 
 from dayanpi.focus.days import (
     build_day_page,
-    find_blocks,
     find_finished_todos,
     find_seconds_until_midnight,
     read_month,
@@ -28,7 +27,7 @@ def line(hour: int, minute: int, event: str, **fields) -> dict:
 
 SAMPLE_DAY = [
     line(9, 0, "state", state="working"),
-    line(9, 5, "block", action="start", source="api"),
+    line(9, 5, "block", action="start", source="api"),  # older logs have these; new pages skip them
     line(10, 0, "state", state="phone"),
     line(10, 0, "pickup"),
     line(10, 10, "state", state="working"),
@@ -49,7 +48,6 @@ phone_minutes: 10
 away_minutes: 30
 pickups: 1
 best_streak_minutes: 60
-blocks: 1
 todos_done: 2
 ---
 
@@ -61,9 +59,6 @@ todos_done: 2
 - Away: 30m
 - Pickups: 1
 - Best streak: 1h00
-
-## Focus blocks
-- 09:05–11:00 (1h55)
 
 ## To-dos done
 - finish the report (1h12)
@@ -78,9 +73,9 @@ def test_a_sample_day_page():
     assert build_day_page(SAMPLE_DAY, DAY) == SAMPLE_PAGE
 
 
-def test_a_day_with_no_todos_or_blocks_says_none():
+def test_a_day_with_no_todos_says_none():
     page = build_day_page([line(9, 0, "state", state="working"), line(9, 30, "sample")], DAY)
-    assert "## Focus blocks\n- None\n\n## To-dos done\n- None\n" in page
+    assert "## To-dos done\n- None\n" in page
     assert read_page_totals(page)["focus_minutes"] == 30
 
 
@@ -93,19 +88,8 @@ def test_a_day_with_no_log():
         "away_minutes": 0,
         "pickups": 0,
         "best_streak_minutes": 0,
-        "blocks": 0,
         "todos_done": 0,
     }
-
-
-def test_blocks_that_cross_midnight_are_cut_at_the_day_edges():
-    lines = [line(0, 30, "block", action="stop"), line(23, 0, "block", action="start"), line(23, 40, "sample")]
-    blocks = find_blocks(lines, DAY)
-    assert [(block.start, block.end, block.still_on) for block in blocks] == [
-        (at(0, 0), at(0, 30), False),
-        (at(23, 0), at(23, 40), True),
-    ]
-    assert "- 23:00–23:40 (40m), still on at the end of the day" in build_day_page(lines, DAY)
 
 
 def test_only_todos_still_checked_at_the_end_of_the_day_count():

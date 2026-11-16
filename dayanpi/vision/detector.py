@@ -86,7 +86,6 @@ class FrameReading:
     phones: list[Detection]
     faces: list[FaceReading]
     elapsed_ms: float
-    poses: list = field(default_factory=list)  # pose.PoseDetection, only when the pose model runs
     hands: list = field(default_factory=list)  # hands.Hand, when the hand models run
     side: "FrameReading | None" = None  # the side camera's own reading, when this one was merged from two
 
@@ -295,8 +294,6 @@ class DeskScanner:
 
     Phones only come from the zoomed pass, so no person means no zoomed pass.
     """
-
-    has_pose = False  # PoseDeskScanner says True: its readings carry keypoints
 
     def __init__(
         self,

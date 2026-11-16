@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool, StringConstraints
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from dayanpi.hardware import collector
 from dayanpi.focus import days
@@ -116,7 +116,7 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
         logger.info("focus callout %s: %s", callout.name, callout.text)
         if callout.speak:
             voice.say(callout.text)
-    todos.track(update.state == "working" and update.block_active, now)
+    todos.track(update.state == "working", now)
 
 
 def say_todos(now: float) -> dict:
@@ -133,12 +133,9 @@ SIGN_ACTIONS = {"peace": say_todos}
 
 
 def handle_gesture(name: str, now: float) -> None:
-    """Runs on the worker thread when a held gesture or hand sign fires."""
+    """Runs on the worker thread when a hand sign fires."""
     details = SIGN_ACTIONS[name](now) if name in SIGN_ACTIONS else {}
     tracker.record_gesture(name, now, **details)
-    if name == "toggle_block":
-        active = tracker.toggle_block(now, source="gesture")
-        voice.say("Block started." if active else "Block stopped.")
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -316,22 +313,6 @@ def focus_now():
     status = build_focus_status()
     status["segments"] = tracker.segments()
     return status
-
-
-class BlockCommand(BaseModel):
-    action: Literal["start", "stop", "toggle"]
-
-
-@app.post("/api/focus/block")
-def focus_block(command: BlockCommand):
-    now = time.time()
-    if command.action == "toggle":
-        active = tracker.toggle_block(now, source="api")
-        changed = True
-    else:
-        active = command.action == "start"
-        changed = tracker.set_block(active, now, source="api")
-    return {"status": "ok", "active": active, "changed": changed}
 
 
 TodoText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TEXT_MAX)]

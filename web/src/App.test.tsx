@@ -44,7 +44,6 @@ it("draws every card from one stream", async () => {
   expect(document.getElementById("focus-timer")).toHaveTextContent("2:05");
   expect(document.getElementById("focus-working")).toHaveTextContent("1h 05m");
   expect(document.getElementById("focus-pickups")).toHaveTextContent("3");
-  expect(screen.getByRole("button", { name: "Start block" })).toBeEnabled();
   expect(document.querySelector(".reading[data-key=person] .reading-value")).toHaveTextContent("0.92");
   expect(document.getElementById("check-ms")).toHaveTextContent("~186 ms each");
   expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
@@ -100,24 +99,6 @@ it("shows the browser's site next to the Mac app", () => {
   render(<App />);
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: "Google Chrome", site: "youtube.com" })));
   expect(document.getElementById("mac")).toHaveTextContent("Google Chrome · youtube.com");
-});
-
-it("offers Show pose only with the pose model, and draws the skeleton over the front feed", async () => {
-  const user = userEvent.setup();
-  window.localStorage.removeItem("dayanpi.pose");
-  render(<App />);
-  FakeEventSource.latest?.send(makeSnapshot());
-  expect(screen.queryByRole("button", { name: "Show pose" })).toBeNull();
-
-  const focus = makeFocus();
-  const pose = Array.from({ length: 17 }, (_, index): [number, number, number] => [0.3 + index / 50, 0.2 + index / 30, 0.9]);
-  FakeEventSource.latest?.send(makeSnapshot({ ...focus, overlay: focus.overlay && { ...focus.overlay, pose } }));
-  await user.click(screen.getByRole("button", { name: "Show pose" }));
-
-  expect(screen.getByRole("button", { name: "Hide pose" })).toHaveAttribute("aria-pressed", "true");
-  expect(document.querySelectorAll(".feed-frame svg.pose line")).toHaveLength(19);
-  expect(document.querySelectorAll(".feed-frame svg.pose circle")).toHaveLength(17);
-  expect(window.localStorage.getItem("dayanpi.pose")).toBe("1");
 });
 
 it("pauses the Mac tracker from its switch, flipping right away", async () => {

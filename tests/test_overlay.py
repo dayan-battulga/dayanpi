@@ -48,30 +48,3 @@ def test_an_empty_desk_has_no_boxes():
     overlay = build_overlay(make_reading(), SIZE, at=5.0)
     assert overlay["boxes"] == []
     assert overlay["frame_width"] == 640
-
-
-def make_pose(confidence: float, x: float = 320.0):
-    from dayanpi.vision.pose import Keypoint, PoseDetection
-
-    points = [Keypoint(x=x, y=120.0 + index * 10, confidence=0.9 if index % 2 else 0.3) for index in range(17)]
-    points[0] = Keypoint(x=-15.0, y=500.0, confidence=0.8)  # just off the frame
-    pose = PoseDetection(confidence=confidence, box=Box(200, 100, 440, 470), keypoints=points)
-    return pose
-
-
-def test_the_pose_model_adds_the_main_persons_keypoints_as_fractions():
-    reading = make_reading(people=[Detection("person", 0.9, Box(200, 100, 440, 470))])
-    reading.poses = [make_pose(0.6, x=100.0), make_pose(0.9)]
-    pose = build_overlay(reading, SIZE, at=0.0, with_pose=True)["pose"]
-    assert len(pose) == 17
-    assert pose[0] == [0.0, 1.0, 0.8], "clamped onto the frame"
-    assert pose[1] == [0.5, 0.2708, 0.9], "the strongest person: x 320 of 640, y 130 of 480"
-    assert pose[2][2] == 0.3, "weak points still travel, with their confidence; the page skips them"
-
-
-def test_no_clear_person_means_a_null_pose_and_no_model_means_no_pose_at_all():
-    reading = make_reading()
-    reading.poses = [make_pose(PERSON_MIN - 0.01)]
-    assert build_overlay(reading, SIZE, at=0.0, with_pose=True)["pose"] is None
-    assert build_overlay(make_reading(), SIZE, at=0.0, with_pose=True)["pose"] is None
-    assert "pose" not in build_overlay(reading, SIZE, at=0.0)

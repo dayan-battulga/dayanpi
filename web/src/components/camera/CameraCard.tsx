@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Eye, Lock, PersonStanding } from "lucide-react";
+import { ArrowLeftRight, Eye, Lock } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Feed } from "@/components/camera/Feed";
 import { Readings } from "@/components/camera/Readings";
@@ -17,11 +17,8 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
   const [peeking, setPeeking] = useState(() => readStored("peek", "0") === "1");
   const [view, setView] = useState(() => (readStored("camera", "front") === "side" ? "side" : "front"));
   const [feedStates, setFeedStates] = useState<Record<string, FeedState>>({});
-  const [showPose, setShowPose] = useState(() => readStored("pose", "0") === "1");
   const sidePresent = focus?.side_camera === true;
   const onSide = sidePresent && view === "side";
-  // The front overlay only has a "pose" when the Pi has the pose model loaded.
-  const poseModel = focus?.overlay != null && "pose" in focus.overlay;
 
   const reportState = useCallback((name: string, state: FeedState) => {
     setFeedStates((current) => (current[name] === state ? current : { ...current, [name]: state }));
@@ -29,10 +26,6 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
   const togglePeek = () => {
     writeStored("peek", peeking ? "0" : "1");
     setPeeking(!peeking);
-  };
-  const togglePose = () => {
-    writeStored("pose", showPose ? "0" : "1");
-    setShowPose(!showPose);
   };
   const flipCamera = () => {
     const next = view === "side" ? "front" : "side";
@@ -51,17 +44,6 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
           </span>
         </div>
         <div className="head-buttons">
-          <button
-            type="button"
-            id="pose-toggle"
-            className="button button-ghost button-small"
-            hidden={!poseModel || onSide}
-            aria-pressed={showPose}
-            onClick={togglePose}
-          >
-            <PersonStanding size={16} strokeWidth={1.8} aria-hidden="true" />
-            <span>{showPose ? "Hide pose" : "Show pose"}</span>
-          </button>
           <button
             type="button"
             id="camera-flip"
@@ -92,7 +74,6 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
               cameraOk={focus?.camera_ok ?? false}
               hidden={feed.name === "side" ? !onSide : onSide}
               wanted={peeking}
-              showPose={showPose && feed.name === "front"}
               onState={reportState}
             />
           ))}

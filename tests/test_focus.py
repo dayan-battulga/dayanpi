@@ -180,21 +180,6 @@ def test_long_break_is_announced_on_return():
     assert "16 minutes" in desk.callouts[0].text
 
 
-def test_break_over_flag_during_a_block_is_silent():
-    desk = settled_desk()
-    assert desk.tracker.set_block(True, desk.now) is True
-    assert desk.tracker.set_block(True, desk.now) is False
-    desk.leave(10)
-    assert desk.tracker.status(desk.now)["state"] == "away"
-    desk.leave(15 * 60 - 1)
-    assert desk.names() == []
-    desk.leave(1)
-    assert desk.names() == ["break_over"]
-    assert desk.callouts[0].speak is False
-    desk.leave(60)
-    assert desk.names() == ["break_over"]
-
-
 def test_no_frames_keeps_state_briefly_then_unknown():
     desk = settled_desk()
     assert desk.tick(None, 29) == "working"
@@ -243,7 +228,7 @@ def test_samples_are_logged_every_thirty_seconds(tmp_path):
     assert samples[0]["state"] == "working"
 
 
-SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "turn", "tilt", "ms", "block", "app", "site", "streak_s"}
+SAMPLE_FIELDS = {"ts", "day", "event", "state", "person", "phone", "turn", "tilt", "ms", "app", "site", "streak_s"}
 
 
 def read_samples(log: FocusLog) -> list[dict]:
@@ -299,17 +284,19 @@ def make_old_log_line(seconds: float, event: str, **fields) -> dict:
 OLD_SAMPLE = {"person": 0.9, "phone": 0.0, "food": 0.61, "drink": 0.4, "turn": None, "tilt": None, "ms": 380, "block": False, "app": None}
 OLD_LOG = [
     make_old_log_line(0, "state", state="working", prev="unknown", seconds_in_prev=2.0),
+    make_old_log_line(5, "block", action="start", source="api"),
     make_old_log_line(30, "sample", state="working", streak_s=30, side_person=0.7, side_phone=0.0, side_food=0.5, **OLD_SAMPLE),
     make_old_log_line(31, "snack", count=1),
     make_old_log_line(31, "callout", name="snack", text="Snack number 1."),
     make_old_log_line(60, "pickup", count=1),
     make_old_log_line(60, "state", state="phone", prev="working", seconds_in_prev=60.0),
     make_old_log_line(90, "state", state="working", prev="phone", seconds_in_prev=30.0),
+    make_old_log_line(100, "block", action="stop", source="gesture"),
     make_old_log_line(120, "sample", state="working", streak_s=30, **OLD_SAMPLE),
 ]
 
 
-def test_old_logs_with_snacks_and_food_replay_and_report_without_them(tmp_path):
+def test_old_logs_with_snacks_food_and_blocks_replay_and_report_without_them(tmp_path):
     log_dir = tmp_path / "focus_log"
     log_dir.mkdir()
     (log_dir / "2026-10-29.jsonl").write_text("".join(json.dumps(line) + "\n" for line in OLD_LOG))
@@ -318,7 +305,7 @@ def test_old_logs_with_snacks_and_food_replay_and_report_without_them(tmp_path):
     stripped = [
         {key: value for key, value in event.items() if key not in ("food", "drink", "side_food")}
         for event in events
-        if event["event"] != "snack" and event.get("name") != "snack"
+        if event["event"] not in ("snack", "block") and event.get("name") != "snack"
     ]
 
     totals = focus.total_day(focus.replay_day(events, "2026-10-29"))
@@ -329,6 +316,7 @@ def test_old_logs_with_snacks_and_food_replay_and_report_without_them(tmp_path):
     fresh = FocusTracker(started_at=later)
     assert fresh.restore(events, later) == len(OLD_LOG)
     assert "snacks" not in fresh.status(later)["today"]
+    assert "block" not in fresh.status(later)
 
     report = focus_stats.build_report(log, ["2026-10-29"])
     assert "pickups   1" in report
@@ -341,7 +329,6 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
     desk.work(60)
     desk.phone(5)
     desk.work(15)
-    desk.tracker.set_block(True, desk.now)
     desk.work(30)
 
     later = desk.now + 120
@@ -354,7 +341,6 @@ def test_restore_rebuilds_today_from_the_log(tmp_path):
     # The open segment closes at the last logged event (a sample at 90 s), so up to 30 s is lost: 64 + 17.
     assert status["today"]["working_seconds"] == pytest.approx(81, abs=2)
     assert status["today"]["longest_streak_seconds"] >= 60
-    assert status["block"]["active"] is True
     assert [segment["state"] for segment in fresh.segments()][-1] == "unknown"
     assert log.read_day("2026-10-29")[-1]["event"] == "restart"
 
@@ -405,7 +391,8 @@ def test_status_has_the_fields_the_dashboard_needs():
     desk = settled_desk()
     desk.tick(make_reading(tilt=0.4), 1)
     status = desk.tracker.status(desk.now)
-    assert set(status) >= {"state", "since", "seconds_in_state", "today", "block", "camera_ok", "last_check", "app"}
+    assert set(status) >= {"state", "since", "seconds_in_state", "today", "camera_ok", "last_check", "app"}
+    assert "block" not in status
     assert status["last_check"]["tilt"] == 0.4
     assert status["camera_ok"] is True
 
@@ -517,14 +504,6 @@ def test_day_done_fires_once_per_night_even_across_midnight():
     desk.work(22 * 3600)  # the next evening, past 10 pm again
     desk.leave(10)
     assert desk.names() == ["day_done", "day_done"]
-
-
-def test_toggle_block_flips_under_the_lock(tmp_path):
-    log = FocusLog(tmp_path / "focus_log")
-    tracker = FocusTracker(log=log, started_at=NOON)
-    assert tracker.toggle_block(NOON, source="gesture") is True
-    assert tracker.toggle_block(NOON + 1, source="api") is False
-    assert [event["action"] for event in log.read_day("2026-10-29") if event["event"] == "block"] == ["start", "stop"]
 
 
 def test_paused_mac_tracking_drops_reports_and_clears_the_current_app(tmp_path):

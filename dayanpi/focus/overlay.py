@@ -45,25 +45,10 @@ def place_box(kind: str, detection: Detection, size: FrameSize) -> dict:
     return placed
 
 
-def place_pose(poses: list, size: FrameSize) -> list[list[float]] | None:
-    """The main person's 17 keypoints as [x, y, confidence], x and y in 0-1 fractions of the frame,
-    or None when nobody clears the person cutoff (a weak box's keypoints are noise)."""
-    main = max(poses, key=lambda pose: pose.confidence, default=None)
-    points = None
-    if main is not None and main.confidence >= PERSON_MIN:
-        points = [
-            [round(clamp_fraction(point.x / size.width), 4), round(clamp_fraction(point.y / size.height), 4), round(point.confidence, 2)]
-            for point in main.keypoints
-        ]
-    return points
-
-
-def build_overlay(reading: FrameReading, size: FrameSize, at: float, with_pose: bool = False) -> dict:
+def build_overlay(reading: FrameReading, size: FrameSize, at: float) -> dict:
     """The strongest few boxes of each kind that clear the focus rules' cutoffs.
 
-    A hand only gets a box while it makes a sign, labeled with the sign. with_pose (the pose
-    model is loaded) adds "pose", the main person's keypoints or None; without it there's no
-    "pose" at all, which is how the page knows to hide its Show pose button.
+    A hand only gets a box while it makes a sign, labeled with the sign.
     """
     hands = [
         Detection(label=sign, confidence=hand.confidence, box=hand.find_box())
@@ -81,6 +66,4 @@ def build_overlay(reading: FrameReading, size: FrameSize, at: float, with_pose: 
         strongest = sorted(counted, key=lambda detection: detection.confidence, reverse=True)[:MAX_BOXES_PER_KIND]
         boxes.extend(place_box(kind, detection, size) for detection in strongest)
     overlay = {"at": round(at, 3), "frame_width": size.width, "frame_height": size.height, "boxes": boxes}
-    if with_pose:
-        overlay["pose"] = place_pose(reading.poses, size)
     return overlay

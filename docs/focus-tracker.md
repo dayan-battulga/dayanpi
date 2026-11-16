@@ -119,19 +119,18 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6), today's totals and a **Start block** button. A work block is just a flag for now: while it's on, a break longer than 15 minutes gets flagged as "break over". The button, `/api/focus/block` and the both-hands gesture all flip it.
+**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6) and today's totals.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
 - *instant pickup*: on the phone within 60 s of sitting back down
 - *late night phone*: on the phone between 1 and 5 am
 - *long break*: you come back after 15+ minutes away
-- *break over*: 15 minutes away during a work block
 - *day done*: you leave after 10 pm (once a night, with the day's totals)
 
-Gestures get a `gesture` line in the log too, and the both-hands gesture says "Block started." / "Block stopped."
+Hand signs get a `gesture` line in the log too.
 
-**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, block starts/stops, the Mac's front app (and the site, for a browser), a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks; the restart and the stats tool just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, hand signs, the Mac's front app (and the site, for a browser), a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks, and `block` lines from when it had work blocks; the restart, the stats tool and the day pages just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
 
 Check it's filling up:
 
@@ -148,8 +147,7 @@ If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your
 
 | Route | What |
 | --- | --- |
-| `GET /api/focus` | Current state, today's totals, the block, the last check's numbers, and today's timeline segments |
-| `POST /api/focus/block` | `{"action": "start" \| "stop" \| "toggle"}` |
+| `GET /api/focus` | Current state, today's totals, the last check's numbers, and today's timeline segments |
 | `POST /api/mac/app` | `{"app": "Google Chrome", "site": "youtube.com"}` (site optional, a plain host name or nothing), sent by the Mac helper when the front app or site changes |
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
@@ -194,15 +192,15 @@ Every check grabs a new frame from each camera and gives each one its own full s
 | What | Comes from |
 | --- | --- |
 | People, phones | Both cameras (each camera's phones only count near that camera's own view of your hands) |
-| Face turn and tilt, gestures, hand signs | The front camera only, because they assume the straight-on view |
+| Face turn and tilt, hand signs | The front camera only, because they assume the straight-on view |
 
 What that means day to day:
 
 - **You count as there if either camera sees you.** So **away** needs both to lose you, and someone walking through the side view can hold it off.
 - **A phone in your hand that either camera sees counts.** That's the point, but a false alarm from either one counts too. With the hand models in, the side camera has to see your hand on the phone too. The cutoffs were tuned on front-view frames, so watch for pickups that didn't happen.
 - **The side camera has to see you first.** It only does the zoomed phone pass when it finds a person at 0.5 or above. If it only catches part of you, a phone in your lap never gets looked at. `side_person` in the log tells you.
-- **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people and phones but no face numbers or gestures. With neither, it goes to **unknown** after 30 s.
-- **A dead front camera doesn't look dead.** The tracker keeps running off the side camera and the card looks normal, but gestures stop. What gives it away is the front feed stopping and `camera read failing` in the journal.
+- **A stuck camera just drops out.** Its frames stop counting and the other camera carries on, same as a frozen camera today. With only the side camera working, you get people and phones but no face numbers or hand signs. With neither, it goes to **unknown** after 30 s.
+- **A dead front camera doesn't look dead.** The tracker keeps running off the side camera and the card looks normal, but hand signs stop. What gives it away is the front feed stopping and `camera read failing` in the journal.
 
 **Which camera caught it?** Sample lines gain `side_person` and `side_phone`, the side camera's own best numbers. The usual `person` and `phone` are the best of both cameras, so if `phone` is higher than `side_phone`, the front camera saw it better. If they match, the side did at least as well. No `side_` fields means the side camera gave no frame for that check. Samples only come every 30 s, so they show the long stretches, and a quick pickup can fall between them.
 
@@ -216,11 +214,11 @@ curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json,
 
 ## To-do list
 
-The card next to the camera is one running to-do list. It carries over between work blocks and days.
+The card next to the camera is one running to-do list. It carries over from day to day.
 
 - **Add** with the box at the top (Enter or **Add**). **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels. **Delete** with the ×.
 - **Check it off** and it moves down to **Done today**, ticked and crossed out. Uncheck it and it goes back to where it was.
-- **The current one.** The round button on an item makes it the one you're on (press it again to stop). It only collects time while you're **focused during a work block**, so phone time, away time and time outside a block don't count. Only one item is current at a time, and checking it off stops its clock. The time shows next to every item, in both lists.
+- **The current one.** The round button on an item makes it the one you're on (press it again to stop). It only collects time while you're **focused**, so phone time and away time don't count. Only one item is current at a time, and checking it off stops its clock. The time shows next to every item, in both lists.
 - **Midnight.** Done shows what you finished today. At local midnight those items leave the list, and that day's [calendar page](#calendar) keeps them. Unfinished ones stay put.
 - **Where it lives.** `data/todos.json` on the Pi (or in `DAYANPI_DATA_DIR`). Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
 - **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
@@ -237,9 +235,9 @@ grep '"todo"' data/focus_log/$(date +%F).jsonl
 
 Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in `DAYANPI_DATA_DIR`). It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
 
-- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak, how many blocks and how many to-dos. Obsidian shows these as properties, and the calendar card reads them back.
+- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos. Obsidian shows these as properties, and the calendar card reads them back.
 - **Totals:** the same numbers, readable.
-- **Focus blocks:** each block's start and end time and how long it ran. A block still on at midnight shows up in both days: one ends "still on at the end of the day", the next starts at 00:00.
+- Pages written back when there were work blocks still have a **Focus blocks** section and a `blocks` number. Pages are never rewritten, so they just stay that way.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
 - **Sites:** the top 10 websites by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site). Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked, and Mac tracking isn't switched off (if it was, the section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. Days from before sites existed just say "None".
 
@@ -258,91 +256,9 @@ journalctl -u dayanpi --no-pager | grep "day pages"
 curl -s -u YOURUSER:YOURPASS "localhost:8000/api/days?month=$(date +%Y-%m)" | python3 -m json.tool
 ```
 
-## Gestures
-
-Hold both arms up in front of the camera to start or stop a work block. One arm up used to flip the LED sign's pages; the sign's gone, so now it only gets logged. This uses a third model, YOLO26 nano **pose**. Instead of boxes, it finds 17 points on your body (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles). Gestures only look at your shoulders and wrists. The code is in `dayanpi/vision/pose.py` (runs the model) and `dayanpi/vision/gestures.py` (turns arm positions into gestures).
-
-### Getting the pose model
-
-It's in the repo: `models/yolo26n-pose_480x640.onnx` comes with `git pull`, so there's nothing to do. Without it, gestures and Show pose are off (the journal says `no pose model`), and everything else works.
-
-To export it again, same story as the object model: the weights are a PyTorch file, so the conversion happens on the Mac. If `/tmp/yolo-export` is still around from last time, reuse it (Ultralytics 8.4.213 is known to work):
-
-```bash
-cd /tmp
-/tmp/yolo-export/bin/python -c "from ultralytics import YOLO; YOLO('yolo26n-pose.pt').export(format='onnx', imgsz=(480, 640), opset=12, simplify=True)"
-mv /tmp/yolo26n-pose.onnx ~/Desktop/code/projects/site-page/models/yolo26n-pose_480x640.onnx
-```
-
-`/tmp` gets wiped when the Mac restarts. If `/tmp/yolo-export` is gone, make it again first, then run the commands above:
-
-```bash
-python3 -m venv /tmp/yolo-export && /tmp/yolo-export/bin/pip install ultralytics onnx onnxslim onnxruntime
-```
-
-Quick check before you push. This should print `(1, 56, 6300)`:
-
-```bash
-cd ~/Desktop/code/projects/site-page
-/tmp/yolo-export/bin/python -c "import cv2, numpy as np; net = cv2.dnn.readNetFromONNX('models/yolo26n-pose_480x640.onnx'); net.setInput(np.zeros((1, 3, 480, 640), np.float32)); print(net.forward().shape)"
-```
-
-That's 56 numbers (a box, a person score, then x, y and confidence for each of the 17 points) for each of the 6300 spots the model checks, the same shape the older YOLO11 nano pose had, so the same code reads both. On Ultralytics' own sample photos, the app's decoding gives exactly the keypoints Ultralytics does from the same file, and it loads on OpenCV 4.12 and 5.0. Anything other than that shape means the export went sideways. Then push it like any other change:
-
-```bash
-cd ~/Desktop/code/projects/site-page
-git pull origin main
-git add models/yolo26n-pose_480x640.onnx
-git commit -m "Re-export the YOLO26 nano pose model"
-git push origin main
-```
-
-Like the other YOLO file, `models/yolo26n-pose_480x640.onnx` is Ultralytics' model (AGPL-3.0).
-
-### Show pose
-
-With the pose model loaded, the Camera card gets a **Show pose** button next to Peek. It draws what the model sees as a stick figure over the front feed: dots on your joints and lines between them (the usual COCO skeleton), in the same color as your person box. Points the model isn't sure about (under 0.5) are left out, with the lines that end at them, so a hand off the edge of the picture just isn't drawn. It's only for the front camera, it follows the main person (the strongest one), and it hides after 3 s without a fresh check, like the boxes. The browser remembers whether it's on.
-
-Only numbers leave the Pi: the 17 points come with each check's boxes as fractions of the frame plus a confidence, and they're never logged. Without the pose model, the button doesn't show.
-
-### The gestures
-
-| Gesture | What it does | Hold it for |
-| --- | --- | --- |
-| Right hand up | Nothing now (it used to flip the sign's pages), only logged | 1 s |
-| Left hand up | Same, only logged | 1 s |
-| Both hands up | Start or stop a work block | 2 s |
-
-- Right and left are **your** right and left. On the camera picture, your right hand is on the left side.
-- "Up" means your wrist is clearly above your shoulder, by about a third of your shoulder width. Head height is plenty.
-- Each hold fires once. To do it again, drop your hands for a second or two, then raise them again.
-- After anything fires, nothing else fires until your hands come down. No chaining gestures with your hands still up.
-- Going for both hands? Raise them together. One hand that's up alone for a full second counts as a one-hand gesture. Getting the second hand up before then cancels the flip.
-- If the camera loses your wrist for one check, the hold keeps going. Two bad checks in a row and it starts over.
-- Stretching with both arms up for 2 seconds counts as both hands up. If that keeps toggling your blocks, make the both-hands hold longer (see Tuning).
-
-### Tips
-
-- Face the camera and sit like you normally do. With both cameras on, gestures only use the front one (the webcam unless `DAYANPI_FRONT_CAMERA=picamera`).
-- Keep both shoulders in the shot. No shoulders, no gestures.
-- Keep the raised hand in the shot too. The camera looks down at your desk, so a hand straight up can go off the top of the picture. Head height works better.
-- Hold still. The tracker only checks about once a second, so quick waves and swipes won't register.
-
-### Tuning
-
-All of these are at the top of `dayanpi/vision/gestures.py`. Change them on the Mac, push, pull on the Pi, and restart the service.
-
-| Knob | Default | What it does |
-| --- | --- | --- |
-| `HOLD_SECONDS` | 1 s for one hand, 2 s for blocks | How long you hold before it fires |
-| `RAISE_MARGIN` | `0.3` | How far above your shoulder the wrist has to be, in shoulder widths. Raise it if gestures fire by accident; lower it if they're hard to trigger. |
-| `MIN_KEYPOINT_CONFIDENCE` | `0.5` | How sure the model has to be about a shoulder or wrist before it counts |
-| `MIN_PERSON_CONFIDENCE` | `0.5` | How sure it has to be that there's a person there at all |
-| `ALLOWED_MISSES` | `1` | How many bad checks in a row a hold survives |
-
 ## Hand signs
 
-Hold up a peace sign ✌️ and the Pi gives you a quick rundown out loud: the time, how long until bed, what's left on your to-do list and what you finished today. That's a fixed sentence out of the box, or a friendlier one written by a small LLM on the Pi if you set one up. Both are in [What the peace sign says](voice.md#what-the-peace-sign-says). The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off. The arm gestures show one too.
+Hold up a peace sign ✌️ and the Pi gives you a quick rundown out loud: the time, how long until bed, what's left on your to-do list and what you finished today. That's a fixed sentence out of the box, or a friendlier one written by a small LLM on the Pi if you set one up. Both are in [What the peace sign says](voice.md#what-the-peace-sign-says). The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off.
 
 It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Signs only come from the front camera, about once a second. (The hand models also look at the side camera's frame, but only for the [phone-in-hand check](#steps-2-to-4-the-tracker-runs-inside-the-site).) The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
 
@@ -350,15 +266,14 @@ It runs on two small hand models (see [Where the models come from](#where-the-mo
 
 - **Peace** = index and middle fingers up, ring and pinky folded. The thumb doesn't matter.
 - A finger counts as **open** when its tip is farther from your wrist than its middle knuckle. That's distances, not directions, so a tilted hand still counts.
-- Hold it for about a second. Like the arm gestures, it fires once, and you have to drop it (two checks without the sign, so about two seconds) before it fires again. One check that misses your hand doesn't break a hold.
-- Hand signs and arm gestures hold separately, so a peace sign with your arm raised can do both.
+- Hold it for about a second. It fires once, and you have to drop it (two checks without the sign, so about two seconds) before it fires again. One check that misses your hand doesn't break a hold.
 - Palm toward the camera, around chest or face height, works best.
 
 ### Checking it on the Pi
 
 - **Peek** at the camera: a hand making a sign gets a box labeled `peace` (front camera only, since that's where signs fire). A plain hand gets no box. No `peace` box while you're holding the sign means the models aren't reading it.
 - The journal says whether the models loaded: `hand models found: hand signs are on`, or `no hand models (...): hand signs are off` if a file is missing. Missing files just turn signs off; everything else keeps working.
-- Each sign that fires writes `gesture: peace` to the journal and a `gesture` line with `"name": "peace"` to the focus log, same as the arm gestures.
+- Each sign that fires writes `gesture: peace` to the journal and a `gesture` line with `"name": "peace"` to the focus log.
 - The hand models add to each check. The camera card's "~N ms each" includes them, so you can see what they cost.
 
 ```bash

@@ -18,16 +18,12 @@ export interface OverlayBox {
   height: number;
 }
 
-// One COCO keypoint: x and y as 0-1 fractions of the frame, then the model's confidence.
-export type PosePoint = [number, number, number];
-
 export interface Overlay {
   at: number;
   age_s: number;
   frame_width: number;
   frame_height: number;
   boxes: OverlayBox[];
-  pose?: PosePoint[] | null; // only with the pose model loaded (front feed); null when nobody's clear
 }
 
 export interface TodoItem {
@@ -60,7 +56,6 @@ export interface FocusStatus {
     longest_streak_seconds: number;
     first_seen: number | null;
   };
-  block: { active: boolean };
   app: string | null;
   site?: string | null; // the browser tab's host name, when the Mac's front app is a browser that says
   mac_tracking?: boolean; // the dashboard's switch for the Mac helper
@@ -72,7 +67,7 @@ export interface FocusStatus {
   side_overlay: Overlay | null;
   voice: { enabled: boolean; backend: string; problem: string | null } | null;
   todos?: Todos;
-  gesture?: { name: string; age_s: number } | null; // the last arm gesture or hand sign that fired
+  gesture?: { name: string; age_s: number } | null; // the last hand sign that fired
 }
 
 export interface Throttle {
@@ -100,7 +95,6 @@ export interface DayNumbers {
   away_minutes?: number;
   pickups?: number;
   best_streak_minutes?: number;
-  blocks?: number;
   todos_done?: number;
 }
 

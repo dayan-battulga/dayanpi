@@ -87,7 +87,7 @@ export function TodoRow({ item, done, current, onChange, onDelete }: TodoRowProp
           size="icon"
           aria-pressed={current}
           aria-label={current ? `Stop working on: ${item.text}` : `Work on: ${item.text}`}
-          title={current ? "Current: collecting time while you work in a block" : "Make current"}
+          title={current ? "Current: collecting time while you work" : "Make current"}
           onClick={() => onChange({ current: !current })}
           className="rounded-full text-muted-foreground aria-pressed:text-work"
         >

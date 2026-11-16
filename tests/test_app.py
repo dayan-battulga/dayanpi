@@ -132,17 +132,6 @@ def test_the_mac_app_route_takes_a_site_or_none_and_logs_it(monkeypatch, tmp_pat
     assert lines == [("Google Chrome", "youtube.com"), ("Code", None), ("Arc", "localhost")]
 
 
-def test_block_route_starts_stops_and_toggles():
-    with TestClient(app.app) as client:
-        assert client.post("/api/focus/block", json={"action": "stop"}, auth=AUTH).json()["active"] is False
-        started = client.post("/api/focus/block", json={"action": "start"}, auth=AUTH).json()
-        assert started == {"status": "ok", "active": True, "changed": True}
-        assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is True
-        toggled = client.post("/api/focus/block", json={"action": "toggle"}, auth=AUTH).json()
-        assert toggled["active"] is False
-        assert client.post("/api/focus/block", json={"action": "dance"}, auth=AUTH).status_code == 422
-
-
 def test_focus_status_reports_the_voice():
     with TestClient(app.app) as client:
         status = client.get("/api/focus", auth=AUTH).json()
@@ -156,22 +145,10 @@ def test_callouts_reach_the_voice(monkeypatch):
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     update = focus.FocusUpdate(
         state="phone",
-        callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("break_over", "Break's over.", speak=False)],
+        callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("quiet", "Only for the log.", speak=False)],
     )
     app.handle_focus_update(update, time.time())
     assert said == ["Already?"]
-
-
-def test_gesture_toggles_the_block_and_speaks(monkeypatch):
-    said = []
-    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
-    with TestClient(app.app) as client:
-        client.post("/api/focus/block", json={"action": "stop"}, auth=AUTH)
-        app.handle_gesture("toggle_block", time.time())
-        assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is True
-        app.handle_gesture("toggle_block", time.time())
-        assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is False
-    assert said == ["Block started.", "Block stopped."]
 
 
 def test_every_hand_sign_does_something():
@@ -253,16 +230,16 @@ def test_todo_routes_add_edit_check_current_and_delete():
         assert client.patch(path, json={"text": ""}, auth=AUTH).status_code == 422
 
 
-def test_working_in_a_block_counts_time_for_the_current_todo():
+def test_working_counts_time_for_the_current_todo():
     from dayanpi.focus.tracker import FocusUpdate
 
     now = time.time()
     item_id = app.todos.add("hook test", now)["id"]
     app.todos.change(item_id, now, current=True)
     for second in range(4):
-        app.handle_focus_update(FocusUpdate(state="working", block_active=True), now + second)
+        app.handle_focus_update(FocusUpdate(state="working"), now + second)
     for second in range(4, 8):
-        app.handle_focus_update(FocusUpdate(state="working", block_active=False), now + second)
+        app.handle_focus_update(FocusUpdate(state="phone"), now + second)
     open_items = app.todos.snapshot(now + 8)["open"]
     assert [item["seconds"] for item in open_items if item["id"] == item_id] == [4]
     app.todos.delete(item_id, now + 9)

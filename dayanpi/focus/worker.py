@@ -3,7 +3,7 @@
 It reads frames from the app's camera streams (the one opener of each camera), so it never
 fights the video feed for the device. With a side camera, each check scans a frame from each
 camera and merges the two readings. Everything the detector finds goes into the tracker; the
-app's hooks get each FocusUpdate (callouts for the speaker, to-do time) and each gesture.
+app's hooks get each FocusUpdate (callouts for the speaker, to-do time) and each hand sign that fires.
 """
 
 import logging
@@ -15,7 +15,6 @@ from pathlib import Path
 from dayanpi.hardware.camera import CameraStream
 from dayanpi.vision import detector
 from dayanpi.vision import hands
-from dayanpi.vision import pose
 from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
 from dayanpi.focus.merge import merge_readings
 from dayanpi.focus.overlay import FrameSize, build_overlay
@@ -39,23 +38,14 @@ GestureHook = Callable[[str, float], None]
 
 
 def build_scanner() -> DeskScanner | None:
-    """Loads the models, or returns None (focus disabled) when the files aren't there.
-
-    With the pose model in models/ the full-frame pass is the pose model, which is what
-    makes gestures possible; without it, the plain object model runs and gestures are off.
-    """
+    """Loads the models, or returns None (focus disabled) when the files aren't there."""
     scanner = None
     missing = [path.name for path in (detector.OBJECT_MODEL_PATH, detector.FACE_MODEL_PATH) if not path.exists()]
     if missing:
         logger.warning("focus tracker disabled: missing model files %s", ", ".join(missing))
     else:
         try:
-            if pose.POSE_MODEL_PATH.exists():
-                scanner = pose.PoseDeskScanner()
-                logger.info("pose model found: gestures are on")
-            else:
-                scanner = DeskScanner()
-                logger.info("no pose model (%s): gestures are off", pose.POSE_MODEL_PATH.name)
+            scanner = DeskScanner()
         except Exception:
             logger.exception("focus tracker disabled: the models failed to load")
     return scanner
@@ -125,12 +115,11 @@ class FocusWorker(LoopThread):
         self._on_update = on_update
         self._on_gesture = on_gesture
         self._wait_for_clock_first = wait_for_clock_first
-        self.gestures = GestureTracker()
         self.signs = GestureTracker()
         self.hand_failures = 0
         self.checks = 0
         self.last_update: FocusUpdate | None = None
-        self.last_gesture: dict | None = None  # {"name", "at"} of the last arm gesture or hand sign that fired
+        self.last_gesture: dict | None = None  # {"name", "at"} of the last hand sign that fired
         self.last_overlay: dict | None = None
         self.last_side_overlay: dict | None = None
 
@@ -201,7 +190,7 @@ class FocusWorker(LoopThread):
         self.last_update = update
         # Swapped in whole, so the stream thread never sees a half-built overlay.
         if front_reading is not None:
-            self.last_overlay = build_overlay(front_reading, self.front.frame_size, now, with_pose=getattr(self._scanner, "has_pose", False))
+            self.last_overlay = build_overlay(front_reading, self.front.frame_size, now)
         if side_reading is not None:
             # No sign boxes on the side feed: signs only fire from the front camera.
             self.last_side_overlay = build_overlay(replace(side_reading, hands=[]), self.side.frame_size, now)
@@ -214,17 +203,16 @@ class FocusWorker(LoopThread):
         return update
 
     def track_gestures(self, reading: FrameReading | None, now: float) -> None:
-        main_pose = None if reading is None else max(reading.poses, key=lambda found: found.confidence, default=None)
         sign = None if reading is None else read_sign(reading.hands)
-        for gesture in (self.gestures.update(main_pose, now), self.signs.hold(sign, now)):
-            if gesture is not None:
-                self.last_gesture = {"name": gesture, "at": round(now, 3)}
-                logger.info("gesture: %s", gesture)
-                if self._on_gesture is not None:
-                    try:
-                        self._on_gesture(gesture, now)
-                    except Exception:
-                        logger.exception("gesture hook failed")
+        gesture = self.signs.hold(sign, now)
+        if gesture is not None:
+            self.last_gesture = {"name": gesture, "at": round(now, 3)}
+            logger.info("gesture: %s", gesture)
+            if self._on_gesture is not None:
+                try:
+                    self._on_gesture(gesture, now)
+                except Exception:
+                    logger.exception("gesture hook failed")
 
     def before_loop(self) -> None:
         if self._wait_for_clock_first:
