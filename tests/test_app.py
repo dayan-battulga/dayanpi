@@ -526,3 +526,41 @@ def test_every_response_refuses_to_be_framed():
         responses = [client.get("/api/health", auth=AUTH), client.get("/", auth=AUTH), client.get("/api/health")]
         assert [response.status_code for response in responses] == [200, 200, 401]
         assert all(response.headers["x-frame-options"] == "DENY" for response in responses)
+
+
+def test_day_routes_serve_past_pages_and_build_today_live(monkeypatch, tmp_path):
+    from dayanpi.focus.tracker import FocusLog, format_day
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "focus_log", log)
+    monkeypatch.setattr(app, "DAYS_DIR", tmp_path / "days")
+    now = time.time()
+    today = format_day(now)
+    month = today[:7]
+    past = f"{month}-01" if today != f"{month}-01" else f"{month}-02"
+    (tmp_path / "days").mkdir()
+    (tmp_path / "days" / f"{past}.md").write_text("---\nfocus_minutes: 95\n---\n\n# A past day\n")
+    (tmp_path / "days" / "notes.md").write_text("not a day")
+    log.write({"ts": now - 600, "day": today, "event": "state", "state": "working"})
+    log.write({"ts": now, "day": today, "event": "sample"})
+
+    with TestClient(app.app) as client:
+        assert client.get(f"/api/days?month={month}").status_code == 401
+        assert client.get(f"/api/days/{past}").status_code == 401
+        listed = client.get(f"/api/days?month={month}", auth=AUTH).json()
+        page = client.get(f"/api/days/{past}", auth=AUTH).json()
+        live = client.get(f"/api/days/{today}", auth=AUTH).json()
+        missing = client.get("/api/days/1999-01-01", auth=AUTH)
+        bad_names = [client.get(f"/api/days/{name}", auth=AUTH).status_code for name in ("notes", "2026-11-1", "2026-11-014", "..%2F..%2Fdayanpi")]
+        bad_month = client.get("/api/days?month=2026-1", auth=AUTH)
+
+    assert listed["month"] == month and listed["today"] == today
+    assert listed["days"][past] == {"focus_minutes": 95}
+    assert listed["days"][today]["focus_minutes"] == 10, "today comes live from the log"
+    assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n"}
+    assert live["today"] is True and "- Focus: 10m" in live["markdown"]
+    assert not (tmp_path / "days" / f"{today}.md").exists(), "today's page is never saved"
+    assert missing.status_code == 404
+    assert all(code in (404, 422) for code in bad_names)
+    assert bad_names[:3] == [422, 422, 422]
+    assert bad_month.status_code == 422

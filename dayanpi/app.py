@@ -9,7 +9,7 @@ import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from typing import Annotated, Literal
 
 from dayanpi.hardware import collector
+from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
@@ -32,6 +33,7 @@ from dayanpi.sign.renderer import PanelOutput, PreviewOutput
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 FOCUS_LOG_DIR = find_focus_log_dir()
+DAYS_DIR = days.find_days_dir()
 
 FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
@@ -39,6 +41,7 @@ MAX_CONSECUTIVE_TIMEOUTS = 3
 SNAPSHOT_INTERVAL_S = 1.0
 VIDEO_MAX_CONCURRENT = 2
 STREAM_MAX_CONCURRENT = 5
+AFTER_MIDNIGHT_S = 5.0  # the day pages get written this long after local midnight
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +193,23 @@ async def snapshot_producer() -> None:
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
 
+async def day_page_writer() -> None:
+    """Writes the missing day pages at startup, then again just after each local midnight.
+
+    It waits for the network clock first, like the focus worker: before that, "today" can
+    be a day that's already over.
+    """
+    await asyncio.to_thread(focus_worker.wait_for_clock)
+    while True:
+        try:
+            written = await asyncio.to_thread(days.write_missing_pages, focus_log, DAYS_DIR, time.time())
+            if written:
+                logger.info("day pages written: %s", ", ".join(written))
+        except Exception:
+            logger.exception("day pages failed")
+        await asyncio.sleep(days.find_seconds_until_midnight(time.time()) + AFTER_MIDNIGHT_S)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global worker, sign_controller
@@ -206,10 +226,12 @@ async def lifespan(app: FastAPI):
     sign_controller = start_sign()
     worker = start_focus_worker()
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
+    day_pages = asyncio.create_task(day_page_writer(), name="day-page-writer")
     yield
-    producer.cancel()
-    with suppress(asyncio.CancelledError):
-        await producer
+    for task in (producer, day_pages):
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
     if worker is not None:
         worker.stop()
         worker = None
@@ -334,6 +356,38 @@ class TodoChange(BaseModel):
     text: TodoText | None = None
     done: bool | None = None
     current: bool | None = None
+
+
+def build_today_page(now: float) -> str:
+    today = format_day(now)
+    page = days.build_day_page(focus_log.read_day(today), today)
+    return page
+
+
+@app.get("/api/days")
+def month_days(month: Annotated[str, Query(pattern=days.MONTH_PATTERN)]):
+    """A month's numbers for the calendar, one entry per day with a page. Today's comes live from the log."""
+    now = time.time()
+    today = format_day(now)
+    found = days.read_month(DAYS_DIR, month)
+    if today.startswith(month + "-"):
+        found[today] = days.read_page_totals(build_today_page(now))
+    return {"month": month, "today": today, "days": found}
+
+
+@app.get("/api/days/{day}")
+def day_page(day: Annotated[str, PathParam(pattern=days.DAY_PATTERN)]):
+    """One day's page as markdown. The pattern keeps the name to digits and dashes, so it can only be a file in data/days."""
+    now = time.time()
+    today = format_day(now)
+    path = DAYS_DIR / f"{day}.md"
+    if day == today:
+        page = build_today_page(now)
+    elif path.is_file():
+        page = path.read_text(encoding="utf-8")
+    else:
+        raise HTTPException(status_code=404, detail="no page for that day")
+    return {"day": day, "today": day == today, "markdown": page}
 
 
 @app.get("/api/todos")

@@ -1,3 +1,4 @@
+import { CalendarCard } from "@/components/calendar/CalendarCard";
 import { CameraCard } from "@/components/camera/CameraCard";
 import { FocusCard } from "@/components/focus/FocusCard";
 import { Header } from "@/components/header/Header";
@@ -30,6 +31,7 @@ export function App() {
         <CameraCard focus={focus} />
         <TodoCard todos={focus?.todos} known={known} now={now} />
       </div>
+      <CalendarCard todayFocusSeconds={focus?.today.working_seconds} now={now} />
       <SignCard sign={focus?.sign} now={now} />
       <PiSection stats={snapshot} />
       <footer className="footer mono muted small">

@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from dayanpi.focus.tracker import MAX_STEP_S, FocusLog, find_data_dir, format_day
+from dayanpi.utils.files import write_atomically
 
 TODO_FILE = "todos.json"
 TEXT_MAX = 200
@@ -173,14 +174,8 @@ class TodoList:
 
     def _save_locked(self, now: float) -> None:
         data = {"current": self._current_id, "items": [{**asdict(item), "seconds": round(item.seconds, 1)} for item in self._items]}
-        temporary = self._path.with_name(self._path.name + ".tmp")
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with temporary.open("w", encoding="utf-8") as handle:
-                json.dump(data, handle, indent=1)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, self._path)
+            write_atomically(self._path, json.dumps(data, indent=1))
             self._unsaved = False
             self._last_saved_at = now
         except OSError:

@@ -87,3 +87,26 @@ export interface Snapshot {
   rates: { cpu_percent: number; core_percents?: number[]; rx_kbps: number; tx_kbps: number } | null;
   focus?: FocusStatus;
 }
+
+// The numbers in a day page's frontmatter; a page edited by hand may have dropped some.
+export interface DayNumbers {
+  focus_minutes?: number;
+  phone_minutes?: number;
+  away_minutes?: number;
+  pickups?: number;
+  best_streak_minutes?: number;
+  blocks?: number;
+  todos_done?: number;
+}
+
+export interface MonthDays {
+  month: string;
+  today: string;
+  days: Record<string, DayNumbers>;
+}
+
+export interface DayPageReply {
+  day: string;
+  today: boolean;
+  markdown: string;
+}

@@ -203,7 +203,7 @@ The card next to the camera is one running to-do list (the LED sign preview move
 - **Add** with the box at the top (Enter or **Add**). **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels. **Delete** with the ×.
 - **Check it off** and it moves down to **Done today**, ticked and crossed out. Uncheck it and it goes back to where it was.
 - **The current one.** The round button on an item makes it the one you're on (press it again to stop). It only collects time while you're **focused during a work block**, so phone time, away time and time outside a block don't count. Only one item is current at a time, and checking it off stops its clock. The time shows next to every item, in both lists.
-- **Midnight.** Done shows what you finished today. At local midnight those items leave the list (the calendar step will write them into that day's page). Unfinished ones stay put.
+- **Midnight.** Done shows what you finished today. At local midnight those items leave the list, and that day's [calendar page](#calendar) keeps them. Unfinished ones stay put.
 - **Where it lives.** `data/todos.json` on the Pi (or in `DAYANPI_DATA_DIR`). Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
 - **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
 
@@ -213,6 +213,30 @@ The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todo
 curl -s -u YOURUSER:YOURPASS localhost:8000/api/todos | python3 -m json.tool
 cat data/todos.json
 grep '"todo"' data/focus_log/$(date +%F).jsonl
+```
+
+## Calendar
+
+Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in `DAYANPI_DATA_DIR`). It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
+
+- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak, how many blocks and how many to-dos. Obsidian shows these as properties, and the calendar card reads them back.
+- **Totals:** the same numbers, readable.
+- **Focus blocks:** each block's start and end time and how long it ran. A block still on at midnight shows up in both days: one ends "still on at the end of the day", the next starts at 00:00.
+- **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
+
+It's all built from that day's focus log (the to-dos come from its `todo` lines), with the same math the restart and the stats tool use.
+
+**When pages get written.** Once when the service starts, for every past day that has a log and no page yet (that's how the old days get filled in the first time), then again a few seconds after each local midnight for the day that just ended. Like the focus checks, it waits for the network clock first. A page is never written over, so if you edit one, your edits stay. Today never gets a file; asking for today builds its page live from the log.
+
+**The calendar card** sits under the camera and to-do cards. Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. Click a day to read its page under the calendar, and click it again to close it. Today's page refreshes every minute while it's open. The arrows move between months, and the top line adds up the month's focus. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
+
+The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from `data/days`. A day with no page is a 404.
+
+```bash
+ls data/days/
+cat data/days/$(date -d yesterday +%F).md
+journalctl -u dayanpi --no-pager | grep "day pages"
+curl -s -u YOURUSER:YOURPASS "localhost:8000/api/days?month=$(date +%Y-%m)" | python3 -m json.tool
 ```
 
 ## Gestures

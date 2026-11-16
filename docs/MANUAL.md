@@ -6,7 +6,7 @@ The app is password-protected and bound to **localhost only**. You reach it thro
 
 This manual covers setting up the Pi, shipping code, running the service, Tailscale, power, security and troubleshooting. Each add-on has its own guide next to it:
 
-- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, gestures, hand signs
+- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, the to-do list, the calendar, gestures, hand signs
 - [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
 - [LED sign](led-sign.md): the 128x32 sign's pages, wiring and bring-up
 - [Voice](voice.md): callouts out loud through a USB speaker
@@ -39,6 +39,8 @@ Always use the **`main`** branch on both machines.
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/sign/page` | Flip the LED sign to the next or previous page (POST `{"step": 1}` or `-1`) |
+| `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
+| `/api/days/YYYY-MM-DD` | One day's page from `data/days/` as markdown (today's built live; 404 when there's no page) |
 | `/docs` | Disabled (404 on purpose) |
 
 ### How you open it
