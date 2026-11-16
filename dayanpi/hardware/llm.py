@@ -17,7 +17,7 @@ LLM_MODEL_ENV = "DAYANPI_LLM_MODEL"
 LLM_THREADS = 2  # leaves the other cores to the focus checks
 KEEP_ALIVE = "15m"  # longer than the gap between calls, so the model stays loaded
 TIMEOUT_S = 60.0  # about 11 tokens a second on the Pi, plus loading the model the first time
-MAX_TOKENS = 120  # 2 or 3 short sentences fit in well under this
+MAX_TOKENS = 120  # 4 short sentences fit in well under this
 TEMPERATURE = 0.7
 
 

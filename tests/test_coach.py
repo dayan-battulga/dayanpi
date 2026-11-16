@@ -10,9 +10,9 @@ import pytest
 from dayanpi.focus.coach import (
     MAX_AGE_S,
     REWRITE_S,
-    SYSTEM_PROMPT,
     TodoCoach,
     build_prompt,
+    build_system_prompt,
     clean_message,
     collect_facts,
     describe_todos,
@@ -130,6 +130,16 @@ def test_the_prompt_holds_only_the_facts():
     )
 
 
+@pytest.mark.parametrize(
+    ("open_texts", "done", "sentences"),
+    [(THREE, [], "2 or 3"), (THREE + ["call mom"], [], "3 or 4"), (THREE, [("read chapter 3", 2400)], "3 or 4")],
+    ids=["3 to-dos", "4 open", "3 open and 1 done"],
+)
+def test_more_to_dos_get_more_sentences(open_texts, done, sentences):
+    system = build_system_prompt(collect_facts(make_snapshot(open_texts, done), at(18), 0))
+    assert f"Use {sentences} short sentences." in system
+
+
 GOOD = "It's 6 p.m., so you've got about 6 hours before bed. Three things left: the report, emails and laundry. You already knocked out the reading in 40 minutes, so you can definitely finish these."
 
 
@@ -223,7 +233,7 @@ def test_a_good_reply_is_written_ahead_and_spoken(tmp_path, ollama):
     assert request["path"] == "/api/generate"
     body = request["body"]
     assert (body["model"], body["stream"], body["keep_alive"], body["options"]["num_thread"]) == ("llama3.2:1b", False, "15m", 2)
-    assert body["system"] == SYSTEM_PROMPT
+    assert "Use 3 or 4 short sentences." in body["system"], "3 open and 1 done"
     assert "Open to-dos (3): finish the report; reply to emails; do laundry" in body["prompt"]
 
 

@@ -37,10 +37,11 @@ REWRITE_S = 240.0  # a new draft every 4 minutes, so one under 5 minutes old is 
 MAX_AGE_S = 300.0  # the time left in a spoken draft is never older than this
 MAX_MESSAGE_CHARS = 400
 MAX_SENTENCES = 4
+MORE_SENTENCES_FROM = 4  # to-dos (open plus done) that get a fourth sentence, so the model doesn't drop one to fit
 
 SYSTEM_PROMPT = (
     "You write one short message that a small speaker will say out loud to someone working at their desk. "
-    "Sound like a friendly, encouraging coach. Use 2 or 3 short sentences. "
+    "Sound like a friendly, encouraging coach. Use {sentences} short sentences. "
     "Mention the time, the time left until bed, what is left to do and what is already done. "
     "Past bedtime, say it is past bedtime and to wrap up, instead of counting hours. "
     "Use only the facts given: never add, drop or rename a to-do, and never change a time or a number. "
@@ -182,6 +183,12 @@ def build_prompt(facts: TodoFacts) -> str:
     return prompt
 
 
+def build_system_prompt(facts: TodoFacts) -> str:
+    named = len(facts.open_texts) + len(facts.done)
+    system = SYSTEM_PROMPT.format(sentences="3 or 4" if named >= MORE_SENTENCES_FROM else "2 or 3")
+    return system
+
+
 def clean_message(reply: str | None, prompt: str) -> str | None:
     """The reply as one line ready to speak, or None when it's empty, too long, list-like, has markup or emojis,
     or has a number the facts don't (the model making things up)."""
@@ -238,7 +245,7 @@ class TodoCoach(LoopThread):
 
     def write_draft(self, facts: TodoFacts, now: float) -> Draft:
         prompt = build_prompt(facts)
-        reply = self.llm.generate(SYSTEM_PROMPT, prompt)
+        reply = self.llm.generate(build_system_prompt(facts), prompt)
         text = clean_message(reply, prompt)
         was_working = self.draft is not None and self.draft.text is not None
         if reply is None and (was_working or self.draft is None):
