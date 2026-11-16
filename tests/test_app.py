@@ -142,14 +142,15 @@ def test_every_hand_sign_does_something():
     assert set(HAND_SIGNS) == set(app.SIGN_ACTIONS)
 
 
-def test_peace_reads_the_open_todos_out_loud_and_is_logged(monkeypatch, tmp_path):
+def test_peace_speaks_the_coachs_message_and_logs_which_kind(monkeypatch, tmp_path):
+    from dayanpi.focus.coach import TodoCoach
     from dayanpi.focus.todos import TodoList
     from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
 
     said = []
     log = FocusLog(tmp_path / "focus_log")
     todos = TodoList(tmp_path / "todos.json", log)
-    monkeypatch.setattr(app, "todos", todos)
+    monkeypatch.setattr(app, "coach", TodoCoach(todos, 0, None))
     monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     now = time.time()
@@ -160,9 +161,16 @@ def test_peace_reads_the_open_todos_out_loud_and_is_logged(monkeypatch, tmp_path
 
     app.handle_gesture("peace", now)
 
-    assert said == ["You have 2 things to do: finish the report and reply to emails."]
-    gestures = [line["name"] for line in log.read_day(format_day(now)) if line["event"] == "gesture"]
-    assert gestures == ["peace"]
+    assert len(said) == 1
+    assert "You have 2 things to do: finish the report and reply to emails. Done today: do laundry." in said[0]
+    gestures = [line for line in log.read_day(format_day(now)) if line["event"] == "gesture"]
+    assert [(line["name"], line["spoken"]) for line in gestures] == [("peace", "template")]
+
+
+def test_the_coach_only_writes_ahead_with_a_model_set():
+    with TestClient(app.app):
+        assert app.coach.llm is None, "DAYANPI_LLM_MODEL isn't set in the tests"
+        assert not app.coach.running
 
 
 def test_focus_status_carries_the_last_gesture_and_its_age(monkeypatch):

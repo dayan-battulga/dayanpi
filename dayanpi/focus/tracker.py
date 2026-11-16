@@ -329,9 +329,10 @@ class FocusTracker:
                 self._write({"event": "mac_app", "app": app}, now)
         return changed
 
-    def record_gesture(self, name: str, now: float) -> None:
+    def record_gesture(self, name: str, now: float, **details) -> None:
+        """details go on the same line, like spoken="llm" for the peace sign."""
         with self._lock:
-            self._write({"event": "gesture", "name": name}, now)
+            self._write({"event": "gesture", "name": name, **details}, now)
 
     def set_block(self, active: bool, now: float, source: str = "api") -> bool:
         with self._lock:

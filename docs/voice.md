@@ -155,3 +155,73 @@ Check the log first: `journalctl -u dayanpi -n 50 --no-pager | grep -i voice`
 | `Permission denied` | `dayoon` isn't in the `audio` group (step 3) |
 | Some other `audio open error` (like `No such device`) | Speaker unplugged, or the name's off (re-check `aplay -L \| grep plughw`). It can also mean `dayoon` isn't in the `audio` group: without it, ALSA can't even look the card up by name |
 | Nothing at all | Is `DAYANPI_VOICE` set, and did you restart? Without `DAYANPI_AUDIO_DEVICE`, aplay uses ALSA's default device, which usually isn't the USB speaker. Also check the volume |
+
+## What the peace sign says
+
+Hold up a peace sign (see [Hand signs](focus-tracker.md#hand-signs)) and the speaker gives you a quick rundown: the time, how long until bed, what's left on your to-do list and what you already finished today.
+
+Out of the box it's a fixed sentence (the template):
+
+> It's 6 p.m., about 6 hours until bed. You have 3 things to do: finish the report, reply to emails, and do laundry. Done today: read chapter 3 in 40 minutes.
+
+Past bedtime (from bedtime until 5 a.m.) it says it's past your bedtime and to wrap up instead of counting hours. It reads the first 5 to-dos of each list and says how many more.
+
+### Your bedtime
+
+`DAYANPI_BEDTIME` in `/etc/dayanpi.env`, as `HH:MM` on a 24-hour clock. The default is `00:00` (midnight). A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away. Something that isn't `HH:MM` logs a warning and falls back to midnight.
+
+### A friendlier message from a small LLM
+
+With a small model running in [Ollama](https://ollama.com) on the Pi, the peace sign says something more natural instead, written fresh for you, like:
+
+> It's 6 p.m., so you've got about 6 hours before bed. Three things left: the report, emails and laundry. You already knocked out the reading in 40 minutes, so you can definitely finish these.
+
+1. Install Ollama on the Pi. Its installer sets it up as a service that listens on `127.0.0.1:11434`, only reachable from the Pi itself:
+
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ```
+
+2. Pull a small model. `llama3.2:1b` is about 1.3 GB and writes about 11 tokens (roughly words) a second on a Pi 5:
+
+   ```bash
+   ollama pull llama3.2:1b
+   ollama run llama3.2:1b "Say hi in one short sentence."
+   ```
+
+3. Turn it on in `/etc/dayanpi.env` and restart:
+
+   ```bash
+   DAYANPI_LLM_MODEL=llama3.2:1b
+   ```
+
+   ```bash
+   sudo systemctl restart dayanpi
+   journalctl -u dayanpi -n 50 --no-pager | grep "peace sign"
+   ```
+
+   You want `peace sign: writing messages ahead with llama3.2:1b through Ollama`, then a few seconds later `peace sign: LLM messages from llama3.2:1b are ready`.
+
+How it works, so the speaker can answer right away even though the model is slow:
+
+- **Written ahead.** The message gets written in the background every 4 minutes and whenever your to-do list changes, so one is always waiting. The peace sign just speaks it.
+- **Never stale.** It only speaks a message written for your current to-do list in the last 5 minutes. Right after you change the list, the template covers the few seconds until the new message is ready.
+- **Only the facts.** The model gets the time, the time to bed and the two to-do lists, and is told not to add, drop or rename anything or change any number. Before a message is used, the app checks it: no lists, emojis or markdown, at most 4 sentences, and no number that isn't in the facts. Anything that fails, plus Ollama being off, slow (over 60 s) or erroring, means the template speaks instead. The journal says why.
+- **Easy on the Pi.** The model gets 2 of the 4 cores, so the focus checks keep running, and stays loaded between messages: the app asks Ollama to keep it loaded for 15 minutes and asks again every 4, so it doesn't reload each time.
+- **Stays on the Pi.** The app only ever talks to `127.0.0.1:11434`. That address is fixed in `dayanpi/hardware/llm.py`, with no setting to point it somewhere else.
+
+Each peace sign's line in the focus log says which one you heard: `"spoken": "llm"` or `"spoken": "template"`.
+
+```bash
+grep '"gesture"' data/focus_log/$(date +%F).jsonl
+journalctl -u dayanpi -n 100 --no-pager | grep "peace sign"
+```
+
+| Log says | What it means |
+| --- | --- |
+| `no LLM message (ConnectionRefusedError: ...)` | Ollama isn't running: `sudo systemctl status ollama` |
+| `no LLM message (Ollama said 404: model ... not found)` | The model in `DAYANPI_LLM_MODEL` isn't pulled: `ollama list`, then `ollama pull` it |
+| `no LLM message (TimeoutError: ...)` | It took over 60 s. The first message after a reboot also has to load the model, so give it one more round |
+| `the LLM's message didn't pass` | The model wrote a list, an emoji, too much, or a number that wasn't in the facts. The message is in the log line. Once in a while is fine; all the time means try another model |
+
+To go back to the template, delete the `DAYANPI_LLM_MODEL` line and restart.

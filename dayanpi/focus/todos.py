@@ -21,7 +21,6 @@ from dayanpi.utils.files import write_atomically
 TODO_FILE = "todos.json"
 TEXT_MAX = 200
 SAVE_EVERY_S = 30.0  # collected time saves this often, like the log's samples; edits save right away
-SPOKEN_MAX = 5  # describe_todos reads this many, then says how many more
 
 logger = logging.getLogger(__name__)
 
@@ -43,18 +42,6 @@ class TodoItem:
 def describe_item(item: TodoItem) -> dict:
     described = {"id": item.id, "text": item.text, "seconds": round(item.seconds), "done_at": item.done_at}
     return described
-
-
-def describe_todos(texts: list[str]) -> str:
-    """What the peace sign says, e.g. You have 3 things to do: finish the report, reply to emails, and do laundry."""
-    spoken = texts[:SPOKEN_MAX] + ([f"{len(texts) - SPOKEN_MAX} more"] if len(texts) > SPOKEN_MAX else [])
-    if len(spoken) > 2:
-        listed = ", ".join(spoken[:-1]) + ", and " + spoken[-1]
-    else:
-        listed = " and ".join(spoken)
-    things = "thing" if len(texts) == 1 else "things"
-    sentence = f"You have {len(texts)} {things} to do: {listed}." if texts else "Your to-do list is empty."
-    return sentence
 
 
 class TodoList:

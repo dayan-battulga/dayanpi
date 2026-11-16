@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from dayanpi.focus.todos import SAVE_EVERY_S, TodoList, describe_todos
+from dayanpi.focus.todos import SAVE_EVERY_S, TodoList
 from dayanpi.focus.tracker import MAX_STEP_S, FocusLog
 
 NOON = datetime(2026, 11, 15, 12, 0).timestamp()
@@ -153,23 +153,3 @@ def test_added_current_done_and_undone_go_to_the_focus_log(tmp_path):
     done = todo_lines[2]
     assert (done["id"], done["text"], done["seconds"]) == (report, "finish the report", 120)
     assert todo_lines[3]["id"] is None, "checking the current item clears current"
-
-
-@pytest.mark.parametrize(
-    ("texts", "sentence"),
-    [
-        ([], "Your to-do list is empty."),
-        (["finish the report"], "You have 1 thing to do: finish the report."),
-        (["finish the report", "reply to emails"], "You have 2 things to do: finish the report and reply to emails."),
-        (
-            ["finish the report", "reply to emails", "do laundry"],
-            "You have 3 things to do: finish the report, reply to emails, and do laundry.",
-        ),
-        (
-            ["one", "two", "three", "four", "five", "six", "seven", "eight"],
-            "You have 8 things to do: one, two, three, four, five, and 3 more.",
-        ),
-    ],
-)
-def test_the_spoken_list(texts, sentence):
-    assert describe_todos(texts) == sentence

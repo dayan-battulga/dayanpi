@@ -21,8 +21,10 @@ from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
-from dayanpi.focus.todos import TEXT_MAX, TodoList, describe_todos, find_todo_path
+from dayanpi.focus.coach import TodoCoach, read_bedtime
+from dayanpi.focus.todos import TEXT_MAX, TodoList, find_todo_path
 from dayanpi.focus.worker import FocusWorker
+from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
 from dayanpi.sign.controller import SignController
@@ -57,6 +59,8 @@ tracker = FocusTracker(focus_log, started_at=time.time())
 todos = TodoList(find_todo_path(), focus_log)
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
+LLM_MODEL = read_llm_model()
+coach = TodoCoach(todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
 SIGN_MODE = os.environ.get("DAYANPI_SIGN", "preview").strip().lower() or "preview"  # preview | panel | off
 sign_preview = PreviewOutput()
 sign_controller: SignController | None = None
@@ -137,24 +141,28 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
     todos.track(update.state == "working" and update.block_active, now)
 
 
-def say_todos(now: float) -> None:
-    voice.say(describe_todos([item["text"] for item in todos.snapshot(now)["open"]]))
+def say_todos(now: float) -> dict:
+    """Speaks the coach's message and returns which kind it was, for the gesture's log line."""
+    message = coach.pick(now)
+    logger.info("peace sign: speaking the %s message", message.source)
+    voice.say(message.text)
+    return {"spoken": message.source}
 
 
 # What each hand sign does when it fires. Its finger rule lives in vision/gestures.py (HAND_SIGNS).
+# An action returns extra fields for the sign's gesture line in the focus log.
 SIGN_ACTIONS = {"peace": say_todos}
 
 
 def handle_gesture(name: str, now: float) -> None:
     """Runs on the worker thread when a held gesture or hand sign fires."""
-    tracker.record_gesture(name, now)
+    details = SIGN_ACTIONS[name](now) if name in SIGN_ACTIONS else {}
+    tracker.record_gesture(name, now, **details)
     if name == "toggle_block":
         active = tracker.toggle_block(now, source="gesture")
         voice.say("Block started." if active else "Block stopped.")
     elif sign_controller is not None and name in ("next_page", "previous_page"):
         sign_controller.flip_page(1 if name == "next_page" else -1)
-    elif name in SIGN_ACTIONS:
-        SIGN_ACTIONS[name](now)
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -225,6 +233,11 @@ async def lifespan(app: FastAPI):
     voice.start()
     sign_controller = start_sign()
     worker = start_focus_worker()
+    if coach.llm is not None:
+        coach.start()
+        logger.info("peace sign: writing messages ahead with %s through Ollama", coach.llm.model)
+    else:
+        logger.info("peace sign: template messages (DAYANPI_LLM_MODEL isn't set)")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
     day_pages = asyncio.create_task(day_page_writer(), name="day-page-writer")
     yield
@@ -238,6 +251,7 @@ async def lifespan(app: FastAPI):
     if sign_controller is not None:
         sign_controller.stop()
         sign_controller = None
+    coach.stop()
     todos.save(time.time())
     voice.stop()
     stream.stop()

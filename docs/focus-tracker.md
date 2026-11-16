@@ -315,7 +315,7 @@ All of these are at the top of `dayanpi/vision/gestures.py`. Change them on the 
 
 ## Hand signs
 
-Hold up a peace sign ✌️ and the Pi reads your to-do list out loud: "You have 3 things to do: finish the report, reply to emails, and do laundry." Only open items count, it reads the first 5 and says how many more ("…, and 3 more"), and with nothing open it says "Your to-do list is empty." The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off. The arm gestures show one too.
+Hold up a peace sign ✌️ and the Pi gives you a quick rundown out loud: the time, how long until bed, what's left on your to-do list and what you finished today. That's a fixed sentence out of the box, or a friendlier one written by a small LLM on the Pi if you set one up. Both are in [What the peace sign says](voice.md#what-the-peace-sign-says). The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off. The arm gestures show one too.
 
 It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Signs only come from the front camera, about once a second. (The hand models also look at the side camera's frame, but only for the [phone-in-hand check](#steps-2-to-4-the-tracker-runs-inside-the-site).) The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
 
@@ -351,4 +351,4 @@ Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (whic
 | `PALM_MIN_CONFIDENCE` | `vision/hands.py` | `0.6` | How sure the palm finder has to be before the hand model even looks |
 | `NEAR_HAND_MARGIN` | `vision/hands.py` | `0.25` | How close a phone has to be to a hand to count, in hand lengths. Raise it if phone time stops counting while you're holding it; lower it if a phone next to your keyboard counts. |
 | `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |
-| `SPOKEN_MAX` | `focus/todos.py` | `5` | How many to-dos it reads before "and N more" |
+| `SPOKEN_MAX` | `focus/coach.py` | `5` | How many to-dos of each list it reads before "and N more" |
