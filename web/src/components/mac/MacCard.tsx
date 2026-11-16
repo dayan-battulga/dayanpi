@@ -1,24 +1,15 @@
 import { useState } from "react";
 import { riseDelay } from "@/components/shared/rise";
 import { Switch } from "@/components/ui/switch";
+import { request } from "@/lib/http";
 import type { FocusStatus } from "@/lib/types";
 
 // A snapshot built just before the switch flipped can still arrive after the reply, so the reply wins for a moment.
 const SWITCH_HOLD_S = 2.5;
 
 async function sendMacTracking(enabled: boolean): Promise<boolean> {
-  let saved = false;
-  try {
-    const response = await fetch("/api/mac/tracking", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    saved = response.ok;
-  } catch {
-    saved = false;
-  }
-  return saved;
+  const reply = await request("POST", "/api/mac/tracking", { enabled });
+  return reply.ok;
 }
 
 // The big line and the small one under it. In a browser the site is the big one, so it reads from across the room.
@@ -36,8 +27,14 @@ function describeFront(focus: FocusStatus | undefined, tracking: boolean): { mai
   return front;
 }
 
+interface MacCardProps {
+  focus: FocusStatus | undefined;
+  now: number;
+  readOnly?: boolean; // a member: the switch is the owner's
+}
+
 // What's in front on the Mac, at the top for anyone to see, with the switch that pauses the tracking.
-export function MacCard({ focus, now }: { focus: FocusStatus | undefined; now: number }) {
+export function MacCard({ focus, now, readOnly = false }: MacCardProps) {
   // The switch flips right away; a failed POST drops the hold and it goes back to what the Pi says.
   const [held, setHeld] = useState<{ enabled: boolean; until: number } | null>(null);
   const tracking = held != null && now < held.until ? held.enabled : (focus?.mac_tracking ?? true);
@@ -57,7 +54,7 @@ export function MacCard({ focus, now }: { focus: FocusStatus | undefined; now: n
         </p>
         {front.detail && <p className="mono muted small mt-0.5">{front.detail}</p>}
       </div>
-      {focus != null && (
+      {focus != null && !readOnly && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Switch checked={tracking} onCheckedChange={flipTracking} aria-label="Mac tracking" />
           <span aria-hidden="true">Tracking</span>

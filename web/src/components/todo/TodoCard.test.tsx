@@ -110,6 +110,15 @@ it("edits an item with Enter, and Esc leaves it alone", async () => {
 it("deletes an item", async () => {
   const user = renderCard();
   await user.click(screen.getByRole("button", { name: "Delete: reply to emails" }));
-  expect(sent).toEqual([{ method: "DELETE", url: "/api/todos/b2", body: undefined }]);
+  expect(sent).toEqual([{ method: "DELETE", url: "/api/todos/b2", body: {} }]);
   await vi.waitFor(() => expect(screen.queryByText("reply to emails")).toBeNull());
+});
+
+it("only shows the list to a member: no add box, checkboxes, current or delete buttons", () => {
+  render(<TodoCard todos={TODOS} known={[]} now={Date.now() / 1000} readOnly />);
+  const open = within(screen.getByRole("list", { name: "To-do" }));
+  expect(open.getAllByRole("listitem")[0]).toHaveTextContent("finish the report12m");
+  expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
+  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+  expect(screen.queryAllByRole("button")).toHaveLength(0);
 });

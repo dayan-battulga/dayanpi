@@ -12,11 +12,12 @@ interface TodoRowProps {
   item: TodoItem;
   done: boolean;
   current: boolean;
+  readOnly: boolean;
   onChange: (change: TodoChange) => void;
   onDelete: () => void;
 }
 
-export function TodoRow({ item, done, current, onChange, onDelete }: TodoRowProps) {
+export function TodoRow({ item, done, current, readOnly, onChange, onDelete }: TodoRowProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const finished = useRef(false);
 
@@ -43,25 +44,22 @@ export function TodoRow({ item, done, current, onChange, onDelete }: TodoRowProp
     }
   };
 
+  const textClass = cn("min-w-0 flex-1 py-2 [overflow-wrap:anywhere]", current && "font-semibold", done && "text-muted-foreground line-through");
+
   return (
     <li className="rise flex min-h-12 items-center gap-2.5 border-b border-border text-sm last:border-b-0">
-      <Checkbox
-        checked={done}
-        onCheckedChange={(checked) => onChange({ done: checked === true })}
-        aria-label={`${done ? "Not done" : "Done"}: ${item.text}`}
-        className="size-5 cursor-pointer border-muted-foreground data-[state=checked]:border-work data-[state=checked]:bg-work dark:data-[state=checked]:bg-work"
-      />
-      {draft == null ? (
-        <button
-          type="button"
-          title="Edit"
-          onClick={startEditing}
-          className={cn(
-            "min-w-0 flex-1 cursor-text py-2 text-left [overflow-wrap:anywhere]",
-            current && "font-semibold",
-            done && "text-muted-foreground line-through",
-          )}
-        >
+      {!readOnly && (
+        <Checkbox
+          checked={done}
+          onCheckedChange={(checked) => onChange({ done: checked === true })}
+          aria-label={`${done ? "Not done" : "Done"}: ${item.text}`}
+          className="size-5 cursor-pointer border-muted-foreground data-[state=checked]:border-work data-[state=checked]:bg-work dark:data-[state=checked]:bg-work"
+        />
+      )}
+      {readOnly ? (
+        <span className={textClass}>{item.text}</span>
+      ) : draft == null ? (
+        <button type="button" title="Edit" onClick={startEditing} className={cn(textClass, "cursor-text text-left")}>
           {item.text}
         </button>
       ) : (
@@ -81,7 +79,7 @@ export function TodoRow({ item, done, current, onChange, onDelete }: TodoRowProp
       <span className={`mono shrink-0 text-xs ${current ? "text-work" : "text-muted-foreground"}`}>
         {item.seconds > 0 ? formatDuration(item.seconds) : "—"}
       </span>
-      {!done && (
+      {!done && !readOnly && (
         <Button
           variant="ghost"
           size="icon"
@@ -94,9 +92,11 @@ export function TodoRow({ item, done, current, onChange, onDelete }: TodoRowProp
           <CircleDot strokeWidth={1.8} />
         </Button>
       )}
-      <Button variant="ghost" size="icon" aria-label={`Delete: ${item.text}`} onClick={onDelete} className="rounded-full text-muted-foreground">
-        <X strokeWidth={1.8} />
-      </Button>
+      {!readOnly && (
+        <Button variant="ghost" size="icon" aria-label={`Delete: ${item.text}`} onClick={onDelete} className="rounded-full text-muted-foreground">
+          <X strokeWidth={1.8} />
+        </Button>
+      )}
     </li>
   );
 }

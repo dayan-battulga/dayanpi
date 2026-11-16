@@ -1,4 +1,3 @@
-import base64
 import http.client
 import io
 import json
@@ -18,7 +17,7 @@ from mac_helper import dayanpi_mac_helper as helper
 HELPER_DIR = Path(helper.__file__).resolve().parent
 APP_URL = helper.DEFAULT_BASE_URL + helper.APP_ROUTE
 USER = "dayan"
-PASSWORD = "hunter2-not-real"
+TOKEN = "dpi_not-a-real-token-0123456789abcdefghij"
 
 FRONT_ASN = "ASN:0x0-0x8d08d:\n"
 NULL_OUTPUT = "[ NULL ]\n"
@@ -56,12 +55,12 @@ class LoopStopped(Exception):
 class FakeMac:
     """Answers like lsappinfo, osascript and security would. None in front_apps means nothing is in front."""
 
-    def __init__(self, front_apps=("Code",), lsappinfo_works=True, osascript_app=None, password=PASSWORD, tab_urls=("",)):
+    def __init__(self, front_apps=("Code",), lsappinfo_works=True, osascript_app=None, token=TOKEN, tab_urls=("",)):
         self.tab_urls = list(tab_urls)  # what the browser URL script prints, one per ask; "" is a private window
         self.front_apps = list(front_apps)
         self.lsappinfo_works = lsappinfo_works
         self.osascript_app = osascript_app
-        self.password = password
+        self.token = token
         self.current_app = None
         self.commands = []
 
@@ -95,8 +94,8 @@ class FakeMac:
 
     def answer_security(self):
         output = make_output(44, "", KEYCHAIN_MISSING)
-        if self.password is not None:
-            output = make_output(0, f"{self.password}\n", "")
+        if self.token is not None:
+            output = make_output(0, f"{self.token}\n", "")
         return output
 
     def count_runs(self, tool):
@@ -213,9 +212,15 @@ def make_tools(mac, pi, clock):
     return tools
 
 
-def make_auth_header(password):
-    header = "Basic " + base64.b64encode(f"{USER}:{password}".encode()).decode()
+def make_auth_header(token):
+    header = f"Bearer {token}"
     return header
+
+
+def assert_sends_token(request, token):
+    """Bearer only, and as an unredirected header, so a redirect to another host never carries it."""
+    assert request.unredirected_hdrs.get("Authorization") == make_auth_header(token)
+    assert "Authorization" not in request.headers
 
 
 def run_until_stopped(argv, mac, pi, clock):
@@ -356,7 +361,7 @@ def test_a_long_outage_never_overflows_the_backoff():
 
 
 
-def test_client_posts_the_app_as_json_with_basic_auth():
+def test_client_posts_the_app_as_json_with_the_token():
     mac = FakeMac()
     pi = FakePi()
     result = helper.PiClient(APP_URL, USER, mac.run, pi.send).send_app("Code")
@@ -366,7 +371,7 @@ def test_client_posts_the_app_as_json_with_basic_auth():
     assert request.get_method() == "POST"
     assert json.loads(request.data) == {"app": "Code", "site": None}
     assert request.get_header("Content-type") == "application/json"
-    assert request.get_header("Authorization") == make_auth_header(PASSWORD)
+    assert_sends_token(request, TOKEN)
     assert pi.timeouts == [5.0]
     assert mac.commands == [["/usr/bin/security", "find-generic-password", "-s", "dayanpi", "-a", USER, "-w"]]
 
@@ -391,14 +396,32 @@ def test_client_rereads_the_keychain_after_a_401():
     pi = FakePi([401, 200])
     client = helper.PiClient(APP_URL, USER, mac.run, pi.send)
     rejected = client.send_app("Code")
-    mac.password = "fixed-password"
+    mac.token = "dpi_a-new-token-from-settings"
     accepted = client.send_app("Code")
     assert not rejected.delivered
-    assert "401" in rejected.problem
+    assert "the Pi said 401" in rejected.problem
+    assert "wrong or was revoked" in rejected.problem
+    assert "Settings → Mac helper tokens" in rejected.problem
     assert "security add-generic-password -U -s dayanpi -a dayan -w" in rejected.problem
     assert accepted.delivered
-    assert pi.requests[1].get_header("Authorization") == make_auth_header("fixed-password")
+    assert_sends_token(pi.requests[1], "dpi_a-new-token-from-settings")
     assert mac.count_runs("security") == 2
+
+
+def test_client_rereads_the_keychain_after_a_401_on_the_switch():
+    mac = FakeMac()
+    pi = FakePi()
+    client = helper.PiClient(APP_URL, USER, mac.run, pi.send)
+    client.load_token()
+    pi.answer_tracking = lambda request: helper.Reply(401)
+    assert client.read_tracking() is None
+    assert client.token is None, "the next try reads the Keychain again"
+
+
+def test_a_members_token_gets_told_only_the_owner_reports():
+    result = helper.PiClient(APP_URL, USER, FakeMac().run, FakePi([403]).send).send_app("Code")
+    assert not result.delivered
+    assert result.problem == "the Pi said 403, this is a member's token: only the owner's helper can report for now"
 
 
 def test_client_survives_the_keychain_entry_vanishing_mid_run():
@@ -406,10 +429,11 @@ def test_client_survives_the_keychain_entry_vanishing_mid_run():
     pi = FakePi([401])
     client = helper.PiClient(APP_URL, USER, mac.run, pi.send)
     client.send_app("Code")
-    mac.password = None
+    mac.token = None
     result = client.send_app("Code")
     assert not result.delivered
-    assert "security add-generic-password -s dayanpi -a dayan -w" in result.problem
+    assert "No Mac helper token in the Keychain" in result.problem
+    assert "security add-generic-password -U -s dayanpi -a dayan -w" in result.problem
     assert len(pi.requests) == 1
 
 
@@ -442,20 +466,20 @@ def test_live_run_keeps_going_through_401s(caplog):
     pi = FakePi([401])
     run_until_stopped([], mac, pi, FakeClock(stop_after_sleeps=60))
     assert len(pi.requests) == 6
-    assert caplog.text.count("the Pi said 401, wrong login for 'dayan'") == 6
+    assert caplog.text.count("the Pi said 401, the token in the Keychain (account 'dayan') is wrong or was revoked") == 6
     assert mac.count_runs("security") == 1 + len(pi.requests), "read at start, then again after each 401"
 
 
-def test_password_never_shows_up_in_the_output(caplog, capsys):
+def test_token_never_shows_up_in_the_output(caplog, capsys):
     caplog.set_level(logging.DEBUG)
     mac = FakeMac(front_apps=["Code", "Slack", "Notion"])
-    pi = FakePi([200, 401, urllib.error.URLError("no route to host"), 500, 200])
+    pi = FakePi([200, 401, urllib.error.URLError("no route to host"), 403, 500, 200])
     run_until_stopped([], mac, pi, FakeClock(stop_after_sleeps=20))
     captured = capsys.readouterr()
     everything = caplog.text + captured.out + captured.err
-    assert len(pi.requests) == 5
-    assert PASSWORD not in everything
-    assert make_auth_header(PASSWORD).split()[1] not in everything
+    assert len(pi.requests) == 6
+    assert TOKEN not in everything
+    assert TOKEN.removeprefix("dpi_") not in everything
 
 
 def test_detection_trouble_is_logged_once_not_every_tick(caplog):
@@ -490,11 +514,13 @@ def test_missing_user_stops_with_a_clear_message(monkeypatch, caplog):
     assert pi.requests == []
 
 
-def test_missing_keychain_password_stops_with_the_fix(caplog):
+def test_missing_keychain_token_stops_with_the_fix(caplog):
     pi = FakePi()
-    assert helper.main([], make_tools(FakeMac(password=None), pi, FakeClock())) == helper.SETUP_FAILED_EXIT
+    assert helper.main([], make_tools(FakeMac(token=None), pi, FakeClock())) == helper.SETUP_FAILED_EXIT
     assert "could not be found in the keychain" in caplog.text
-    assert "security add-generic-password -s dayanpi -a dayan -w" in caplog.text
+    assert "No Mac helper token in the Keychain for account 'dayan'" in caplog.text
+    assert "Settings → Mac helper tokens" in caplog.text
+    assert "security add-generic-password -U -s dayanpi -a dayan -w" in caplog.text
     assert pi.requests == []
 
 
@@ -595,12 +621,12 @@ def test_launch_agent_template_runs_this_script():
     assert agent["StandardErrorPath"] == agent["StandardOutPath"]
 
 
-def test_the_password_never_follows_a_redirect():
+def test_the_token_never_follows_a_redirect():
     client = helper.PiClient(APP_URL, USER, FakeMac().run, FakePi().send)
-    client.load_password()
+    client.load_token()
     request = client.build_request("Code")
     redirected = urllib.request.HTTPRedirectHandler().redirect_request(request, None, 302, "Found", {}, "http://elsewhere.example/")
-    assert request.get_header("Authorization") == make_auth_header(PASSWORD)
+    assert_sends_token(request, TOKEN)
     assert redirected.get_header("Authorization") is None
 
 
@@ -754,7 +780,7 @@ def test_the_switch_reads_the_pis_answer_or_none():
     client = helper.PiClient(APP_URL, USER, FakeMac().run, pi.send)
     assert client.read_tracking() is False
     assert pi.tracking_requests[0].full_url == helper.DEFAULT_BASE_URL + helper.TRACKING_ROUTE
-    assert pi.tracking_requests[0].get_header("Authorization") == make_auth_header(PASSWORD)
+    assert_sends_token(pi.tracking_requests[0], TOKEN)
     assert helper.PiClient(APP_URL, USER, FakeMac().run, FakePi(switch=[OSError("down")]).send).read_tracking() is None
     assert helper.read_enabled(b"<html>404</html>") is None
     assert helper.read_enabled(b'{"status": "ok"}') is None, "an older Pi's reply doesn't say"

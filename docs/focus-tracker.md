@@ -143,7 +143,7 @@ tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
 
 If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point it at the folder: `.venv/bin/python -m dayanpi.focus.stats --log-dir /your/folder/focus_log`.
 
-**Routes** (all behind the login):
+**Routes** (all behind the sign-in; members can read them all, but every write in this guide is yours only for now). The `curl` lines in this guide run on the Pi and expect you to have signed in once, as in [Using the API from a terminal](MANUAL.md#using-the-api-from-a-terminal), which leaves your sign-in in `~/.dayanpi-cookies`.
 
 | Route | What |
 | --- | --- |
@@ -152,7 +152,7 @@ If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
 
-**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, and when that's a browser, which website, so "focused" can later be split into coding / docs / browsing / Slack. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **On the Mac** card at the top of the page shows what's in front, big enough to read from across the room: the site when it's a browser (`youtube.com`, with "in Google Chrome" under it), the app otherwise (`Cursor`). It's meant to let anyone walking by see what you're on. If the helper hasn't checked in for 2.5 minutes (it checks in at least once a minute, even when nothing changes), the Mac is asleep or the helper is gone, so the card says **Not reporting** and that time stops counting.
+**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, and when that's a browser, which website, so "focused" can later be split into coding / docs / browsing / Slack. Setup is in `mac_helper/README.md`: make a Mac helper token in Settings and put it in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **On the Mac** card at the top of the page shows what's in front, big enough to read from across the room: the site when it's a browser (`youtube.com`, with "in Google Chrome" under it), the app otherwise (`Cursor`). It's meant to let anyone walking by see what you're on. If the helper hasn't checked in for 2.5 minutes (it checks in at least once a minute, even when nothing changes), the Mac is asleep or the helper is gone, so the card says **Not reporting** and that time stops counting.
 
 What it records, and what it never does:
 
@@ -207,7 +207,7 @@ What that means day to day:
 ```bash
 cd ~/Desktop/site-page/dayanpi
 grep '"sample"' data/focus_log/$(date +%F).jsonl | tail -3
-curl -s -u YOURUSER:YOURPASS localhost:8000/api/focus | python3 -c "import json, sys; print(json.load(sys.stdin)['last_check'])"
+curl -s -b ~/.dayanpi-cookies localhost:8000/api/focus | python3 -c "import json, sys; print(json.load(sys.stdin)['last_check'])"
 ```
 
 **Timing.** A scan takes about 185 ms on the Pi, so two come to about 370 ms, and a stuck camera adds up to 0.2 s while it waits for a frame. `ms` in the sample lines and "~X ms each" on the card are both scans added together. Checks still run once a second as long as a check stays under 1 s. If it reaches about 1.5 s (a hot Pi slowing itself down, say), the boxes over the video start flickering, because the page hides boxes older than 3 s. The scans use all four cores, so keep an eye on the Temp tile too.
@@ -226,7 +226,7 @@ The card next to the camera is one running to-do list. It carries over from day 
 The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the card keeps up.
 
 ```bash
-curl -s -u YOURUSER:YOURPASS localhost:8000/api/todos | python3 -m json.tool
+curl -s -b ~/.dayanpi-cookies localhost:8000/api/todos | python3 -m json.tool
 cat data/todos.json
 grep '"todo"' data/focus_log/$(date +%F).jsonl
 ```
@@ -242,7 +242,7 @@ It counts the same way as the day page: from the 30-second sample lines, only wh
 The route, behind the login: `GET /api/apps?range=today|week` (anything else is a 422). It gives `{"range", "apps"}` with the apps sorted by time, most first: the top 8, then everything else summed into one last entry called "Other apps". Each app has `total_seconds`. An app that ever had a site in the range (a browser) also has `youtube_seconds` and `other_sites_seconds`. An empty range gives `"apps": []`.
 
 ```bash
-curl -s -u YOURUSER:YOURPASS "localhost:8000/api/apps?range=week" | python3 -m json.tool
+curl -s -b ~/.dayanpi-cookies "localhost:8000/api/apps?range=week" | python3 -m json.tool
 ```
 
 ## Calendar
@@ -267,7 +267,7 @@ The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's num
 ls data/days/
 cat data/days/$(date -d yesterday +%F).md
 journalctl -u dayanpi --no-pager | grep "day pages"
-curl -s -u YOURUSER:YOURPASS "localhost:8000/api/days?month=$(date +%Y-%m)" | python3 -m json.tool
+curl -s -b ~/.dayanpi-cookies "localhost:8000/api/days?month=$(date +%Y-%m)" | python3 -m json.tool
 ```
 
 ## Hand signs

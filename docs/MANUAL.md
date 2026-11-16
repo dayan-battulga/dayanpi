@@ -2,7 +2,7 @@
 
 Live dashboard for a Raspberry Pi 5: focus tracking, Pi stats, live updates over SSE, and a camera feed.
 
-The app is password-protected and bound to **localhost only**. You reach it through Tailscale Serve, which keeps it private to your own devices. Funnel stays off: the site shows a camera pointed at you all day.
+Everyone signs in with their own account (up to 4, invite only), and the app is bound to **localhost only**. You reach it through Tailscale: Serve for your own devices, and Funnel (the public internet) once the camera lock is set. Your full camera feeds only ever answer you, on your own Tailscale devices.
 
 This manual covers setting up the Pi, shipping code, running the service, Tailscale, power, security and troubleshooting. Each add-on has its own guide next to it:
 
@@ -27,11 +27,17 @@ Always use the **`main`** branch on both machines.
 | Path | Purpose |
 | --- | --- |
 | `/` | Dashboard |
-| `/api/stats` | One JSON snapshot |
-| `/api/stream` | Live SSE feed |
-| `/api/health` | Health check |
-| `/video` | MJPEG camera |
-| `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
+| `/login` | The sign-in page |
+| `/join/<code>` | Make an account from an invite link |
+| `/settings` | Your name, password, sign out and Mac helper tokens; invites and accounts for the owner |
+| `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
+| `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens |
+| `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
+| `/api/stats` | One JSON snapshot (owner only) |
+| `/api/stream` | Live SSE feed (members only get the focus part) |
+| `/api/health` | Health check (open, no sign-in) |
+| `/video` | MJPEG camera (owner only; with the camera lock on, only from your own Tailscale devices; 404 otherwise) |
+| `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise; same lock as `/video`) |
 | `/api/focus` | Focus state, today's totals, timeline, and the last hand sign (`gesture`) |
 | `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name). While Mac tracking is off it's dropped, still a 200, with `"enabled": false` |
 | `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
@@ -45,11 +51,12 @@ Always use the **`main`** branch on both machines.
 
 | From | URL / method |
 | --- | --- |
-| **Pi itself** | http://127.0.0.1:8000/ |
+| **Pi itself** | http://localhost:8000/ |
 | **Mac or phone (Tailscale app on)** | https://dayoon.tail279594.ts.net/ via **Serve** |
+| **Anyone else, once Funnel is on** | https://dayoon.tail279594.ts.net/ via **Funnel** (they need an account; no camera) |
 | **Home LAN IP** `http://192.168.x.x:8000` | Does **not** work (app listens on 127.0.0.1 only) |
 
-Login is **HTTP Basic Auth** from `/etc/dayanpi.env` — not your Linux password.
+You sign in on the `/login` page with your dashboard username and password, not your Linux password. See [Signing in](#signing-in).
 
 ---
 
@@ -101,6 +108,8 @@ Set your own values (you invent these):
 DAYANPI_USER=yourname
 DAYANPI_PASSWORD=a-strong-password
 ```
+
+These make your owner account the first time the app starts (when there's no `data/accounts.db` yet), and that's what you sign in with. After that the app ignores them, unless `accounts.db` goes missing. It still won't start without them, though, so leave them in. Before you ever turn on Funnel, add `DAYANPI_TAILSCALE_LOGIN` too (see [Camera lock](#camera-lock)).
 
 Then:
 
@@ -172,10 +181,10 @@ The page is a React app in `web/` (TypeScript, Vite, Tailwind CSS and shadcn/ui)
 cd ~/Desktop/code/projects/site-page/web
 npm ci
 cp .env.example .env.local
-nano .env.local        # the Pi's address, plus the same login as /etc/dayanpi.env
+nano .env.local        # just the Pi's address, DAYANPI_URL
 ```
 
-`.env.local` is gitignored. Only the dev server reads it, to log in to the Pi for you, and it never ends up in the page.
+`.env.local` is gitignored. Only the dev server reads it, to know where the Pi is, and it never ends up in the page. There's no password in it any more: you sign in on the dev page itself. Use Chrome (or Brave, Edge, Arc) for that. The Pi's sign-in cookie is https-only, and Chrome still keeps it on plain http://localhost, but Safari throws it away, so there you'd sign in fine and then land straight back on `/login`.
 
 **Working on it with live data:**
 
@@ -232,10 +241,75 @@ cd ~/Desktop/site-page/dayanpi
 source .venv/bin/activate
 export DAYANPI_USER=yourname
 export DAYANPI_PASSWORD=yourpass
+export DAYANPI_TAILSCALE_LOGIN=you@github   # if Funnel is on, or the camera isn't locked while you test
 uvicorn dayanpi.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+Keep `--host 127.0.0.1`. The camera lock trusts a header that only Tailscale gets to set, and that only holds while nothing but the Pi itself can reach port 8000.
+
 When finished: `Ctrl+C`, then `sudo systemctl start dayanpi`.
+
+---
+
+## Accounts
+
+### Signing in
+
+Open the site and it sends you to `/login`. Sign in with your username and password. The very first time, that's the `DAYANPI_USER` / `DAYANPI_PASSWORD` from `/etc/dayanpi.env`.
+
+- **It lasts 30 days**, and every visit pushes that back, so a device you use keeps you signed in. **Sign out** from the menu under your name at the top right (or in Settings), and that sign-in is gone on the Pi too.
+- **Wrong passwords.** Five misses in a row on one username and that name has to wait 30 s. Each miss after a wait doubles it, up to 15 minutes, and the right password clears it. The message is always "wrong username or password", even during a wait, so a stranger can't tell which names exist or which are waiting. Restarting the service clears every wait.
+- **Changing your password:** Settings → Password. It asks for the current one (a wrong one counts as a sign-in miss, and after 5 wrong ones in a row it says **too many tries, wait a bit**: 30 seconds, doubling each time up to 15 minutes), and the new one needs at least 10 characters. It signs you out on every other device and keeps this one signed in. After that, the password in `/etc/dayanpi.env` doesn't work any more. It only comes back if `data/accounts.db` is gone (see [Forgot your password?](#forgot-your-password)).
+- **Your name:** Settings → Display name. That's what the header shows.
+
+All of it lives in `data/accounts.db` on the Pi (or in `DAYANPI_DATA_DIR`): accounts, sign-ins, invites and Mac helper tokens. Passwords are stored scrambled (scrypt with a salt), and sign-ins, invites and tokens only as a fingerprint (sha256), so the file holds nothing you could sign in with. None of them ever show up in the journal either.
+
+### Inviting someone
+
+Up to 4 accounts in all: you (the owner) plus 3 members.
+
+1. Settings → Invites, and make one.
+2. Copy the link it shows (`https://dayoon.tail279594.ts.net/join/...`) and send it to them somewhere private, because anyone with the link can use it. You only see it this once. Lost it? Delete that invite and make a new one.
+3. They open it, pick a display name, a username and a password (at least 10 characters), and they're signed in. Usernames are 2 to 32 characters: lowercase letters, digits, dots, dashes and underscores, starting with a letter or digit (capitals just turn lowercase).
+
+A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
+
+**What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the On the Mac card) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
+
+**What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), see the Pi section (temps, memory, disk, power), see the camera (the card shows a note instead), or touch invites and accounts.
+
+**Removing someone:** Settings → Accounts. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. The owner can't be removed.
+
+### Using the API from a terminal
+
+`curl -u` doesn't work any more. Sign in once, keep the cookie in a file, and send it along after that. On the Pi:
+
+```bash
+python3 -c 'import getpass, json; print(json.dumps({"username": "yourname", "password": getpass.getpass()}))' \
+  | (umask 077; curl -s -c ~/.dayanpi-cookies -H 'Content-Type: application/json' -d @- localhost:8000/api/login)
+curl -s -b ~/.dayanpi-cookies localhost:8000/api/focus | python3 -m json.tool
+```
+
+The first command asks for your password (so it stays out of your shell history) and prints `{"user": ...}` when it worked. `~/.dayanpi-cookies` is now your sign-in for 30 days, and `umask 077` makes sure only you can read it. From the Mac it's the same with `https://dayoon.tail279594.ts.net` in place of `localhost:8000`. The cookie is https-only, but curl makes an exception for localhost, so plain `localhost:8000` works on the Pi.
+
+- **Writes** need `-H 'Content-Type: application/json'` and a JSON body, or you get a 415 "send JSON": `curl -s -b ~/.dayanpi-cookies -H 'Content-Type: application/json' -d '{"text": "call the dentist"}' localhost:8000/api/todos`
+- **With the camera lock on**, `/video` is a 404 from `localhost`, on purpose: that request never went through Tailscale.
+- **Done?** `curl -s -b ~/.dayanpi-cookies -H 'Content-Type: application/json' -d '{}' localhost:8000/api/logout; rm ~/.dayanpi-cookies`
+
+### Forgot your password?
+
+**A member:** remove them in Settings → Accounts and send a new invite.
+
+**You, the owner:** the only way back is a fresh `accounts.db`. That deletes every account, sign-in, invite and Mac token, so everyone else needs a new invite afterwards:
+
+```bash
+sudo systemctl stop dayanpi
+cd ~/Desktop/site-page/dayanpi
+old=data/accounts-old-$(date +%F-%H%M%S)
+mkdir "$old" && mv data/accounts.db* "$old"/ && sudo systemctl start dayanpi
+```
+
+The old copy goes in a folder named after the date and time, so doing this a second time doesn't trip over the first one. If the last line prints an error, the app stays stopped on purpose (starting it with the old `accounts.db` would bring the old password back), so check `ls data/` and fix that first. (With `DAYANPI_DATA_DIR`, the file's in that folder instead.) On the way up, the app makes you again from `/etc/dayanpi.env`, so sign in with that password, then make a new Mac helper token (see `mac_helper/README.md`). Your focus log, to-dos and day pages aren't in `accounts.db`, so they all stay.
 
 ---
 
@@ -274,11 +348,45 @@ If Serve says “not enabled” or “access denied”:
 
 ### Opening it from your Mac or phone
 
-Install the Tailscale app, sign in to the same account, and keep it connected. Then open **https://dayoon.tail279594.ts.net/** and log in with the `/etc/dayanpi.env` credentials. See [The dashboard](#the-dashboard) for what's where.
+Install the Tailscale app, sign in to the same account, and keep it connected. Then open **https://dayoon.tail279594.ts.net/** and sign in (see [Signing in](#signing-in)). See [The dashboard](#the-dashboard) for what's where.
 
-### Funnel stays off
+### Camera lock
 
-Funnel would put the site on the public internet, and the site shows a camera pointed at you all day. If it ever gets turned on, this switches back to Serve:
+Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Camera card says **Tailscale only** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always.
+
+Find your login on the Pi:
+
+```bash
+tailscale status --json | python3 -c 'import json, sys; s = json.load(sys.stdin); print(s["User"][str(s["Self"]["UserID"])]["LoginName"])'
+```
+
+That's the account the Pi is signed in to, something like `you@github` or `you@gmail.com`, and it's the right one as long as your Mac and phone are signed in to that same account. If it prints `tagged-devices`, or you're not sure, the admin console's Users page (login.tailscale.com/admin/users) lists everyone's login. Copy it exactly: it's matched letter for letter, capitals too.
+
+Put it in the env file and restart:
+
+```bash
+sudo nano /etc/dayanpi.env     # add a line: DAYANPI_TAILSCALE_LOGIN=you@github
+sudo systemctl restart dayanpi
+journalctl -u dayanpi -b --no-pager | grep -i tailscale
+```
+
+The journal line says the camera is locked to your login. Without the variable it warns "camera not locked to Tailscale, don't turn on Funnel" instead, and the camera works for you from anywhere, like before.
+
+**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, and the Camera card says **Tailscale only**.
+
+### Funnel (the public internet)
+
+Only after the camera lock is set. Funnel lets anyone on the internet reach the site. They still have to sign in, nobody gets an account without an invite, and the camera stays yours. It's also how someone who isn't on your tailnet opens an invite link.
+
+```bash
+journalctl -u dayanpi -b --no-pager | grep -i tailscale   # says locked? don't skip this
+sudo tailscale funnel --bg 8000
+tailscale funnel status
+```
+
+`funnel status` should show `https://dayoon.tail279594.ts.net (Funnel on)` going to `http://127.0.0.1:8000`. Like Serve, `--bg` keeps it after you close the terminal, and after reboots. If it says Funnel isn't enabled, open the link it prints and allow Funnel for the Pi, same as Serve the first time. Your own devices still come in through Serve, which is why the camera keeps working for you.
+
+Turning it back off (Serve only):
 
 ```bash
 sudo tailscale funnel reset
@@ -319,7 +427,7 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 ### Turning it back on
 
 1. Plug in the Pi (webcam already connected).
-2. Wait about a minute, then open https://dayoon.tail279594.ts.net/ and log in. Hard-refresh if it looks stale.
+2. Wait about a minute, then open https://dayoon.tail279594.ts.net/ (you're usually still signed in). Hard-refresh if it looks stale.
 
 ### Missing something after boot?
 
@@ -334,17 +442,35 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 
 ## Security checklist
 
+On the Pi:
+
 ```bash
 curl -s localhost:8000/api/stats
-# expect 401
+# expect {"detail":"sign in first"}
 
-curl -s -u wrong:wrong localhost:8000/video
-# expect 401
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/
+# expect 303 (off to /login)
 
-curl -s -u YOURUSER:YOURPASS localhost:8000/api/stats
+curl -s -H 'Content-Type: application/json' -d '{"username":"nobody","password":"not-the-password"}' localhost:8000/api/login
+# expect {"detail":"wrong username or password"}
+
+curl -s -o /dev/null -w '%{http_code}\n' -d 'username=nobody&password=x' localhost:8000/api/login
+# expect 415 (a plain form post is refused: writes have to be JSON)
+
+journalctl -u dayanpi -b --no-pager | grep -i tailscale
+# expect the camera locked to your login before Funnel goes on
+```
+
+Then sign in the way [Using the API from a terminal](#using-the-api-from-a-terminal) shows, and:
+
+```bash
+curl -s -b ~/.dayanpi-cookies localhost:8000/api/stats
 # expect JSON
 
-curl -s localhost:8000/docs
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 3 -b ~/.dayanpi-cookies localhost:8000/video
+# with the camera lock on, expect 404 (localhost doesn't go through Tailscale); lock off: 200 after 3 s
+
+curl -s -o /dev/null -w '%{http_code}\n' -b ~/.dayanpi-cookies localhost:8000/docs
 # expect 404
 ```
 
@@ -361,6 +487,8 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 ## The dashboard
 
+- **Header:** who's signed in, at the top right, with a menu for Settings and Sign out.
+- **Members** see the same page minus the Pi section, and the Camera card shows a note instead of the feed (see [Inviting someone](#inviting-someone)).
 - **Top:** the On the Mac card: what's in front on the Mac (the site for a browser, the app otherwise), in big letters for anyone to see, with a switch that pauses Mac tracking. Then the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
 - **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes. Under them, the calendar (see [Calendar](focus-tracker.md#calendar)).
 - **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power and voice.
@@ -380,16 +508,23 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 | `Unit dayanpi.service not found` | `sudo cp deploy/dayanpi.service /etc/systemd/system/` then `daemon-reload` and `enable --now` |
 | `activating (auto-restart)` / crash loop | `journalctl -u dayanpi -n 50 --no-pager` |
 | `No module named ...` on start | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
-| Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` |
+| Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` (still needed after your account exists) |
 | Connection refused on LAN IP:8000 | Expected — use Serve |
-| 401 everywhere | Use credentials from `/etc/dayanpi.env` |
+| "wrong username or password" | The first time, use the login from `/etc/dayanpi.env`; once you've changed it in Settings, use the new one. Five misses on one name means a wait (30 s, doubling up to 15 min) with the same message, so wait it out or restart the service. Lost it for good: [Forgot your password?](#forgot-your-password) |
+| Signed in on the Pi's own browser but it keeps going back to `/login` | Use https://dayoon.tail279594.ts.net/ instead. The sign-in cookie is https-only, and not every browser makes an exception for plain http on the Pi itself |
+| Dev page (`npm run dev`) signs you in, then goes straight back to `/login` | You're in Safari, which drops the https-only sign-in cookie on http://localhost. Use Chrome for the dev page |
+| Camera card says **Tailscale only** | That's the [camera lock](#camera-lock): you came in through Funnel, or your device's Tailscale login isn't exactly `DAYANPI_TAILSCALE_LOGIN`. Switch Tailscale on and check the login. If both are fine, that device isn't using Tailscale's DNS, so the site's name led it to Funnel instead: turn on **Use Tailscale DNS** in the Tailscale app, and turn off Android's Private DNS or the browser's own secure DNS for it |
+| Journal says `camera not locked to Tailscale` | Set `DAYANPI_TAILSCALE_LOGIN` and restart. Until then, keep Funnel off |
+| `{"detail":"send JSON"}` (415) from curl | Every POST, PATCH and DELETE needs `-H 'Content-Type: application/json'` and a JSON body, `-d '{}'` if there's nothing to send |
+| `{"detail":"too big"}` (413) from curl | A write has to say how big it is up front (curl's `-d` does) and stay under 64 KB. Streaming a body in (`-T -`, or anything chunked) gets this every time |
+| The invite link says it doesn't work any more | It was used, it's older than 7 days, or it was deleted. Make a new one. With 4 accounts already, the room is full: remove someone first |
 | Port in use | `sudo lsof -i :8000` — stop leftover uvicorn or the service |
 | Camera busy / black | Only one opener; restart service; confirm `video` in `groups` |
 | Camera says "Hidden while you work" | That's on purpose: press **Peek** |
 | Numbers stuck on `--` | The live stream isn't connecting: check the pill at the top right says **Live**, then hard refresh |
 | `No serve config` after Ctrl+C | Use `sudo tailscale serve --bg 8000` |
 | Serve access denied | Approve in Tailscale admin; try `sudo` |
-| `listener already exists for port 443` | Funnel is probably on: `sudo tailscale funnel reset` then `sudo tailscale serve --bg 8000` |
+| `listener already exists for port 443` | An old Serve or Funnel setup has the port. `sudo tailscale funnel reset`, then `sudo tailscale serve --bg 8000` (and `sudo tailscale funnel --bg 8000` again if you want Funnel) |
 | Mac works, phone doesn’t | The phone needs the Tailscale app, connected and signed in to the same account |
 
 ---
@@ -398,6 +533,6 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 1. Edit on Mac → push `main`
 2. Pull on Pi → `sudo systemctl restart dayanpi`
-3. Proxy with `serve --bg` (private to your devices)
-4. Open https://dayoon.tail279594.ts.net/ → log in
+3. Proxy with `serve --bg` (private to your devices), and `funnel --bg` only once the camera lock is set
+4. Open https://dayoon.tail279594.ts.net/ → sign in
 5. Leave systemd **enabled** so the app survives disconnects and reboots

@@ -1,4 +1,4 @@
-import type { Level, Snapshot, Throttle } from "@/lib/types";
+import type { Level, PiStats, Snapshot, Throttle } from "@/lib/types";
 
 export const TEMP_ELEVATED_C = 70;
 export const TEMP_CRITICAL_C = 80;
@@ -49,7 +49,7 @@ export function describePower(throttle: Throttle): PowerReport {
   return power;
 }
 
-export function describePi(stats: Snapshot, power: PowerReport): Described {
+export function describePi(stats: PiStats, power: PowerReport): Described {
   const cpu = stats.rates == null ? 0 : stats.rates.cpu_percent;
   const summary: Described = { text: "Running smooth", level: "nominal" };
   if (power.live) {
@@ -66,4 +66,10 @@ export function describePi(stats: Snapshot, power: PowerReport): Described {
     summary.level = "elevated";
   }
   return summary;
+}
+
+// A member's snapshot has no Pi numbers, only "focus".
+export function readPiStats(snapshot: Snapshot | null): PiStats | null {
+  const stats = snapshot?.throttle != null ? (snapshot as PiStats) : null;
+  return stats;
 }

@@ -19,14 +19,14 @@ It sends the app's name, and for a browser the site, like `{"app": "Google Chrom
 - **Safari and Firefox send no site at all.** Safari doesn't let a script tell which windows are private, so it isn't asked. Firefox has nothing for scripts to ask. The log says so once.
 - No window titles, no screenshots, no keystrokes, nothing else from inside any app.
 
-The Pi checks it too: it only takes a site that's a plain host name (letters, digits, dots and hyphens) and turns away anything else. It all goes to your Pi over Tailscale and nowhere else. The log on the Mac (`~/Library/Logs/dayanpi-mac-helper.log`) has the same app names and sites and nothing more. Your password stays in the Keychain and never shows up in the log.
+The Pi checks it too: it only takes a site that's a plain host name (letters, digits, dots and hyphens) and turns away anything else. It all goes to your Pi over Tailscale and nowhere else. The log on the Mac (`~/Library/Logs/dayanpi-mac-helper.log`) has the same app names and sites and nothing more. The helper logs in with its own token, not your password. The token stays in the Keychain and never shows up in the log, and it only works on the Mac routes, so it can't open the dashboard or the camera.
 
 ## What you need
 
 - The Tailscale app connected on the Mac, same as for opening the dashboard.
-- The dashboard login (`DAYANPI_USER` / `DAYANPI_PASSWORD` from `/etc/dayanpi.env` on the Pi).
+- Your dashboard username, and a Mac helper token from the dashboard (step 2). For now only the owner's token can report; a member's token gets a 403.
 - `/usr/bin/python3`, which comes with Xcode's command line tools. Run `/usr/bin/python3 --version`. If it offers to install the tools, say yes.
-- The Pi running a version of the app that has `/api/mac/app`.
+- The Pi running a version of the app with sign-in accounts (Settings has a **Mac helper tokens** section).
 
 ## 1. Copy it out of Desktop
 
@@ -38,19 +38,20 @@ cp dayanpi_mac_helper.py com.dayanpi.machelper.plist ~/dayanpi-mac-helper/
 
 For the hand tests in step 3 you can also just `cd ~/Desktop/code/projects/site-page/mac_helper` and run it from the repo. The background job can't, though: macOS guards `~/Desktop`, `~/Documents` and `~/Downloads`, and a background `python3` reading a script in there usually just fails with "Operation not permitted". The LaunchAgent expects `~/dayanpi-mac-helper`.
 
-## 2. Put the password in the Keychain
+## 2. Make a token and put it in the Keychain
 
-Swap `yourname` for your dashboard username, here and in every command below:
+Sign in to the dashboard, open **Settings → Mac helper tokens** and make one. Name it after the Mac (like `MacBook`) so you can tell them apart later. It starts with `dpi_` and it's **shown only once**, so copy it before you close the page. The Pi only keeps a hash of it.
+
+Then save it in the Keychain. Swap `yourname` for your dashboard username, here and in every command below:
 
 ```bash
-security add-generic-password -s dayanpi -a yourname -w
+security add-generic-password -U -s dayanpi -a yourname -w
 ```
 
-With `-w` last and nothing after it, `security` asks for the password instead of taking it on the command line, so it never lands in your shell history. Nothing shows up while you type; that's normal.
+With `-w` last and nothing after it, `security` asks for the token instead of taking it on the command line, so it never lands in your shell history. Paste it and press Enter (it asks twice). Nothing shows up while you paste; that's normal. `-U` means "overwrite it if it's already there", so the same command works for a first setup and for swapping in a new token.
 
-- Check it's there (this shows the item's details, not the password): `security find-generic-password -s dayanpi -a yourname`
-- Changed the password on the Pi? Run the same add command with `-U` to overwrite it: `security add-generic-password -U -s dayanpi -a yourname -w`. A running helper picks up the new one by itself after its next 401.
-- Stick to plain keyboard characters. `security` hands back passwords with emoji or accented letters as hex, and then the login fails.
+- Check it's there (this shows the item's details, not the token): `security find-generic-password -s dayanpi -a yourname`
+- Lost it, or think it leaked? Revoke it in **Settings → Mac helper tokens**, make a new one and run the same command again. A running helper picks up the new one by itself after its next 401.
 
 ## 3. Try it by hand
 
@@ -59,7 +60,7 @@ cd ~/dayanpi-mac-helper
 /usr/bin/python3 dayanpi_mac_helper.py --once
 ```
 
-It prints the app in front (probably `Terminal`, since you just typed in it) and quits. No network, no password needed.
+It prints the app in front (probably `Terminal`, since you just typed in it) and quits. No network, no token needed.
 
 Then the dry run. It keeps watching but only prints what it *would* send:
 
@@ -135,6 +136,33 @@ launchctl kickstart -k gui/$(id -u)/com.dayanpi.machelper
 
 `kickstart -k` restarts it with the new script. If the plist changed too, boot it out (below), redo the `sed` line from step 4, and bootstrap it again.
 
+## Switching from the password to a token
+
+Older versions of the helper logged in with your dashboard password. Now it uses a token, and the Pi won't take the password from it any more. The plist doesn't change, and the Keychain item stays the same one (`-s dayanpi -a yourname`); only what's inside it changes.
+
+1. Update the Pi first (pull and restart the service there). From then on the old helper gets a 401 on every try until you finish the steps below. It just keeps retrying, nothing breaks.
+2. On the Mac, pull and copy the new script:
+
+   ```bash
+   cd ~/Desktop/code/projects/site-page && git pull
+   cp mac_helper/dayanpi_mac_helper.py ~/dayanpi-mac-helper/
+   ```
+
+3. Make a token in **Settings → Mac helper tokens** and overwrite the password with it (paste the token when asked):
+
+   ```bash
+   security add-generic-password -U -s dayanpi -a yourname -w
+   ```
+
+4. Restart the helper and watch the log:
+
+   ```bash
+   launchctl kickstart -k gui/$(id -u)/com.dayanpi.machelper
+   tail -f ~/Library/Logs/dayanpi-mac-helper.log
+   ```
+
+   `front app: ...` lines and no `the Pi said 401` warnings means it's working.
+
 ## Stopping and uninstalling
 
 Stop it for now:
@@ -153,15 +181,16 @@ rm ~/Library/Logs/dayanpi-mac-helper.log
 security delete-generic-password -s dayanpi -a yourname
 ```
 
-The last line deletes the saved password too; skip it if you want to keep it.
+The last line deletes the saved token too; skip it if you want to keep it. Revoke the token in **Settings → Mac helper tokens** as well, so it stops working on the Pi.
 
 ## When something's off
 
 | What you see | What to do |
 | --- | --- |
 | `DAYANPI_USER isn't set` | By hand: put `DAYANPI_USER=yourname` in front of the command. Background: redo the `sed` line with your name |
-| `No dashboard password in the Keychain` | Step 2. The `-a` name has to match `DAYANPI_USER` exactly |
-| `the Pi said 401` | Wrong username or password. Fix it with the `-U` command from step 2; the helper rereads it by itself |
+| `No Mac helper token in the Keychain` | Step 2. The `-a` name has to match `DAYANPI_USER` exactly |
+| `the Pi said 401` | The token is wrong or was revoked, or the Keychain still has your old password. Make a new one in Settings → Mac helper tokens and store it with the `-U` command from step 2; the helper rereads it by itself |
+| `the Pi said 403` | That's a member's token. Only the owner's helper can report for now |
 | `can't reach the Pi` | Is Tailscale connected? Does https://dayoon.tail279594.ts.net/ open in the browser? Is the `dayanpi` service running? |
 | `the Pi answered HTTP 404` | The Pi's code doesn't have `/api/mac/app` yet. Pull and restart the service there |
 | `can't tell which app is in front` | Run `--once` in Terminal to see why. Usually it's the System Events permission above |

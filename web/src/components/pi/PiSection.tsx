@@ -3,7 +3,7 @@ import { riseDelay } from "@/components/shared/rise";
 import { TickText } from "@/components/shared/TickText";
 import { formatBits, formatUptime } from "@/lib/format";
 import { GAUGE_MAX_C, GAUGE_MIN_C, TEMP_CRITICAL_C, TEMP_ELEVATED_C, describePi, describePower, readLevel, readLoadLevel } from "@/lib/pi";
-import type { FocusStatus, Snapshot } from "@/lib/types";
+import type { FocusStatus, PiStats } from "@/lib/types";
 
 function describeVoice(voice: FocusStatus["voice"] | undefined): string {
   let text = "off";
@@ -15,7 +15,7 @@ function describeVoice(voice: FocusStatus["voice"] | undefined): string {
   return text;
 }
 
-export function PiSection({ stats }: { stats: Snapshot | null }) {
+export function PiSection({ stats, focus }: { stats: PiStats | null; focus: FocusStatus | undefined }) {
   const power = stats == null ? null : describePower(stats.throttle);
   const summary = stats == null || power == null ? null : describePi(stats, power);
   const temp = stats?.temperature_celsius;
@@ -25,7 +25,6 @@ export function PiSection({ stats }: { stats: Snapshot | null }) {
   const cores = rates?.core_percents ?? [];
   const memory = stats?.memory;
   const disk = stats?.disk;
-  const focus = stats?.focus;
 
   return (
     <section id="pi" className="pi rise" style={riseDelay(5)} aria-labelledby="pi-summary">

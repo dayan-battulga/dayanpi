@@ -8,13 +8,10 @@ import { defineConfig } from "vitest/config";
 const webDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
-  // Only DAYANPI_* from web/.env.local, and only here in the dev server: none of it reaches the page.
+  // Only DAYANPI_URL from web/.env.local, and only here in the dev server. You sign in on the dev
+  // page itself: Chrome keeps the Pi's Secure session cookie on http://localhost too.
   const env = loadEnv(mode, webDir, "DAYANPI_");
-  const toPi = {
-    target: env.DAYANPI_URL,
-    changeOrigin: true,
-    auth: env.DAYANPI_USER ? `${env.DAYANPI_USER}:${env.DAYANPI_PASSWORD}` : undefined,
-  };
+  const toPi = { target: env.DAYANPI_URL, changeOrigin: true };
   return {
     plugins: [react(), tailwindcss()],
     resolve: { alias: { "@": path.resolve(webDir, "src") } },

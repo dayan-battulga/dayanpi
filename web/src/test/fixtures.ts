@@ -1,4 +1,7 @@
-import type { FocusStatus, Snapshot, Todos } from "@/lib/types";
+import type { FocusStatus, Snapshot, Todos, User } from "@/lib/types";
+
+export const OWNER: User = { id: 1, username: "dayan", display_name: "Dayan", role: "owner" };
+export const MEMBER: User = { id: 2, username: "sam", display_name: "Sam", role: "member" };
 
 export const TODOS: Todos = {
   current: "a1",

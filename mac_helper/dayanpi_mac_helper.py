@@ -13,7 +13,7 @@ browser at all, and when it comes back on it sends the app in front right away.
 
     python3 dayanpi_mac_helper.py --once      # print the app in front and quit
     python3 dayanpi_mac_helper.py --dry-run   # keep watching, only print what it would send
-    python3 dayanpi_mac_helper.py             # the real thing (DAYANPI_USER + Keychain password)
+    python3 dayanpi_mac_helper.py             # the real thing (DAYANPI_USER + a Mac helper token in the Keychain)
 
 Setup and the LaunchAgent are in README.md next to this file. Standard library
 only, so macOS's own /usr/bin/python3 (3.9) runs it.
@@ -22,7 +22,6 @@ only, so macOS's own /usr/bin/python3 (3.9) runs it.
 from __future__ import annotations
 
 import argparse
-import base64
 import http.client
 import json
 import logging
@@ -108,7 +107,7 @@ logger = logging.getLogger("dayanpi_mac_helper")
 
 
 class SetupError(Exception):
-    """Something only you can fix (no login, bad URL). The message says how."""
+    """Something only you can fix (no token, bad URL). The message says how."""
 
 
 @dataclass
@@ -288,18 +287,24 @@ def describe_front(app_name: str, site: str | None) -> str:
     return text
 
 
-def read_keychain_password(run: CommandRunner, user: str) -> str:
-    """Reads the dashboard password from the login Keychain. Raises SetupError when it isn't there."""
+def describe_token_fix(user: str) -> str:
+    fix = (
+        "Make one in the dashboard's Settings → Mac helper tokens and store it with: "
+        f"security add-generic-password -U -s {KEYCHAIN_SERVICE} -a {user} -w"
+    )
+    return fix
+
+
+def read_keychain_token(run: CommandRunner, user: str) -> str:
+    """Reads the Mac helper token from the login Keychain. Raises SetupError when it isn't there."""
     output = run([SECURITY, "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", user, "-w"])
-    # `security -w` prints a password with any non-ASCII character as hex, so such a password can't log in.
-    password = output.stdout.removesuffix("\n")
-    if output.returncode != 0 or not password:
+    token = output.stdout.strip()
+    if output.returncode != 0 or not token:
         raise SetupError(
-            f"No dashboard password in the Keychain for account {user!r} "
-            f"({output.stderr.strip() or 'security found nothing'}). "
-            f"Add it with: security add-generic-password -s {KEYCHAIN_SERVICE} -a {user} -w"
+            f"No Mac helper token in the Keychain for account {user!r} "
+            f"({output.stderr.strip() or 'security found nothing'}). {describe_token_fix(user)}"
         )
-    return password
+    return token
 
 
 def read_app_url() -> str:
@@ -331,27 +336,29 @@ def describe_status(status: int, user: str) -> SendResult:
     result = SendResult(delivered=200 <= status < 300)
     if status == HTTPStatus.UNAUTHORIZED:
         result.problem = (
-            f"the Pi said 401, wrong login for {user!r}. Check DAYANPI_USER and the Keychain password "
-            f"(security add-generic-password -U -s {KEYCHAIN_SERVICE} -a {user} -w)"
+            f"the Pi said 401, the token in the Keychain (account {user!r}) is wrong or was revoked. "
+            f"{describe_token_fix(user)}"
         )
+    elif status == HTTPStatus.FORBIDDEN:
+        result.problem = "the Pi said 403, this is a member's token: only the owner's helper can report for now"
     elif not result.delivered:
         result.problem = f"the Pi answered HTTP {status}"
     return result
 
 
 class PiClient:
-    """Posts the front app to the dashboard and asks about its switch, logging in like the browser does (Basic Auth)."""
+    """Posts the front app to the dashboard and asks about its switch, with a Mac helper token (Bearer)."""
 
     def __init__(self, app_url: str, user: str, run: CommandRunner, send: RequestSender) -> None:
         self.app_url = app_url
         self.tracking_url = app_url[: -len(APP_ROUTE)] + TRACKING_ROUTE
-        self.user = user
+        self.user = user  # only names the Keychain item; the Pi knows who it is from the token
         self.run = run
         self.send = send
-        self.password: str | None = None
+        self.token: str | None = None
 
-    def load_password(self) -> None:
-        self.password = read_keychain_password(self.run, self.user)
+    def load_token(self) -> None:
+        self.token = read_keychain_token(self.run, self.user)
 
     def build_request(self, app_name: str, site: str | None = None) -> urllib.request.Request:
         request = urllib.request.Request(
@@ -360,38 +367,37 @@ class PiClient:
             method="POST",
             headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
         )
-        self.add_login(request)
+        self.add_token(request)
         return request
 
-    def add_login(self, request: urllib.request.Request) -> None:
-        token = base64.b64encode(f"{self.user}:{self.password}".encode("utf-8")).decode("ascii")
+    def add_token(self, request: urllib.request.Request) -> None:
         # urllib copies ordinary headers onto a redirect, even to another host; this one stays behind.
-        request.add_unredirected_header("Authorization", f"Basic {token}")
+        request.add_unredirected_header("Authorization", f"Bearer {self.token}")
 
     def read_tracking(self) -> bool | None:
-        """GET the dashboard's switch: True or False, or None when the Pi can't say (out of reach, wrong login)."""
+        """GET the dashboard's switch: True or False, or None when the Pi can't say (out of reach, bad token)."""
         status = 0
         enabled = None
         try:
-            if self.password is None:
-                self.load_password()
+            if self.token is None:
+                self.load_token()
             request = urllib.request.Request(self.tracking_url, method="GET", headers={"User-Agent": USER_AGENT})
-            self.add_login(request)
+            self.add_token(request)
             reply = self.send(request, HTTP_TIMEOUT_S)
             status = reply.status
             enabled = read_enabled(reply.body) if 200 <= status < 300 else None
         except (SetupError, OSError, http.client.HTTPException):
             enabled = None
         if status == HTTPStatus.UNAUTHORIZED:
-            self.password = None
+            self.token = None
         return enabled
 
     def send_app(self, app_name: str, site: str | None = None) -> SendResult:
         """One POST. After a 401 the Keychain is read again on the next try, so fixing it there is enough."""
         status = 0
         try:
-            if self.password is None:
-                self.load_password()
+            if self.token is None:
+                self.load_token()
             reply = self.send(self.build_request(app_name, site), HTTP_TIMEOUT_S)
             status = reply.status
             result = describe_status(status, self.user)
@@ -404,7 +410,7 @@ class PiClient:
                 problem=f"can't reach the Pi ({error}). Is Tailscale connected and the dayanpi service running?",
             )
         if status == HTTPStatus.UNAUTHORIZED:
-            self.password = None
+            self.token = None
         return result
 
 
@@ -551,7 +557,7 @@ def run_for_real(tools: HelperTools) -> None:
     app_url = read_app_url()
     user = read_user()
     client = PiClient(app_url, user, tools.run, tools.send)
-    client.load_password()
+    client.load_token()
     logger.info("sending the front app to %s as %s", app_url, user)
     switch = TrackingSwitch(client.read_tracking, tools.clock, on_resume=lambda: reporter.resend())
 

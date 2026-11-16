@@ -1,21 +1,26 @@
 import asyncio
-import base64
 import json
 import logging
 import os
-import secrets
+import re
 import threading
 import time
+from collections import defaultdict
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, suppress
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.websockets import WebSocketClose
 from pydantic import BaseModel, Field, StrictBool, StringConstraints
 
 from typing import Annotated, Literal
 
+from dayanpi.auth import routes as auth_routes
+from dayanpi.auth.accounts import SESSION_REFRESH_S
 from dayanpi.hardware import collector
 from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
@@ -41,13 +46,34 @@ FRAME_TIMEOUT_S = 5.0
 MAX_CONSECUTIVE_TIMEOUTS = 3
 SNAPSHOT_INTERVAL_S = 1.0
 VIDEO_MAX_CONCURRENT = 2
-STREAM_MAX_CONCURRENT = 5
+STREAM_MAX_CONCURRENT = 5  # per account
+FEED_SESSION_CHECK_S = 1.0  # an open camera feed checks its viewer is still signed in this often
 AFTER_MIDNIGHT_S = 5.0  # the day pages get written this long after local midnight
+# The biggest write body. FastAPI reads a whole body before any max_length runs, and the sign-in is public.
+MAX_BODY_BYTES = 64 * 1024
 
 logger = logging.getLogger(__name__)
 
+# Only used to make the owner account when accounts.db has no users (the first start, or after it's deleted).
 AUTH_USER = os.environ.get("DAYANPI_USER", "")
 AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
+# Tailscale Serve sets Tailscale-User-Login on requests from your own tailnet devices and drops any copy a
+# client sends; Funnel (the public internet) never has it. The full camera feeds only answer when it matches.
+TAILSCALE_LOGIN = os.environ.get("DAYANPI_TAILSCALE_LOGIN", "").strip()
+TAILSCALE_HEADER = "Tailscale-User-Login"
+
+READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+PUBLIC_PAGES = {"/login", "/api/health"}
+PUBLIC_WRITES = {"/api/login", "/api/join", "/api/logout"}
+JOIN_PAGE = re.compile(r"/join/[A-Za-z0-9_-]{1,64}")
+CONTENT_LENGTH = re.compile(r"[0-9]{1,9}")
+# A join link, in a path or inside a query (a stray "/" on the link turns it into /login?next=%2Fjoin%2F...).
+JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
+# Members can read the owner's data but not change it. These writes are their own account things; every
+# other write is the owner's, so a new write route stays owner-only until it's added here.
+MEMBER_WRITES = re.compile(r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+")
+OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
+INDEX_PAGE = STATIC_DIR / "index.html"
 
 sampler = collector.RateSampler("wlan0")
 stream = create_stream()
@@ -64,29 +90,23 @@ coach = TodoCoach(todos, read_bedtime(), None if LLM_MODEL is None else OllamaCl
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
-_stream_slots = threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
+# One pool per account, so a member's open tabs can't use up the owner's.
+_stream_slots: defaultdict[int, threading.BoundedSemaphore] = defaultdict(
+    lambda: threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
+)
 
 
-def _authorized(request: Request) -> bool:
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Basic "):
-        return False
-    try:
-        decoded = base64.b64decode(header[6:]).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return False
-    username, sep, password = decoded.partition(":")
-    if not sep:
-        return False
-    user_ok = secrets.compare_digest(
-        username.encode("utf-8"),
-        AUTH_USER.encode("utf-8"),
-    )
-    pass_ok = secrets.compare_digest(
-        password.encode("utf-8"),
-        AUTH_PASSWORD.encode("utf-8"),
-    )
-    return user_ok and pass_ok
+class InviteCodeFilter(logging.Filter):
+    """uvicorn's access log prints every path with its query, and a join link carries a live invite code."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) > 2 and isinstance(args[2], str):
+            record.args = args[:2] + (JOIN_LINK.sub(r"\1join\2…", args[2]),) + args[3:]
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(InviteCodeFilter())
 
 
 def stamp_age(event: dict | None, now: float) -> dict | None:
@@ -108,6 +128,35 @@ def build_focus_status() -> dict:
     status["todos"] = todos.snapshot(now)
     status["mac_tracking"] = mac_tracking.enabled
     return status
+
+
+def find_camera_access(request: Request) -> str:
+    """"open" when this request may have the full feeds: the owner's session, and with DAYANPI_TAILSCALE_LOGIN
+    set, from the owner's own Tailscale devices. Otherwise why not: "owner_only" or "tailscale_only"."""
+    viewer = auth_routes.read_viewer(request)
+    if viewer.user.role != "owner" or viewer.session is None:
+        access = "owner_only"
+    elif TAILSCALE_LOGIN and request.headers.getlist(TAILSCALE_HEADER) != [TAILSCALE_LOGIN]:
+        access = "tailscale_only"
+    else:
+        access = "open"
+    return access
+
+
+def shape_focus(focus: dict, access: str) -> dict:
+    """One viewer's copy of the focus status. The boxes come off the camera, so they go wherever the feed can't."""
+    shaped = {**focus, "camera_access": access}
+    if access != "open":
+        shaped["overlay"] = None
+        shaped["side_overlay"] = None
+    return shaped
+
+
+def shape_snapshot(snapshot: dict, request: Request) -> dict:
+    """The owner gets the Pi's numbers too; a member only the focus status."""
+    focus = shape_focus(snapshot["focus"], find_camera_access(request))
+    shaped = {**snapshot, "focus": focus} if auth_routes.read_viewer(request).user.role == "owner" else {"focus": focus}
+    return shaped
 
 
 def handle_focus_update(update: FocusUpdate, now: float) -> None:
@@ -199,6 +248,12 @@ async def lifespan(app: FastAPI):
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
             "(e.g. via EnvironmentFile=/etc/dayanpi.env)"
         )
+    if auth_routes.accounts.seed_owner(AUTH_USER, AUTH_PASSWORD, time.time()):
+        logger.info("made the owner account from DAYANPI_USER and DAYANPI_PASSWORD")
+    if TAILSCALE_LOGIN:
+        logger.info("camera locked to Tailscale login %s", TAILSCALE_LOGIN)
+    else:
+        logger.warning("camera not locked to Tailscale, don't turn on Funnel")
     sampler.sample()
     if not mac_tracking.enabled:
         tracker.set_mac_tracking(False, time.time())
@@ -239,30 +294,124 @@ app = FastAPI(
 )
 
 
-@app.middleware("http")
-async def basic_auth_middleware(request: Request, call_next):
-    # Covers API routes and StaticFiles — app dependencies don't apply to mounts.
-    if not _authorized(request):
-        response = Response(
-            content="Unauthorized",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            headers={"WWW-Authenticate": 'Basic realm="dayanpi"'},
-            media_type="text/plain",
-        )
+class WebSocketGate:
+    """Closes every WebSocket handshake. The session middleware only sees HTTP, so one would reach the routes
+    unchecked, and StaticFiles asserts on it: a 500 and a traceback in the journal per stranger's try."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "websocket":
+            await WebSocketClose(code=1008)(scope, receive, send)
+        else:
+            await self.inner(scope, receive, send)
+
+
+app.add_middleware(WebSocketGate)
+
+
+@app.exception_handler(RequestValidationError)
+async def refuse_invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+    """Where and what was wrong, never the value sent."""
+    # FastAPI's own 422 repeats each bad value, a password too, and can't encode a lone surrogate or NaN: that
+    # 422 turns into a 500 whose traceback writes the value into the journal.
+    problems = [{"loc": problem["loc"], "msg": problem["msg"], "type": problem["type"]} for problem in error.errors()]
+    response = JSONResponse({"detail": problems}, status_code=422)
+    return response
+
+
+app.include_router(auth_routes.router)
+
+
+def read_media_type(request: Request) -> str:
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    return media_type
+
+
+def is_body_small(request: Request) -> bool:
+    """uvicorn ends a body at its Content-Length, so a write must send one under the cap. A chunked body has
+    none and could run on for as long as the sender likes."""
+    length = request.headers.get("content-length", "")
+    small = "transfer-encoding" not in request.headers and CONTENT_LENGTH.fullmatch(length) is not None and int(length) <= MAX_BODY_BYTES
+    return small
+
+
+def is_public(method: str, path: str) -> bool:
+    """The sign-in and join pages, what they load, and the routes they call."""
+    if method in ("GET", "HEAD"):
+        is_asset = path.startswith("/assets/") and ".." not in path and "\\" not in path
+        public = path in PUBLIC_PAGES or JOIN_PAGE.fullmatch(path) is not None or is_asset
     else:
+        public = method == "POST" and path in PUBLIC_WRITES
+    return public
+
+
+def is_member_allowed(method: str, path: str) -> bool:
+    allowed = MEMBER_WRITES.fullmatch(f"{method} {path}") is not None if method not in READ_METHODS else path not in OWNER_READS
+    return allowed
+
+
+def refuse_stranger(request: Request, path: str) -> Response:
+    """No sign-in: the API, the feeds and a Mac token used anywhere but /api/mac/ get a 401, a page the sign-in page."""
+    is_page = request.method in ("GET", "HEAD") and auth_routes.read_bearer(request) is None
+    if is_page and not path.startswith(("/api/", "/video")):
+        query = request.scope["query_string"].decode("latin-1")
+        response = RedirectResponse("/login?next=" + quote(path + (f"?{query}" if query else ""), safe=""), status_code=303)
+    else:
+        response = JSONResponse({"detail": "sign in first"}, status_code=status.HTTP_401_UNAUTHORIZED)
+    return response
+
+
+async def guard_request(request: Request, call_next) -> Response:
+    # scope["path"] is what the router matches; request.url.path re-splits it, so a %3F could make the two differ.
+    path = request.scope["path"]
+    now = time.time()
+    if request.method not in READ_METHODS and read_media_type(request) != "application/json":
+        # A form or a text/plain post from another site can't send application/json without a CORS preflight.
+        response = JSONResponse({"detail": "send JSON"}, status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+    elif request.method not in READ_METHODS and not is_body_small(request):
+        response = JSONResponse({"detail": "too big"}, status_code=status.HTTP_413_CONTENT_TOO_LARGE)
+    elif is_public(request.method, path):
         response = await call_next(request)
-    # The browser reuses the saved login inside frames, so another page could frame the dashboard.
+    elif (viewer := auth_routes.find_viewer(request, now)) is None:
+        response = refuse_stranger(request, path)
+    elif viewer.user.role != "owner" and not is_member_allowed(request.method, path):
+        response = JSONResponse({"detail": "only the owner can do that"}, status_code=status.HTTP_403_FORBIDDEN)
+    else:
+        request.state.viewer = viewer
+        response = await call_next(request)
+        session = viewer.session
+        if session is not None and now - session.extended_at > SESSION_REFRESH_S:
+            auth_routes.accounts.extend_session(session.token_hash, now)
+            auth_routes.set_session_cookie(response, request.cookies[auth_routes.SESSION_COOKIE])
+    return response
+
+
+@app.middleware("http")
+async def session_middleware(request: Request, call_next):
+    # Covers API routes and StaticFiles — app dependencies don't apply to mounts.
+    response = await guard_request(request, call_next)
+    # A signed-in browser sends its cookie inside frames too, so another page could frame the dashboard.
     response.headers["X-Frame-Options"] = "DENY"
+    # The /join/<code> page must not hand its code to anything it loads or links to.
+    response.headers["Referrer-Policy"] = "no-referrer"
     # Without it a browser can keep last week's focus.js against today's index.html after a git pull.
     response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
 
-def frame_generator(camera: CameraStream) -> Iterator[bytes]:
+def frame_generator(camera: CameraStream, token: str) -> Iterator[bytes]:
+    """Ends once the viewer's session is gone, like the stats stream: signed out, or ended by a password change."""
     last_id = -1
     consecutive_timeouts = 0
+    checked_at = time.monotonic()
 
     while True:
+        if time.monotonic() - checked_at >= FEED_SESSION_CHECK_S:
+            if auth_routes.accounts.find_session(token, time.time()) is None:
+                return
+            checked_at = time.monotonic()
         result = camera.frame_after(last_id, timeout=FRAME_TIMEOUT_S)
         if result is None:
             consecutive_timeouts += 1
@@ -281,15 +430,20 @@ def frame_generator(camera: CameraStream) -> Iterator[bytes]:
 
 
 async def event_stream(request: Request) -> AsyncIterator[bytes]:
+    """Each viewer gets their own copy of the shared snapshot, and the stream ends once their session is gone."""
+    token = request.cookies.get(auth_routes.SESSION_COOKIE, "")
     try:
         yield b"retry: 5000\n\n"
         while True:
             if await request.is_disconnected():
                 break
+            # Signed out, or the account removed: no more live data from this second on.
+            if auth_routes.accounts.find_session(token, time.time()) is None:
+                break
 
             snapshot = latest_snapshot
             if snapshot is not None:
-                yield f"data: {json.dumps(snapshot)}\n\n".encode("utf-8")
+                yield f"data: {json.dumps(shape_snapshot(snapshot, request))}\n\n".encode("utf-8")
             else:
                 yield b": ping\n\n"
 
@@ -299,8 +453,9 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 
 
 @app.get("/api/stats")
-def stats():
-    return latest_snapshot if latest_snapshot is not None else {}
+def stats(request: Request):
+    """Owner only (OWNER_READS)."""
+    return shape_snapshot(latest_snapshot, request) if latest_snapshot is not None else {}
 
 
 @app.get("/api/health")
@@ -309,8 +464,8 @@ def health():
 
 
 @app.get("/api/focus")
-def focus_now():
-    status = build_focus_status()
+def focus_now(request: Request):
+    status = shape_focus(build_focus_status(), find_camera_access(request))
     status["segments"] = tracker.segments()
     return status
 
@@ -450,7 +605,8 @@ class SlotResponse(StreamingResponse):
 
 @app.get("/api/stream")
 async def api_stream(request: Request):
-    if not _stream_slots.acquire(blocking=False):
+    slots = _stream_slots[auth_routes.read_viewer(request).user.id]
+    if not slots.acquire(blocking=False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Too many stream connections",
@@ -458,7 +614,7 @@ async def api_stream(request: Request):
 
     return SlotResponse(
         event_stream(request),
-        _stream_slots,
+        slots,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -468,7 +624,7 @@ async def api_stream(request: Request):
     )
 
 
-def stream_video(camera: CameraStream, slots: threading.BoundedSemaphore) -> StreamingResponse:
+def stream_video(camera: CameraStream, slots: threading.BoundedSemaphore, request: Request) -> StreamingResponse:
     if not slots.acquire(blocking=False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -476,23 +632,39 @@ def stream_video(camera: CameraStream, slots: threading.BoundedSemaphore) -> Str
         )
 
     response = SlotResponse(
-        frame_generator(camera),
+        frame_generator(camera, request.cookies.get(auth_routes.SESSION_COOKIE, "")),
         slots,
         media_type=f"multipart/x-mixed-replace; boundary={FRAME_BOUNDARY}",
     )
     return response
 
 
+def require_camera(request: Request) -> None:
+    """The same plain 404 as a route that doesn't exist, for a member, a stranger's header or none at all."""
+    if find_camera_access(request) != "open":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
 @app.get("/video")
-def video():
-    return stream_video(stream, _video_slots)
+def video(request: Request):
+    require_camera(request)
+    return stream_video(stream, _video_slots, request)
 
 
 @app.get("/video/side")
-def side_video():
+def side_video(request: Request):
+    require_camera(request)
     if side_stream is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No side camera")
-    return stream_video(side_stream, _side_video_slots)
+    return stream_video(side_stream, _side_video_slots, request)
+
+
+@app.get("/login")
+@app.get("/join/{code}")
+@app.get("/settings")
+def page():
+    """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""
+    return FileResponse(INDEX_PAGE)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

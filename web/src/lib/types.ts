@@ -1,6 +1,9 @@
 export type FocusState = "working" | "phone" | "away" | "unknown";
 export type Level = "nominal" | "elevated" | "critical";
 export type Connection = "connected" | "reconnecting" | "disconnected";
+// "open" (or missing, from an older Pi): the feeds work. Otherwise /video answers 404 for this viewer.
+export type CameraAccess = "open" | "tailscale_only" | "owner_only";
+export type RecordId = number | string;
 
 export interface Segment {
   state: FocusState;
@@ -63,6 +66,7 @@ export interface FocusStatus {
   last_check: CheckSummary | null;
   enabled: boolean;
   side_camera: boolean;
+  camera_access?: CameraAccess;
   overlay: Overlay | null;
   side_overlay: Overlay | null;
   voice: { enabled: boolean; backend: string; problem: string | null } | null;
@@ -78,14 +82,46 @@ export interface Throttle {
   has_throttling_occured: boolean;
 }
 
-export interface Snapshot {
+export interface PiStats {
   temperature_celsius: number;
   uptime_seconds: number;
   memory: { total_mb: number; available_mb: number; percent_used: number };
   disk: { percent_used: number; free_gb: number };
   throttle: Throttle;
   rates: { cpu_percent: number; core_percents?: number[]; rx_kbps: number; tx_kbps: number } | null;
+}
+
+// The owner's stream carries the Pi's numbers; a member's carries only "focus".
+export interface Snapshot extends Partial<PiStats> {
   focus?: FocusStatus;
+}
+
+export interface User {
+  id: RecordId;
+  username: string;
+  display_name: string;
+  role: "owner" | "member";
+}
+
+export interface ApiToken {
+  id: RecordId;
+  name: string;
+  created_at: number;
+  last_used_at: number | null;
+}
+
+export interface Invite {
+  id: RecordId;
+  created_at: number;
+  expires_at: number;
+}
+
+export interface Account {
+  id: RecordId;
+  username: string;
+  display_name: string;
+  role: "owner" | "member";
+  created_at: number;
 }
 
 // The numbers in a day page's frontmatter; a page edited by hand may have dropped some.

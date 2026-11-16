@@ -16,9 +16,10 @@ interface TodoCardProps {
   todos: Todos | undefined;
   known: Segment[];
   now: number;
+  readOnly?: boolean; // a member: the list is the owner's
 }
 
-export function TodoCard({ todos, known, now }: TodoCardProps) {
+export function TodoCard({ todos, known, now, readOnly = false }: TodoCardProps) {
   const [newText, setNewText] = useState("");
   const [reply, setReply] = useState<{ todos: Todos; until: number } | null>(null);
   const shown = reply != null && now < reply.until ? reply.todos : (todos ?? NO_TODOS);
@@ -48,20 +49,22 @@ export function TodoCard({ todos, known, now }: TodoCardProps) {
           <span className="mono muted small">{shown.open.length > 0 ? `${shown.open.length} open` : ""}</span>
         </div>
       </div>
-      <form className="flex gap-2" onSubmit={addTodo}>
-        <Input
-          value={newText}
-          onChange={(event) => setNewText(event.target.value)}
-          maxLength={TODO_TEXT_MAX}
-          placeholder="Add a to-do"
-          aria-label="New to-do"
-          autoComplete="off"
-          className="h-11 flex-1 rounded-full bg-secondary px-4"
-        />
-        <Button type="submit" variant="outline" className="h-11 rounded-full border-input bg-transparent px-5 font-semibold">
-          Add
-        </Button>
-      </form>
+      {!readOnly && (
+        <form className="flex gap-2" onSubmit={addTodo}>
+          <Input
+            value={newText}
+            onChange={(event) => setNewText(event.target.value)}
+            maxLength={TODO_TEXT_MAX}
+            placeholder="Add a to-do"
+            aria-label="New to-do"
+            autoComplete="off"
+            className="h-11 flex-1 rounded-full bg-secondary px-4"
+          />
+          <Button type="submit" variant="outline" className="h-11 rounded-full border-input bg-transparent px-5 font-semibold">
+            Add
+          </Button>
+        </form>
+      )}
       <ul aria-label="To-do" className="mt-1.5 flex flex-col">
         {shown.open.map((item) => (
           <TodoRow
@@ -69,6 +72,7 @@ export function TodoCard({ todos, known, now }: TodoCardProps) {
             item={item}
             done={false}
             current={item.id === shown.current}
+            readOnly={readOnly}
             onChange={(change) => changeTodo(item.id, change)}
             onDelete={() => deleteTodo(item.id)}
           />
@@ -85,6 +89,7 @@ export function TodoCard({ todos, known, now }: TodoCardProps) {
             item={item}
             done
             current={false}
+            readOnly={readOnly}
             onChange={(change) => changeTodo(item.id, change)}
             onDelete={() => deleteTodo(item.id)}
           />

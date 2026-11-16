@@ -1,6 +1,7 @@
-import { Moon, Sun } from "lucide-react";
+import { AccountMenu } from "@/components/header/AccountMenu";
 import { riseDelay } from "@/components/shared/rise";
-import type { Connection } from "@/lib/types";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import type { Connection, User } from "@/lib/types";
 
 const STATUS_LABELS: Record<Connection, string> = {
   connected: "Live",
@@ -11,11 +12,11 @@ const STATUS_LABELS: Record<Connection, string> = {
 interface HeaderProps {
   connection: Connection;
   undervoltage: boolean;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
+  user: User | null;
+  piShown: boolean;
 }
 
-export function Header({ connection, undervoltage, theme, onToggleTheme }: HeaderProps) {
+export function Header({ connection, undervoltage, user, piShown }: HeaderProps) {
   return (
     <header className="topbar rise" style={riseDelay(0)}>
       <div className="brand">
@@ -25,9 +26,9 @@ export function Header({ connection, undervoltage, theme, onToggleTheme }: Heade
       <nav className="sections" aria-label="Sections">
         <a href="#focus-card">Focus</a>
         <a href="#camera">Camera</a>
-        <a href="#pi">Pi</a>
+        {piShown && <a href="#pi">Pi</a>}
       </nav>
-      <div className="topbar-end">
+      <div className="topbar-end flex-wrap justify-end">
         <span id="power-alert" className="pill pill-hot" hidden={!undervoltage}>
           Undervoltage
         </span>
@@ -35,16 +36,8 @@ export function Header({ connection, undervoltage, theme, onToggleTheme }: Heade
           <span className="status-dot" aria-hidden="true"></span>
           <span className="status-label">{STATUS_LABELS[connection]}</span>
         </p>
-        <button
-          type="button"
-          id="theme-toggle"
-          className="icon-button"
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          onClick={onToggleTheme}
-        >
-          <Sun className="icon-sun" size={18} strokeWidth={1.8} aria-hidden="true" />
-          <Moon className="icon-moon" size={18} strokeWidth={1.8} aria-hidden="true" />
-        </button>
+        {user != null && <AccountMenu user={user} />}
+        <ThemeToggle />
       </div>
     </header>
   );
