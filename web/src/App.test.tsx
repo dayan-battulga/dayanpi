@@ -86,3 +86,13 @@ it("shows the flip button only with a side camera, and only one feed at a time",
   expect(side).toBeVisible();
   expect(screen.getByRole("button", { name: "Show the front camera" })).toBeInTheDocument();
 });
+
+it("shows the last gesture or hand sign for a few seconds", () => {
+  render(<App />);
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.6 } })));
+  expect(screen.getByRole("status")).toHaveTextContent("Peace sign: reading your to-dos");
+
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 4.5 } })));
+
+  expect(screen.getByRole("status")).toBeEmptyDOMElement();
+});

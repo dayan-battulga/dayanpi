@@ -10,6 +10,7 @@ from dayanpi.focus import worker as focus_worker
 from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
 from dayanpi.focus.tracker import FocusTracker
 from dayanpi.focus.worker import FocusWorker
+from dayanpi.vision.hands import Hand
 
 NOON = 1_800_000_000.0
 
@@ -167,7 +168,7 @@ def test_a_held_gesture_reaches_the_hook_once():
     for second in range(1, 5):
         worker.run_once(NOON + second)
     assert fired == [("next_page", NOON + 2)]
-    assert worker.last_gesture == "next_page"
+    assert worker.last_gesture == {"name": "next_page", "at": NOON + 2}
 
 
 def test_hands_down_means_no_gesture():
@@ -418,3 +419,76 @@ def test_one_camera_failing_leaves_the_other_working_and_the_log_quiet(caplog, f
     assert getattr(worker, healthy).failures == 0
     assert caplog.text.count("focus check failed") == 1
     assert f"on the {failing} camera" in caplog.text
+
+
+# ----- hand signs -----
+
+
+def make_peace_hand() -> Hand:
+    """Only the middle joints and tips matter: index and middle reach past theirs, ring and pinky curl back."""
+    joints = np.zeros((21, 3))
+    for middle_joint, tip, tip_y in ((6, 8, -175), (10, 12, -175), (14, 16, -70), (18, 20, -70)):
+        joints[middle_joint, 1] = -120
+        joints[tip, 1] = tip_y
+    joints[:, :2] += (320, 300)
+    hand = Hand(confidence=0.95, joints=joints)
+    return hand
+
+
+class FakeHandScanner:
+    """Notes how bright each frame it got was, so a test can tell the front camera from the side."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+        self.seen: list[float] = []
+
+    def scan(self, image: np.ndarray) -> list[Hand]:
+        self.seen.append(float(image.mean()))
+        if self.fail:
+            raise RuntimeError("hand model exploded")
+        return [make_peace_hand()]
+
+
+def test_a_held_hand_sign_reaches_the_hook_once_and_only_the_front_camera_is_read():
+    hand_scanner = FakeHandScanner()
+    fired = []
+    worker = FocusWorker(
+        FakeStream(fake_jpeg()),
+        TwoCameraScanner(),
+        FocusTracker(started_at=NOON),
+        on_gesture=lambda name, now: fired.append((name, now)),
+        side_stream=FakeStream(side_jpeg()),
+        hand_scanner=hand_scanner,
+    )
+    for second in range(1, 6):
+        worker.run_once(NOON + second)
+    assert fired == [("peace", NOON + 2)]
+    assert worker.last_gesture == {"name": "peace", "at": NOON + 2}
+    assert hand_scanner.seen == pytest.approx([FRONT_BRIGHTNESS] * 5, abs=2)
+    front_hands = [(box["label"], box["confidence"]) for box in worker.last_overlay["boxes"] if box["kind"] == "hand"]
+    assert front_hands == [("peace", 0.95)], "the camera peek shows the hand and the sign it makes"
+    assert all(box["kind"] != "hand" for box in worker.last_side_overlay["boxes"])
+
+
+def test_a_broken_hand_model_costs_the_signs_not_the_focus_check(caplog):
+    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(), FocusTracker(started_at=NOON), hand_scanner=FakeHandScanner(fail=True))
+    with caplog.at_level(logging.ERROR):
+        for second in range(1, 5):
+            update = worker.run_once(NOON + second)
+    assert update.state == "working"
+    assert worker.front.failures == 0
+    assert caplog.text.count("hand check failed") == 1
+
+
+def test_a_missing_hand_model_turns_signs_off_with_one_log_line(monkeypatch, tmp_path, caplog):
+    from dayanpi.vision import hands
+
+    monkeypatch.setattr(hands, "PALM_MODEL_PATH", tmp_path / "palm.onnx")
+    monkeypatch.setattr(hands, "HAND_MODEL_PATH", tmp_path / "hand.onnx")
+    monkeypatch.setattr(hands, "HandScanner", lambda: "hand-scanner")
+    (tmp_path / "palm.onnx").write_bytes(b"x")
+    with caplog.at_level(logging.INFO, logger="dayanpi.focus.worker"):
+        assert focus_worker.build_hand_scanner() is None
+    assert [record.getMessage() for record in caplog.records] == ["no hand models (hand.onnx): hand signs are off"]
+    (tmp_path / "hand.onnx").write_bytes(b"x")
+    assert focus_worker.build_hand_scanner() == "hand-scanner"

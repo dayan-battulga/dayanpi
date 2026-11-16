@@ -30,7 +30,7 @@ It's a personal project, so it's built for one person (me) on my own devices, no
         └─ dayanpi/ (the Python package)
              ├─ app.py      → login, routes, startup and shutdown
              ├─ hardware/   → collector (stats), camera (one thread owns the webcam), voice
-             ├─ vision/     → detector (people, phones, faces), pose, gestures
+             ├─ vision/     → detector (people, phones, faces), pose, hands, gestures
              ├─ focus/      → the focus state machine, its worker thread, the log tools
              ├─ sign/       → the LED sign renderer, font and icons, page controller
              └─ static/     → the dashboard, built from web/ (React); never edited by hand
@@ -89,13 +89,13 @@ The Python code is one package, `dayanpi/`, split by what it talks to. Everythin
 | `dayanpi/app.py` | The FastAPI app: login, routes, startup and shutdown |
 | `dayanpi/paths.py` | Where `static/`, `models/`, `data/` and `focus_check/` live, so no module counts parent folders |
 | `dayanpi/hardware/` | Things attached to the Pi: `collector.py` (stats), `camera.py` (one thread owns the webcam, many viewers), `voice.py` (the USB speaker) |
-| `dayanpi/vision/` | The models: `detector.py` (people, phones and faces), `pose.py` (body points), `gestures.py` (arm gestures that flip the sign and toggle work blocks) |
+| `dayanpi/vision/` | The models: `detector.py` (people, phones and faces), `pose.py` (body points), `hands.py` (hand joints), `gestures.py` (arm gestures that flip the sign and toggle work blocks, and hand signs like the peace sign that reads your to-dos) |
 | `dayanpi/focus/` | `tracker.py` (readings → focused / phone / away, today's totals, the log), `worker.py` (the thread that scans a frame about once a second), `stats.py` (the day report), `check.py` (the guided detector check), `todos.py` (the to-do list and its time) |
 | `dayanpi/sign/` | The LED sign: `renderer.py` (pages drawn with numpy), `glyphs.py` (the 5x7 font and 16x16 icons), `controller.py` (what shows when) |
 | `dayanpi/utils/` | `threads.py`: the start/tick/stop base the worker and the sign share |
 | `dayanpi/static/` | The built dashboard (`npm run build` in `web/` writes it); committed so the Pi needs no Node |
 | `web/` | The dashboard's source: React + TypeScript + Vite + Tailwind + shadcn/ui, one folder per card in `src/components/`. See "Working on the dashboard" in the manual |
-| `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), and YOLO11 nano pose once it's exported |
+| `models/` | The ONNX models: YOLO26 nano (objects), YuNet (faces), MediaPipe palm and hand pose (hand signs), and YOLO11 nano pose once it's exported |
 | `mac_helper/` | The Mac-side helper that reports the front app to the Pi (see its README) |
 | `tests/` | Mac tests (pytest) |
 | `deploy/` | `dayanpi.service` (the systemd unit) and `dayanpi.env.example` (template for the login file) |

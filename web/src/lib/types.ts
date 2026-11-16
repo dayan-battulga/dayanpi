@@ -67,6 +67,7 @@ export interface FocusStatus {
   voice: { enabled: boolean; backend: string; problem: string | null } | null;
   sign?: { mode: string; page: string | null; version: number | null };
   todos?: Todos;
+  gesture?: { name: string; age_s: number } | null; // the last arm gesture or hand sign that fired
 }
 
 export interface Throttle {

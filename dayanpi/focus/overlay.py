@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from dayanpi.focus.tracker import PERSON_MIN, PHONE_MIN
 from dayanpi.vision.detector import Detection, FrameReading
+from dayanpi.vision.gestures import read_sign
+from dayanpi.vision.hands import HAND_MIN_CONFIDENCE
 
 MAX_BOXES_PER_KIND = 3
 
@@ -44,10 +46,18 @@ def place_box(kind: str, detection: Detection, size: FrameSize) -> dict:
 
 
 def build_overlay(reading: FrameReading, size: FrameSize, at: float) -> dict:
-    """The strongest few boxes of each kind that clear the focus rules' cutoffs."""
+    """The strongest few boxes of each kind that clear the focus rules' cutoffs.
+
+    Hands are labeled with the sign they make, or just "hand".
+    """
+    hands = [
+        Detection(label=read_sign([hand]) or "hand", confidence=hand.confidence, box=hand.find_box())
+        for hand in reading.hands
+    ]
     groups = (
         ("person", reading.people, PERSON_MIN),
         ("phone", reading.phones, PHONE_MIN),
+        ("hand", hands, HAND_MIN_CONFIDENCE),
     )
     boxes = []
     for kind, detections, cutoff in groups:

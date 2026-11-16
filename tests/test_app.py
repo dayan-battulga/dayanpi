@@ -29,6 +29,7 @@ def mac_friendly(monkeypatch):
     monkeypatch.setattr(collector, "snapshot", lambda sampler: {"fake": True})
     monkeypatch.setattr(camera, "RECONNECT_SLEEP_S", 0.01)
     monkeypatch.setattr(focus_worker, "build_scanner", lambda: None)
+    monkeypatch.setattr(focus_worker, "build_hand_scanner", lambda: None)
 
 
 def test_dashboard_runs_without_camera(caplog):
@@ -133,6 +134,49 @@ def test_gesture_toggles_the_block_and_speaks(monkeypatch):
         app.handle_gesture("toggle_block", time.time())
         assert client.get("/api/focus", auth=AUTH).json()["block"]["active"] is False
     assert said == ["Block started.", "Block stopped."]
+
+
+def test_every_hand_sign_does_something():
+    from dayanpi.vision.gestures import HAND_SIGNS
+
+    assert set(HAND_SIGNS) == set(app.SIGN_ACTIONS)
+
+
+def test_peace_reads_the_open_todos_out_loud_and_is_logged(monkeypatch, tmp_path):
+    from dayanpi.focus.todos import TodoList
+    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+
+    said = []
+    log = FocusLog(tmp_path / "focus_log")
+    todos = TodoList(tmp_path / "todos.json", log)
+    monkeypatch.setattr(app, "todos", todos)
+    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    now = time.time()
+    todos.add("finish the report", now)
+    laundry = todos.add("do laundry", now)["id"]
+    todos.add("reply to emails", now)
+    todos.change(laundry, now, done=True)
+
+    app.handle_gesture("peace", now)
+
+    assert said == ["You have 2 things to do: finish the report and reply to emails."]
+    gestures = [line["name"] for line in log.read_day(format_day(now)) if line["event"] == "gesture"]
+    assert gestures == ["peace"]
+
+
+def test_focus_status_carries_the_last_gesture_and_its_age(monkeypatch):
+    class FakeScanner:
+        def scan(self, image):
+            raise AssertionError("no frames here")
+
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
+    with TestClient(app.app) as client:
+        assert client.get("/api/focus", auth=AUTH).json()["gesture"] is None
+        app.worker.last_gesture = {"name": "peace", "at": time.time() - 2.0}
+        gesture = client.get("/api/focus", auth=AUTH).json()["gesture"]
+    assert gesture["name"] == "peace"
+    assert 1.5 <= gesture["age_s"] <= 3.0
 
 
 def test_todo_routes_add_edit_check_current_and_delete():

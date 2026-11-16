@@ -80,6 +80,26 @@ cd ~/Desktop/code/projects/site-page
 
 That's 84 numbers (a box, then a score for each of the 80 COCO classes) for each of the 6300 spots the model checks. YOLO26 can also export "NMS-free" (`nms=False`, end-to-end), which gives `(1, 300, 6)` instead. The detector can't read that one, so stick with the plain export above.
 
+The two hand models (for the [hand signs](#hand-signs)) come ready-made, no conversion:
+
+- `models/palm_detection_mediapipe_2023feb.onnx` is the palm detector from OpenCV's model zoo (huggingface.co/opencv/palm_detection_mediapipe, Apache 2.0), converted from Google's MediaPipe Hands.
+- `models/handpose_estimation_mediapipe_2023feb.onnx` is the hand pose model from the same zoo (huggingface.co/opencv/handpose_estimation_mediapipe, Apache 2.0), also from MediaPipe Hands.
+
+Both give the same output on OpenCV 4.12 and 5.0. To check after swapping one, this should print `[(1, 2016, 18), (1, 2016, 1)]` and then `[(1, 63), (1, 1), (1, 1), (1, 63)]`:
+
+```bash
+cd ~/Desktop/code/projects/site-page
+.venv/bin/python -c "
+import cv2, numpy as np
+for name, size in (('palm_detection_mediapipe_2023feb', 192), ('handpose_estimation_mediapipe_2023feb', 224)):
+    net = cv2.dnn.readNetFromONNX(f'models/{name}.onnx')
+    net.setInput(np.zeros((1, size, size, 3), np.float32))
+    print([out.shape for out in net.forward(net.getUnconnectedOutLayersNames())])
+"
+```
+
+The palm model gives 2016 possible palms (a box plus 7 points on the palm, then a score for each). The hand model gives 21 joints as x, y, depth, then how sure it is there's a hand, which hand it is, and the joints again in 3D. The app only uses the first two.
+
 ## Steps 2 to 4: the tracker runs inside the site
 
 Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the Focus card says "The detector isn't running on the Pi".
@@ -266,3 +286,42 @@ All of these are at the top of `dayanpi/vision/gestures.py`. Change them on the 
 | `MIN_KEYPOINT_CONFIDENCE` | `0.5` | How sure the model has to be about a shoulder or wrist before it counts |
 | `MIN_PERSON_CONFIDENCE` | `0.5` | How sure it has to be that there's a person there at all |
 | `ALLOWED_MISSES` | `1` | How many bad checks in a row a hold survives |
+
+## Hand signs
+
+Hold up a peace sign ✌️ and the Pi reads your to-do list out loud: "You have 3 things to do: finish the report, reply to emails, and do laundry." Only open items count, it reads the first 5 and says how many more ("…, and 3 more"), and with nothing open it says "Your to-do list is empty." The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off. The arm gestures show one too.
+
+It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Same as everything else, it's the front camera only, about once a second. The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
+
+### Making the sign
+
+- **Peace** = index and middle fingers up, ring and pinky folded. The thumb doesn't matter.
+- A finger counts as **open** when its tip is farther from your wrist than its middle knuckle. That's distances, not directions, so a tilted hand still counts.
+- Hold it for about a second. Like the arm gestures, it fires once, and you have to drop it (two checks without the sign, so about two seconds) before it fires again. One check that misses your hand doesn't break a hold.
+- Hand signs and arm gestures hold separately, so a peace sign with your arm raised can do both.
+- Palm toward the camera, around chest or face height, works best.
+
+### Checking it on the Pi
+
+- **Peek** at the camera: every hand it finds gets a gray box, labeled `peace` while you're making the sign and `hand` otherwise. No box around your hand means the models aren't seeing it, so the sign can't fire.
+- The journal says whether the models loaded: `hand models found: hand signs are on`, or `no hand models (...): hand signs are off` if a file is missing. Missing files just turn signs off; everything else keeps working.
+- Each sign that fires writes `gesture: peace` to the journal and a `gesture` line with `"name": "peace"` to the focus log, same as the arm gestures.
+- The hand models add to each check. The camera card's "~N ms each" includes them, so you can see what they cost.
+
+```bash
+journalctl -u dayanpi -n 50 --no-pager | grep -iE "hand|gesture|would say"
+grep '"gesture"' data/focus_log/$(date +%F).jsonl
+```
+
+### Adding a sign
+
+Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (which fingers have to be open or folded; leave a finger out to ignore it), a hold time in `HOLD_SECONDS` in the same file, and what it does in `SIGN_ACTIONS` in `dayanpi/app.py`. Add a line for the page's note in `web/src/components/shared/GestureToast.tsx` if you want nicer text than the sign's name.
+
+### Tuning
+
+| Knob | Where | Default | What it does |
+| --- | --- | --- | --- |
+| `HAND_MIN_CONFIDENCE` | `vision/hands.py` | `0.8` | How sure the hand model has to be. Lower it if you see no hand box while your hand is clearly up. |
+| `PALM_MIN_CONFIDENCE` | `vision/hands.py` | `0.6` | How sure the palm finder has to be before the hand model even looks |
+| `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |
+| `SPOKEN_MAX` | `focus/todos.py` | `5` | How many to-dos it reads before "and N more" |

@@ -87,6 +87,7 @@ class FrameReading:
     faces: list[FaceReading]
     elapsed_ms: float
     poses: list = field(default_factory=list)  # pose.PoseDetection, only when the pose model runs
+    hands: list = field(default_factory=list)  # hands.Hand, front camera only, when the hand models run
     side: "FrameReading | None" = None  # the side camera's own reading, when this one was merged from two
 
 

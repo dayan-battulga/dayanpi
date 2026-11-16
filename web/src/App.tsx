@@ -2,6 +2,7 @@ import { CameraCard } from "@/components/camera/CameraCard";
 import { FocusCard } from "@/components/focus/FocusCard";
 import { Header } from "@/components/header/Header";
 import { PiSection } from "@/components/pi/PiSection";
+import { GestureToast } from "@/components/shared/GestureToast";
 import { SignCard } from "@/components/sign/SignCard";
 import { TodoCard } from "@/components/todo/TodoCard";
 import { useFocusSegments } from "@/hooks/useFocusSegments";
@@ -35,6 +36,7 @@ export function App() {
         <span>dayanpi · served from the Pi on your desk</span>
         <span>tailscale serve · private</span>
       </footer>
+      <GestureToast gesture={focus?.gesture} now={now} receivedAt={receivedAt} />
     </div>
   );
 }

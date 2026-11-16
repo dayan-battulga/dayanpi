@@ -20,7 +20,7 @@ from dayanpi.hardware import collector
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
-from dayanpi.focus.todos import TEXT_MAX, TodoList, find_todo_path
+from dayanpi.focus.todos import TEXT_MAX, TodoList, describe_todos, find_todo_path
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
@@ -85,9 +85,9 @@ def _authorized(request: Request) -> bool:
     return user_ok and pass_ok
 
 
-def stamp_overlay_age(overlay: dict | None, now: float) -> dict | None:
-    """The page hides boxes older than a few seconds, so it needs their age, not the Pi's clock."""
-    stamped = None if overlay is None else {**overlay, "age_s": round(now - overlay["at"], 1)}
+def stamp_age(event: dict | None, now: float) -> dict | None:
+    """The page hides boxes and toasts after a few seconds, so it needs their age, not the Pi's clock."""
+    stamped = None if event is None else {**event, "age_s": round(now - event["at"], 1)}
     return stamped
 
 
@@ -97,8 +97,9 @@ def build_focus_status() -> dict:
     status = tracker.status(now)
     status["enabled"] = worker is not None and worker.running
     status["side_camera"] = side_stream is not None
-    status["overlay"] = stamp_overlay_age(None if worker is None else worker.last_overlay, now)
-    status["side_overlay"] = stamp_overlay_age(None if worker is None else worker.last_side_overlay, now)
+    status["overlay"] = stamp_age(None if worker is None else worker.last_overlay, now)
+    status["side_overlay"] = stamp_age(None if worker is None else worker.last_side_overlay, now)
+    status["gesture"] = stamp_age(None if worker is None else worker.last_gesture, now)
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     status["todos"] = todos.snapshot(now)
     version = sign_preview.version if sign_controller is not None else None
@@ -133,14 +134,24 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
     todos.track(update.state == "working" and update.block_active, now)
 
 
+def say_todos(now: float) -> None:
+    voice.say(describe_todos([item["text"] for item in todos.snapshot(now)["open"]]))
+
+
+# What each hand sign does when it fires. Its finger rule lives in vision/gestures.py (HAND_SIGNS).
+SIGN_ACTIONS = {"peace": say_todos}
+
+
 def handle_gesture(name: str, now: float) -> None:
-    """Runs on the worker thread when a held gesture fires."""
+    """Runs on the worker thread when a held gesture or hand sign fires."""
     tracker.record_gesture(name, now)
     if name == "toggle_block":
         active = tracker.toggle_block(now, source="gesture")
         voice.say("Block started." if active else "Block stopped.")
     elif sign_controller is not None and name in ("next_page", "previous_page"):
         sign_controller.flip_page(1 if name == "next_page" else -1)
+    elif name in SIGN_ACTIONS:
+        SIGN_ACTIONS[name](now)
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -159,6 +170,7 @@ def start_focus_worker() -> FocusWorker | None:
             on_gesture=handle_gesture,
             wait_for_clock_first=True,
             side_stream=side_stream,
+            hand_scanner=focus_worker.build_hand_scanner(),
         )
         started.start()
         logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)

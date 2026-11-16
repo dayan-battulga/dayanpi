@@ -1,4 +1,4 @@
-"""Turns arm positions from the pose model into gestures for the LED sign.
+"""Turns arm positions from the pose model, and hand shapes from the hand model, into gestures.
 
 They're holds, not swipes: the detector only checks about once a second, which is
 too slow to catch a swipe.
@@ -6,21 +6,37 @@ too slow to catch a swipe.
 - next_page: right wrist up, left hand down, held 1 s.
 - previous_page: left wrist up, right hand down, held 1 s.
 - toggle_block: both wrists up, held 2 s. Starts or stops a work block.
+- peace: a hand with the index and middle fingers open and the ring and pinky closed, held 1 s.
 
 "Up" means the wrist is above its own shoulder by at least RAISE_MARGIN shoulder widths.
 Right and left are the person's own sides, not the image's.
+
+The arm gestures and the hand signs hold separately (one GestureTracker each), so a raised
+arm making a peace sign can fire both.
 """
 
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
+from dayanpi.vision.hands import Hand
 from dayanpi.vision.pose import LEFT_SHOULDER, LEFT_WRIST, RIGHT_SHOULDER, RIGHT_WRIST, Keypoint, PoseDetection
 
 NEXT_PAGE = "next_page"
 PREVIOUS_PAGE = "previous_page"
 TOGGLE_BLOCK = "toggle_block"
+PEACE = "peace"
 
-HOLD_SECONDS = {NEXT_PAGE: 1.0, PREVIOUS_PAGE: 1.0, TOGGLE_BLOCK: 2.0}
+HOLD_SECONDS = {NEXT_PAGE: 1.0, PREVIOUS_PAGE: 1.0, TOGGLE_BLOCK: 2.0, PEACE: 1.0}
+
+WRIST_JOINT = 0
+# Each finger's tip and middle joint, in the hand model's numbering. The thumb isn't read:
+# peace ignores it and no other sign needs it yet.
+FINGER_JOINTS = {"index": (8, 6), "middle": (12, 10), "ring": (16, 14), "pinky": (20, 18)}
+# One finger rule per sign: True = open, False = closed, a finger left out doesn't matter.
+# A new sign is a line here, a hold time above, and a line in app.SIGN_ACTIONS.
+HAND_SIGNS = {PEACE: {"index": True, "middle": True, "ring": False, "pinky": False}}
 RAISE_MARGIN = 0.3
 MIN_KEYPOINT_CONFIDENCE = 0.5
 # YOLO only learns keypoint confidence on boxes that match a real person, so on a weak box it's noise.
@@ -70,6 +86,28 @@ def read_gesture(pose: PoseDetection | None) -> str | None:
     return gesture
 
 
+def read_open_fingers(joints: np.ndarray) -> dict[str, bool]:
+    """A finger is open when its tip is farther from the wrist than its middle joint.
+
+    joints is one Hand's (21, 3). Distances, not directions, so a tilted hand reads the same.
+    """
+    wrist = joints[WRIST_JOINT]
+    open_fingers = {
+        finger: bool(np.linalg.norm(joints[tip] - wrist) > np.linalg.norm(joints[middle] - wrist))
+        for finger, (tip, middle) in FINGER_JOINTS.items()
+    }
+    return open_fingers
+
+
+def read_sign(hands: list[Hand]) -> str | None:
+    """The first sign any hand makes, or None. A hand makes a sign when every finger in its rule matches."""
+    sign = next(
+        (name for hand in hands for name, rule in HAND_SIGNS.items() if rule.items() <= read_open_fingers(hand.joints).items()),
+        None,
+    )
+    return sign
+
+
 class GestureTracker:
     """Feed it one pose per check (the main person, or None) and it says when a gesture fires.
 
@@ -92,7 +130,14 @@ class GestureTracker:
 
         now is the caller's clock in seconds, like time.monotonic().
         """
-        gesture = read_gesture(pose)
+        fired_gesture = self.hold(read_gesture(pose), now)
+        return fired_gesture
+
+    def hold(self, gesture: str | None, now: float) -> str | None:
+        """update() for a gesture read some other way, like read_sign() for the hand signs.
+
+        For signs, "hands down" means no hand making a sign.
+        """
         hold = self._hold
         fired_gesture = None
         if hold is None:

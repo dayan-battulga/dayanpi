@@ -14,12 +14,13 @@ from pathlib import Path
 
 from dayanpi.hardware.camera import CameraStream
 from dayanpi.vision import detector
+from dayanpi.vision import hands
 from dayanpi.vision import pose
 from dayanpi.vision.detector import DeskScanner, FrameReading, decode_jpeg
 from dayanpi.focus.merge import merge_readings
 from dayanpi.focus.overlay import FrameSize, build_overlay
 from dayanpi.focus.tracker import FocusTracker, FocusUpdate
-from dayanpi.vision.gestures import GestureTracker
+from dayanpi.vision.gestures import GestureTracker, read_sign
 from dayanpi.utils.threads import LoopThread
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,21 @@ def build_scanner() -> DeskScanner | None:
     return scanner
 
 
+def build_hand_scanner() -> hands.HandScanner | None:
+    """The hand models for the hand signs, or None (signs off) when a file is missing or won't load."""
+    scanner = None
+    missing = [path.name for path in (hands.PALM_MODEL_PATH, hands.HAND_MODEL_PATH) if not path.exists()]
+    if missing:
+        logger.info("no hand models (%s): hand signs are off", ", ".join(missing))
+    else:
+        try:
+            scanner = hands.HandScanner()
+            logger.info("hand models found: hand signs are on")
+        except Exception:
+            logger.exception("hand signs are off: the hand models failed to load")
+    return scanner
+
+
 def wait_for_clock(synced_path: Path = CLOCK_SYNCED_PATH, timeout_s: float = CLOCK_WAIT_S, poll_s: float = CLOCK_POLL_S) -> bool:
     """Waits for the network clock sync, up to timeout_s. Returns whether it happened.
 
@@ -97,20 +113,24 @@ class FocusWorker(LoopThread):
         on_gesture: GestureHook | None = None,
         wait_for_clock_first: bool = False,
         side_stream: CameraStream | None = None,
+        hand_scanner=None,
     ) -> None:
         super().__init__(name="focus-worker", interval_s=interval_s)
         self.front = CameraFeed("front", stream)
         self.side = None if side_stream is None else CameraFeed("side", side_stream)
         self._scanner = scanner
+        self._hands = hand_scanner
         self._tracker = tracker
         self._clock = clock
         self._on_update = on_update
         self._on_gesture = on_gesture
         self._wait_for_clock_first = wait_for_clock_first
         self.gestures = GestureTracker()
+        self.signs = GestureTracker()
+        self.hand_failures = 0
         self.checks = 0
         self.last_update: FocusUpdate | None = None
-        self.last_gesture: str | None = None
+        self.last_gesture: dict | None = None  # {"name", "at"} of the last arm gesture or hand sign that fired
         self.last_overlay: dict | None = None
         self.last_side_overlay: dict | None = None
 
@@ -128,7 +148,23 @@ class FocusWorker(LoopThread):
             if image is not None:
                 feed.frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
                 reading = self._scanner.scan(image)
+                if feed is self.front and self._hands is not None:
+                    started = time.perf_counter()
+                    reading.hands = self.find_hands(image)
+                    reading.elapsed_ms += (time.perf_counter() - started) * 1000
         return reading
+
+    def find_hands(self, image) -> list[hands.Hand]:
+        """The hand models on the front frame. A failure here costs the hand signs this check, never the focus check."""
+        found = []
+        try:
+            found = self._hands.scan(image)
+            self.hand_failures = 0
+        except Exception:
+            self.hand_failures += 1
+            if self.hand_failures == 1 or self.hand_failures % ERROR_LOG_EVERY == 0:
+                logger.exception("hand check failed (%s in a row)", self.hand_failures)
+        return found
 
     def read_feed(self, feed: CameraFeed) -> FrameReading | None:
         """read_frame, where a failure only costs this camera this check.
@@ -168,15 +204,16 @@ class FocusWorker(LoopThread):
 
     def track_gestures(self, reading: FrameReading | None, now: float) -> None:
         main_pose = None if reading is None else max(reading.poses, key=lambda found: found.confidence, default=None)
-        gesture = self.gestures.update(main_pose, now)
-        if gesture is not None:
-            self.last_gesture = gesture
-            logger.info("gesture: %s", gesture)
-            if self._on_gesture is not None:
-                try:
-                    self._on_gesture(gesture, now)
-                except Exception:
-                    logger.exception("gesture hook failed")
+        sign = None if reading is None else read_sign(reading.hands)
+        for gesture in (self.gestures.update(main_pose, now), self.signs.hold(sign, now)):
+            if gesture is not None:
+                self.last_gesture = {"name": gesture, "at": round(now, 3)}
+                logger.info("gesture: %s", gesture)
+                if self._on_gesture is not None:
+                    try:
+                        self._on_gesture(gesture, now)
+                    except Exception:
+                        logger.exception("gesture hook failed")
 
     def before_loop(self) -> None:
         if self._wait_for_clock_first:

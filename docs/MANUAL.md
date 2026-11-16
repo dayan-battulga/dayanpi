@@ -6,7 +6,7 @@ The app is password-protected and bound to **localhost only**. You reach it thro
 
 This manual covers setting up the Pi, shipping code, running the service, Tailscale, power, security and troubleshooting. Each add-on has its own guide next to it:
 
-- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, gestures
+- [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, gestures, hand signs
 - [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
 - [LED sign](led-sign.md): the 128x32 sign's pages, wiring and bring-up
 - [Voice](voice.md): callouts out loud through a USB speaker
@@ -33,7 +33,7 @@ Always use the **`main`** branch on both machines.
 | `/api/health` | Health check |
 | `/video` | MJPEG camera |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
-| `/api/focus` | Focus state, today's totals and timeline |
+| `/api/focus` | Focus state, today's totals, timeline, and the last gesture or hand sign (`gesture`) |
 | `/api/focus/block` | Start/stop a work block (POST) |
 | `/api/mac/app` | The Mac helper reports the front app (POST) |
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
