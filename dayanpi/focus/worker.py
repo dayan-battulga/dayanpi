@@ -3,7 +3,7 @@
 It reads frames from the app's camera streams (the one opener of each camera), so it never
 fights the video feed for the device. With a side camera, each check scans a frame from each
 camera and merges the two readings. Everything the detector finds goes into the tracker; the
-app's hooks get each FocusUpdate (speaker, sign) and each gesture.
+app's hooks get each FocusUpdate (callouts for the speaker, to-do time) and each gesture.
 """
 
 import logging

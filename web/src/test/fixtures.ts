@@ -31,7 +31,6 @@ export function makeFocus(changes: Partial<FocusStatus> = {}): FocusStatus {
     },
     side_overlay: null,
     voice: { enabled: false, backend: "off", problem: null },
-    sign: { mode: "preview", page: "now", version: 4 },
     todos: TODOS,
     ...changes,
   };

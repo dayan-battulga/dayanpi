@@ -4,7 +4,6 @@ import { FocusCard } from "@/components/focus/FocusCard";
 import { Header } from "@/components/header/Header";
 import { PiSection } from "@/components/pi/PiSection";
 import { GestureToast } from "@/components/shared/GestureToast";
-import { SignCard } from "@/components/sign/SignCard";
 import { TodoCard } from "@/components/todo/TodoCard";
 import { useFocusSegments } from "@/hooks/useFocusSegments";
 import { useNow } from "@/hooks/useNow";
@@ -32,7 +31,6 @@ export function App() {
         <TodoCard todos={focus?.todos} known={known} now={now} />
       </div>
       <CalendarCard todayFocusSeconds={focus?.today.working_seconds} now={now} />
-      <SignCard sign={focus?.sign} now={now} />
       <PiSection stats={snapshot} now={now} />
       <footer className="footer mono muted small">
         <span>dayanpi · served from the Pi on your desk</span>

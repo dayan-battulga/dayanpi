@@ -13,8 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, SAMPLE_LOG_INTERVAL_S, FocusLog, find_data_dir, format_day, replay_day, total_day
-from dayanpi.sign.renderer import format_duration
+from dayanpi.focus.tracker import DAY_FORMAT, SAMPLE_LOG_INTERVAL_S, FocusLog, find_data_dir, format_day, format_duration, replay_day, total_day
 from dayanpi.utils.files import write_atomically
 
 DAYS_DIR_NAME = "days"

@@ -8,7 +8,6 @@ This manual covers setting up the Pi, shipping code, running the service, Tailsc
 
 - [Focus tracker](focus-tracker.md): the detector check, the models, how the tracker runs and logs, the to-do list, the calendar, gestures, hand signs
 - [Pi camera](pi-camera.md): the Camera Module 3 Wide instead of the USB webcam, or both at once
-- [LED sign](led-sign.md): the 128x32 sign's pages, wiring and bring-up
 - [Voice](voice.md): callouts out loud through a USB speaker
 
 ---
@@ -39,7 +38,6 @@ Always use the **`main`** branch on both machines.
 | `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
-| `/api/sign/page` | Flip the LED sign to the next or previous page (POST `{"step": 1}` or `-1`) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
 | `/api/days/YYYY-MM-DD` | One day's page from `data/days/` as markdown (today's built live; 404 when there's no page) |
 | `/docs` | Disabled (404 on purpose) |
@@ -331,7 +329,7 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 | Site won't load at all | `sudo systemctl status dayanpi` and `tailscale serve status` |
 | Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
 | Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
-| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak, especially with the sign running. Undervoltage can reboot the Pi |
+| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak. Undervoltage can reboot the Pi |
 
 ---
 
@@ -365,8 +363,8 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 ## The dashboard
 
 - **Top:** the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes. Under them, a smaller LED sign card: the sign's preview, which page it's on, and **Flip sign page**.
-- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice, the Mac's front app and the sign mode.
+- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes. Under them, the calendar (see [Calendar](focus-tracker.md#calendar)).
+- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power, voice and the Mac's front app.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
 - **Two cameras.** With `DAYANPI_CAMERA=both`, the Camera card shows one feed at a time, front first, labeled Front or Side with its own boxes. The flip button next to Peek switches between them, and your browser remembers which one you picked. Only the feed you're looking at streams. "What the Pi sees" shows the best of the two cameras either way, since the detector keeps checking both. With one camera there's no flip button and the card looks the way it always has.

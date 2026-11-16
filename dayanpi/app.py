@@ -28,8 +28,6 @@ from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
-from dayanpi.sign.controller import SignController
-from dayanpi.sign.renderer import PanelOutput, PreviewOutput
 
 # uvicorn only configures its own loggers; without this the app's INFO lines
 # ("focus tracker running", "voice off, would say ...") never reach journalctl.
@@ -63,9 +61,6 @@ worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
 LLM_MODEL = read_llm_model()
 coach = TodoCoach(todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
-SIGN_MODE = os.environ.get("DAYANPI_SIGN", "preview").strip().lower() or "preview"  # preview | panel | off
-sign_preview = PreviewOutput()
-sign_controller: SignController | None = None
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
@@ -112,35 +107,15 @@ def build_focus_status() -> dict:
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     status["todos"] = todos.snapshot(now)
     status["mac_tracking"] = mac_tracking.enabled
-    version = sign_preview.version if sign_controller is not None else None
-    status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
     return status
 
 
-def start_sign() -> SignController | None:
-    """The sign always renders for the website preview; the panels join in when DAYANPI_SIGN=panel."""
-    started = None
-    if SIGN_MODE != "off":
-        outputs = [sign_preview]
-        if SIGN_MODE == "panel":
-            try:
-                outputs.append(PanelOutput())
-                logger.info("sign: driving the panels")
-            except Exception:
-                logger.exception("sign: panels unavailable, preview only (is Piomatter installed, see docs/led-sign.md)")
-        started = SignController(tracker, outputs)
-        started.start()
-    return started
-
-
 def handle_focus_update(update: FocusUpdate, now: float) -> None:
-    """Runs on the worker thread after every check. Callouts fan out to the speaker and the sign from here."""
+    """Runs on the worker thread after every check. Callouts go to the journal, and to the speaker when they speak."""
     for callout in update.callouts:
         logger.info("focus callout %s: %s", callout.name, callout.text)
         if callout.speak:
             voice.say(callout.text)
-        if sign_controller is not None:
-            sign_controller.show_callout(callout)
     todos.track(update.state == "working" and update.block_active, now)
 
 
@@ -164,8 +139,6 @@ def handle_gesture(name: str, now: float) -> None:
     if name == "toggle_block":
         active = tracker.toggle_block(now, source="gesture")
         voice.say("Block started." if active else "Block stopped.")
-    elif sign_controller is not None and name in ("next_page", "previous_page"):
-        sign_controller.flip_page(1 if name == "next_page" else -1)
 
 
 def start_focus_worker() -> FocusWorker | None:
@@ -223,7 +196,7 @@ async def day_page_writer() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global worker, sign_controller
+    global worker
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -237,7 +210,6 @@ async def lifespan(app: FastAPI):
     if side_stream is not None:
         side_stream.start()
     voice.start()
-    sign_controller = start_sign()
     worker = start_focus_worker()
     if coach.llm is not None:
         coach.start()
@@ -254,9 +226,6 @@ async def lifespan(app: FastAPI):
     if worker is not None:
         worker.stop()
         worker = None
-    if sign_controller is not None:
-        sign_controller.stop()
-        sign_controller = None
     coach.stop()
     todos.save(time.time())
     voice.stop()
@@ -438,19 +407,6 @@ def delete_todo(item_id: str):
     return {"status": "ok", "todos": todos.snapshot(now)}
 
 
-class SignPageCommand(BaseModel):
-    step: Literal[-1, 1]
-
-
-@app.post("/api/sign/page")
-def flip_sign_page(command: SignPageCommand):
-    """The website's version of the one-hand gestures: next or previous sign page."""
-    if sign_controller is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Sign is off")
-    page = sign_controller.flip_page(command.step)
-    return {"status": "ok", "page": page}
-
-
 # A plain host name like youtube.com: lowercase labels of letters, digits and inner hyphens. The Mac helper
 # makes the same check, so a full URL, a path or a page title can't get through either end.
 SITE_PATTERN = r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
@@ -483,15 +439,6 @@ def set_mac_tracking(change: MacTrackingChange):
     if mac_tracking.set(change.enabled):
         tracker.set_mac_tracking(change.enabled, time.time())
     return {"enabled": mac_tracking.enabled}
-
-
-@app.get("/api/sign.png")
-def sign_png():
-    """What the LED sign is showing right now, as the website preview image."""
-    png = sign_preview.latest_png() if sign_controller is not None else None
-    if png is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sign is off")
-    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 class SlotResponse(StreamingResponse):

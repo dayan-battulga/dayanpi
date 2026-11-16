@@ -4,8 +4,8 @@ export const TOAST_S = 4;
 
 const GESTURE_COPY: Record<string, string> = {
   peace: "✌️ Peace sign: reading your to-dos",
-  next_page: "Right hand up: next sign page",
-  previous_page: "Left hand up: previous sign page",
+  next_page: "Right hand up",
+  previous_page: "Left hand up",
   toggle_block: "Both hands up: block toggled",
 };
 

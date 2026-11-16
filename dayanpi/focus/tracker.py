@@ -10,6 +10,7 @@ clocks. Local-time rules (late night, day done, day rollover) use the Pi's time 
 
 import json
 import logging
+import math
 import os
 import threading
 from collections import deque
@@ -77,7 +78,7 @@ class DayTotals:
 
 @dataclass
 class Callout:
-    """Something worth telling Dayan. speak=False means log/sign only (nobody's in the room)."""
+    """Something worth telling Dayan. speak=False means log only (nobody's in the room)."""
 
     name: str
     text: str
@@ -231,6 +232,24 @@ def format_spoken_duration(seconds: float) -> str:
     else:
         text = f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''}"
     return text
+
+
+DURATION_MAX_S = 999 * 3600 + 59 * 60  # so a wild number in the log can't break a day page or the stats
+
+
+def format_duration(seconds: float) -> str:
+    """Short and glanceable: "45s", "12m", "1h05", "10h30". Negative or NaN shows as "0s"."""
+    # Clamp before isnan: isnan converts to float, which overflows on huge ints.
+    capped = min(max(seconds, 0), DURATION_MAX_S)
+    whole_seconds = 0 if math.isnan(capped) else int(capped)
+    hours, remainder = divmod(whole_seconds, 3600)
+    minutes = remainder // 60
+    duration = f"{hours}h{minutes:02d}"
+    if whole_seconds < 60:
+        duration = f"{whole_seconds}s"
+    elif whole_seconds < 3600:
+        duration = f"{minutes}m"
+    return duration
 
 
 class FocusLog:
@@ -567,7 +586,7 @@ class FocusTracker:
         return text
 
     def _track_break(self, now: float) -> list[Callout]:
-        """Flags a break that's run long during a work block (logged + sign; the phone ping hooks in here later)."""
+        """Flags a break that's run long during a work block (logged; the phone ping hooks in here later)."""
         callouts: list[Callout] = []
         if (
             self._block_active

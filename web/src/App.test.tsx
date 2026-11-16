@@ -50,13 +50,10 @@ it("draws every card from one stream", async () => {
   expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
   expect(screen.getByText("finish the report")).toBeInTheDocument();
   expect(screen.getByText("12m")).toBeInTheDocument();
-  expect(document.getElementById("sign-page")).toHaveTextContent("Now");
-  expect(document.getElementById("sign-image")).toHaveAttribute("src", "/api/sign.png?v=4");
   expect(document.getElementById("pi-summary")).toHaveTextContent("Running smooth");
   expect(document.getElementById("temp")).toHaveTextContent("48.2");
   expect(document.getElementById("cpu-cores")?.children).toHaveLength(4);
   expect(document.getElementById("net")).toHaveTextContent("↓ 120 kb/s · ↑ 1.5 Mb/s");
-  expect(document.getElementById("sign-mode")).toHaveTextContent("preview");
   expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
 
   await waitFor(() => expect(document.querySelector(".segment.is-working.is-live")).not.toBeNull());

@@ -168,12 +168,6 @@ export function PiSection({ stats, now }: { stats: Snapshot | null; now: number 
               <span id="mac">{describeMac(focus, tracking)}</span>
             </dd>
           </div>
-          <div>
-            <dt className="label">Sign</dt>
-            <dd id="sign-mode" className="mono">
-              {focus == null ? "--" : (focus.sign?.mode ?? "off")}
-            </dd>
-          </div>
         </dl>
       </div>
     </section>

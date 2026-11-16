@@ -13,8 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, DayReplay, DayTotals, FocusLog, Segment, find_focus_log_dir, replay_day, total_day
-from dayanpi.sign.renderer import format_duration
+from dayanpi.focus.tracker import DAY_FORMAT, DayReplay, DayTotals, FocusLog, Segment, find_focus_log_dir, format_duration, replay_day, total_day
 
 HOURS = 24
 

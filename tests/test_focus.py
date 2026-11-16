@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timedelta
 
 import pytest
@@ -415,6 +416,30 @@ def test_status_has_the_fields_the_dashboard_needs():
 )
 def test_spoken_durations(seconds, text):
     assert focus.format_spoken_duration(seconds) == text
+
+
+@pytest.mark.parametrize(
+    "seconds, text",
+    [
+        (0, "0s"),
+        (0.9, "0s"),
+        (45, "45s"),
+        (59.99, "59s"),
+        (60, "1m"),
+        (12 * 60 + 59, "12m"),
+        (3599, "59m"),
+        (3600, "1h00"),
+        (3900, "1h05"),
+        (10 * 3600 + 30 * 60, "10h30"),
+        (99 * 3600, "99h00"),
+        (-5, "0s"),
+        (math.nan, "0s"),
+        (math.inf, "999h59"),
+        (10**400, "999h59"),
+    ],
+)
+def test_short_durations(seconds, text):
+    assert focus.format_duration(seconds) == text
 
 
 def test_night_window_crosses_midnight():
