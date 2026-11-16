@@ -32,6 +32,9 @@ PHONE_EXIT_HITS = 0  # hits in the window to count as done with it
 AWAY_AFTER_S = 10.0
 RETURN_CHECKS = 2  # person seen this many checks in a row to count as back
 NO_FRAME_UNKNOWN_S = 30.0
+# The Mac helper reports at least once a minute (a heartbeat when nothing changes). Silence this long
+# means the Mac is asleep or the helper is gone, so the current app stops being shown or counted.
+MAC_STALE_S = 150.0
 
 INSTANT_PICKUP_S = 60.0
 LATE_NIGHT_START_HOUR = 1
@@ -324,6 +327,7 @@ class FocusTracker:
         self._current_app: str | None = None
         self._current_site: str | None = None
         self._mac_tracking = True  # the dashboard's switch; off drops the Mac helper's reports
+        self._app_reported_at: float | None = None  # the helper's last report, heartbeats included
         self._last_sample_at = started_at
         self._last_check: CheckSummary | None = None
         self._totals = DayTotals(day=format_day(started_at))
@@ -342,7 +346,10 @@ class FocusTracker:
         While Mac tracking is off it's dropped: no line, no current app, and False back.
         """
         with self._lock:
+            self._expire_app_locked(now)
             changed = self._mac_tracking and (app, site) != (self._current_app, self._current_site)
+            if self._mac_tracking:
+                self._app_reported_at = now
             if changed:
                 self._current_app = app
                 self._current_site = site
@@ -385,7 +392,14 @@ class FocusTracker:
 
     # ----- the state machine -----
 
+    def _expire_app_locked(self, now: float) -> None:
+        """Forgets the Mac's app and site once the helper has gone quiet for MAC_STALE_S."""
+        if self._current_app is not None and (self._app_reported_at is None or now - self._app_reported_at > MAC_STALE_S):
+            self._current_app = None
+            self._current_site = None
+
     def _update_locked(self, reading: FrameReading | None, now: float) -> FocusUpdate:
+        self._expire_app_locked(now)
         self._roll_day_if_needed(now)
         self._accumulate(now)
         callouts: list[Callout] = []
@@ -631,6 +645,7 @@ class FocusTracker:
         return totals
 
     def _status_locked(self, now: float) -> dict:
+        self._expire_app_locked(now)
         frame_age = (
             None if self._last_frame_at is None else round(now - self._last_frame_at, 1)
         )

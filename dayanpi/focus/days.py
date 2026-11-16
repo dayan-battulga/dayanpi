@@ -1,14 +1,15 @@
 """One markdown page per finished day, data/days/YYYY-MM-DD.md, for the calendar card and for reading anywhere.
 
 Each page is built from that day's focus log: the totals (the same replay as the restart
-and the stats tool), the to-dos checked off, and the sites the Mac had in
-front while you were at the desk. The numbers also go in
+and the stats tool), the to-dos checked off, the apps the Mac had in front while you were at
+the desk, and the time on YouTube. The numbers also go in
 the frontmatter, which Obsidian shows as properties and the calendar reads back. Pages are
 written once: at startup for every past day that has a log and no page, then just after
 each local midnight. Today never gets a file; the routes build its page live from the log.
 """
 
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -18,7 +19,8 @@ from dayanpi.utils.files import write_atomically
 DAYS_DIR_NAME = "days"
 DAY_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MONTH_PATTERN = r"^\d{4}-\d{2}$"
-TOP_SITES = 10
+TOP_APPS = 10
+YOUTUBE = "youtube.com"  # and its subdomains (m., music.), in any browser; the only site the day page counts
 AT_DESK_STATES = ("working", "phone")
 LOCKED_APP = "Locked"
 
@@ -45,24 +47,38 @@ def find_finished_todos(lines: list[dict], day: str) -> list[dict]:
     return todos
 
 
-def count_site_seconds(lines: list[dict], day: str) -> dict[str, float]:
-    """The TOP_SITES sites by time at the desk, most first.
+@dataclass
+class MacTime:
+    apps: dict[str, float]  # the TOP_APPS apps by seconds, most first
+    youtube: float  # seconds with YouTube in front, in any browser
+
+
+def is_youtube(site: str | None) -> bool:
+    youtube = site is not None and (site == YOUTUBE or site.endswith("." + YOUTUBE))
+    return youtube
+
+
+def count_mac_seconds(lines: list[dict], day: str) -> MacTime:
+    """Time per Mac app, and on YouTube, while you were at the desk.
 
     From the sample lines: each one stands for the SAMPLE_LOG_INTERVAL_S before it, and
     counts when you were working or on your phone (not away or unknown), the Mac wasn't
-    locked, and Mac tracking wasn't paused. Older logs have no site on their samples and
-    count nothing.
+    locked, and Mac tracking wasn't paused. Other sites aren't counted. Older logs without
+    an app on their samples count nothing.
     """
-    totals: dict[str, float] = {}
+    apps: dict[str, float] = {}
+    youtube = 0.0
     paused = False
     for line in list_day_lines(lines, day):
-        site = line.get("site")
+        app = line.get("app")
         if line.get("event") == "mac_tracking":
             paused = line.get("enabled") is False
-        if line.get("event") == "sample" and site and not paused and line.get("state") in AT_DESK_STATES and line.get("app") != LOCKED_APP:
-            totals[site] = totals.get(site, 0.0) + SAMPLE_LOG_INTERVAL_S
-    top = dict(sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:TOP_SITES])
-    return top
+        if line.get("event") == "sample" and app and not paused and line.get("state") in AT_DESK_STATES and app != LOCKED_APP:
+            apps[app] = apps.get(app, 0.0) + SAMPLE_LOG_INTERVAL_S
+            youtube += SAMPLE_LOG_INTERVAL_S if is_youtube(line.get("site")) else 0.0
+    top = dict(sorted(apps.items(), key=lambda item: (-item[1], item[0]))[:TOP_APPS])
+    mac_time = MacTime(apps=top, youtube=youtube)
+    return mac_time
 
 
 def count_paused_seconds(lines: list[dict], day: str) -> float:
@@ -94,7 +110,7 @@ def build_day_page(lines: list[dict], day: str) -> str:
     replay = replay_day(lines, day)
     totals = total_day(replay)
     todos = find_finished_todos(lines, day)
-    sites = count_site_seconds(lines, day)
+    mac_time = count_mac_seconds(lines, day)
     paused = count_paused_seconds(lines, day)
     date = datetime.strptime(day, DAY_FORMAT)
     parts = [
@@ -106,6 +122,7 @@ def build_day_page(lines: list[dict], day: str) -> str:
         f"pickups: {totals.pickups}",
         f"best_streak_minutes: {count_minutes(totals.longest_streak_seconds)}",
         f"todos_done: {len(todos)}",
+        f"youtube_minutes: {count_minutes(mac_time.youtube)}",
         "---",
         "",
         f"# {date:%A}, {date:%B} {date.day}, {date.year}",
@@ -121,15 +138,16 @@ def build_day_page(lines: list[dict], day: str) -> str:
             f"- Away: {format_duration(totals.away_seconds)}",
             f"- Pickups: {totals.pickups}",
             f"- Best streak: {format_duration(totals.longest_streak_seconds)}",
+            f"- YouTube: {format_duration(mac_time.youtube)}",
             "",
             "## To-dos done",
             *[f"- {' '.join(str(todo.get('text', '')).split())} ({format_duration(todo.get('seconds', 0))})" for todo in todos],
             *([] if todos else ["- None"]),
             "",
-            "## Sites",
+            "## Apps",
             *([f"Mac tracking was paused for {format_duration(paused)}, so that time isn't counted."] if paused > 0 else []),
-            *[f"- {site}: {format_duration(seconds)}" for site, seconds in sites.items()],
-            *([] if sites else ["- None"]),
+            *[f"- {app}: {format_duration(seconds)}" for app, seconds in mac_time.apps.items()],
+            *([] if mac_time.apps else ["- None"]),
         ]
     page = "\n".join(parts) + "\n"
     return page

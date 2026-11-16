@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Blocks, CoreBars } from "@/components/pi/Meters";
 import { riseDelay } from "@/components/shared/rise";
 import { TickText } from "@/components/shared/TickText";
-import { Switch } from "@/components/ui/switch";
 import { formatBits, formatUptime } from "@/lib/format";
 import { GAUGE_MAX_C, GAUGE_MIN_C, TEMP_CRITICAL_C, TEMP_ELEVATED_C, describePi, describePower, readLevel, readLoadLevel } from "@/lib/pi";
 import type { FocusStatus, Snapshot } from "@/lib/types";
@@ -17,33 +15,7 @@ function describeVoice(voice: FocusStatus["voice"] | undefined): string {
   return text;
 }
 
-// A snapshot built just before the switch flipped can still arrive after the reply, so the reply wins for a moment.
-const SWITCH_HOLD_S = 2.5;
-
-async function sendMacTracking(enabled: boolean): Promise<boolean> {
-  let saved = false;
-  try {
-    const response = await fetch("/api/mac/tracking", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    saved = response.ok;
-  } catch {
-    saved = false;
-  }
-  return saved;
-}
-
-function describeMac(focus: FocusStatus | undefined, tracking: boolean): string {
-  const text =
-    focus == null ? "--" : !tracking ? "Paused" : focus.app && focus.site ? `${focus.app} · ${focus.site}` : focus.app || "—";
-  return text;
-}
-
-export function PiSection({ stats, now }: { stats: Snapshot | null; now: number }) {
-  // The switch flips right away; a failed POST drops the hold and it goes back to what the Pi says.
-  const [held, setHeld] = useState<{ enabled: boolean; until: number } | null>(null);
+export function PiSection({ stats }: { stats: Snapshot | null }) {
   const power = stats == null ? null : describePower(stats.throttle);
   const summary = stats == null || power == null ? null : describePi(stats, power);
   const temp = stats?.temperature_celsius;
@@ -54,12 +26,6 @@ export function PiSection({ stats, now }: { stats: Snapshot | null; now: number 
   const memory = stats?.memory;
   const disk = stats?.disk;
   const focus = stats?.focus;
-  const tracking = held != null && now < held.until ? held.enabled : (focus?.mac_tracking ?? true);
-  const flipTracking = async (enabled: boolean) => {
-    setHeld({ enabled, until: Infinity });
-    const saved = await sendMacTracking(enabled);
-    setHeld(saved ? { enabled, until: Date.now() / 1000 + SWITCH_HOLD_S } : null);
-  };
 
   return (
     <section id="pi" className="pi rise" style={riseDelay(5)} aria-labelledby="pi-summary">
@@ -159,13 +125,6 @@ export function PiSection({ stats, now }: { stats: Snapshot | null; now: number 
             <dt className="label">Voice</dt>
             <dd id="voice" className="mono">
               {focus == null ? "--" : describeVoice(focus.voice)}
-            </dd>
-          </div>
-          <div>
-            <dt className="label">Mac</dt>
-            <dd className="mono flex items-center gap-2">
-              {focus != null && <Switch checked={tracking} onCheckedChange={flipTracking} aria-label="Mac tracking" />}
-              <span id="mac">{describeMac(focus, tracking)}</span>
             </dd>
           </div>
         </dl>

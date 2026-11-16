@@ -8,7 +8,7 @@ Want the step-by-step commands? Setup and running are in **[docs/MANUAL.md](docs
 
 ## What it's for
 
-- **Keeping an eye on the Pi.** Temperature (as a gauge), CPU (with a live bar per core), memory and disk, updated live every second, plus a status bar with network speed, uptime, power, the voice and the Mac's front app. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
+- **Keeping an eye on the Pi.** Temperature (as a gauge), CPU (with a live bar per core), memory and disk, updated live every second, plus a status bar with network speed, uptime, power and the voice. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top.
 - **Seeing the desk.** Live camera feeds right on the page.
 - **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**, and then it shows boxes around whatever the detector counted (you or a phone). Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
 - **Light and dark.** The page follows your device's light or dark setting. The sun/moon button flips it, and your browser remembers the choice.

@@ -152,7 +152,7 @@ If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your
 
 The focus status also rides along in every `/api/stream` update and in `/api/stats`, so the dashboard doesn't poll.
 
-**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, and when that's a browser, which website, so "focused" can later be split into coding / docs / browsing / Slack. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **Mac** entry in the status bar at the bottom of the page shows the current app, like `Google Chrome · youtube.com`.
+**The Mac helper** (`mac_helper/`) tells the Pi which app is in front on the Mac, and when that's a browser, which website, so "focused" can later be split into coding / docs / browsing / Slack. Setup is in `mac_helper/README.md`: put the password in the Keychain, try `--once` and `--dry-run`, then install the LaunchAgent so it runs in the background. The **On the Mac** card at the top of the page shows what's in front, big enough to read from across the room: the site when it's a browser (`youtube.com`, with "in Google Chrome" under it), the app otherwise (`Cursor`). It's meant to let anyone walking by see what you're on. If the helper hasn't checked in for 2.5 minutes (it checks in at least once a minute, even when nothing changes), the Mac is asleep or the helper is gone, so the card says **Not reporting** and that time stops counting.
 
 What it records, and what it never does:
 
@@ -163,9 +163,9 @@ What it records, and what it never does:
 
 Logs from before sites existed just have no `site`, and everything still reads them fine.
 
-**The on/off switch.** The Mac entry in the status bar has a switch. Off pauses Mac tracking:
+**The on/off switch.** The On the Mac card has a **Tracking** switch. Off pauses Mac tracking:
 
-- **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the Mac entry says **Paused**.
+- **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the card says **Paused**.
 - **On the Mac, within 10 seconds:** the helper stops looking at the front app and the browser entirely, and only asks the Pi every 10 seconds whether it's back on. Flip it on and it sends the app in front straight away.
 - **It sticks.** The setting is kept in `data/mac_tracking.json` on the Pi (or in `DAYANPI_DATA_DIR`), so restarts keep it. It's on until you first switch it off.
 - **In the log** every flip writes a `mac_tracking` line with `"enabled": true` or `false`, and while it's off, each new day starts with one too. The day page doesn't count paused time toward any site, and says how long tracking was paused. Logs from before the switch count as on.
@@ -239,7 +239,7 @@ Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in
 - **Totals:** the same numbers, readable.
 - Pages written back when there were work blocks still have a **Focus blocks** section and a `blocks` number. Pages are never rewritten, so they just stay that way.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
-- **Sites:** the top 10 websites by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site). Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked, and Mac tracking isn't switched off (if it was, the section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. Days from before sites existed just say "None".
+- **Apps:** the top 10 Mac apps by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site), and in Totals, **YouTube**: the time youtube.com (or m.youtube.com, music.youtube.com) was the tab in front, in any browser. No other site is counted. Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked or asleep, and Mac tracking isn't switched off (if it was, the Apps section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. YouTube minutes are in the frontmatter too (`youtube_minutes`). Days from before apps were logged just say "None".
 
 It's all built from that day's focus log (the to-dos come from its `todo` lines), with the same math the restart and the stats tool use.
 

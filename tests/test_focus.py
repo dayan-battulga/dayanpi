@@ -534,3 +534,35 @@ def test_a_new_day_that_starts_paused_says_so(tmp_path):
     next_day = [event["event"] for event in log.read_day("2026-10-30")]
     assert next_day[:2] == ["day_start", "mac_tracking"]
     assert [event for event in log.read_day("2026-10-30") if event["event"] == "mac_tracking"][0]["enabled"] is False
+
+
+def test_the_macs_app_fades_once_the_helper_goes_quiet(tmp_path):
+    from dayanpi.focus.tracker import MAC_STALE_S
+
+    log = FocusLog(tmp_path / "focus_log")
+    tracker = FocusTracker(log=log, started_at=NOON)
+    tracker.record_app("Cursor", NOON)
+    tracker.record_app("Cursor", NOON + 60)  # the helper's heartbeat: same app, still there
+    assert tracker.status(NOON + 60 + MAC_STALE_S)["app"] == "Cursor"
+    assert tracker.status(NOON + 60 + MAC_STALE_S + 1)["app"] is None, "the Mac went to sleep"
+    assert tracker.record_app("Cursor", NOON + 600) is True, "back again: a fresh line"
+    assert [event["app"] for event in log.read_day("2026-10-29")] == ["Cursor", "Cursor"]
+
+
+def test_samples_stop_carrying_an_app_the_helper_stopped_reporting(tmp_path):
+    from dayanpi.focus.tracker import MAC_STALE_S
+
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(log=log)
+    desk.tracker.record_app("Google Chrome", desk.now, site="youtube.com")
+    desk.tick(make_reading(), int(MAC_STALE_S) + 40)
+    samples = read_samples(log)
+    assert (samples[0]["app"], samples[0]["site"]) == ("Google Chrome", "youtube.com")
+    assert (samples[-1]["app"], samples[-1]["site"]) == (None, None)
+
+
+def test_the_mac_goes_stale_after_two_missed_heartbeats_but_within_three_minutes():
+    from dayanpi.focus.tracker import MAC_STALE_S
+    from mac_helper import dayanpi_mac_helper as helper
+
+    assert 2 * helper.HEARTBEAT_INTERVAL_S < MAC_STALE_S <= 3 * 60, "one late heartbeat mustn't blank the sign; a sleeping Mac should, soon"

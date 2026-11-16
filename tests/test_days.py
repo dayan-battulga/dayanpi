@@ -49,6 +49,7 @@ away_minutes: 30
 pickups: 1
 best_streak_minutes: 60
 todos_done: 2
+youtube_minutes: 0
 ---
 
 # Saturday, November 14, 2026
@@ -59,12 +60,13 @@ todos_done: 2
 - Away: 30m
 - Pickups: 1
 - Best streak: 1h00
+- YouTube: 0s
 
 ## To-dos done
 - finish the report (1h12)
 - reply to emails (10m)
 
-## Sites
+## Apps
 - None
 """
 
@@ -89,6 +91,7 @@ def test_a_day_with_no_log():
         "pickups": 0,
         "best_streak_minutes": 0,
         "todos_done": 0,
+        "youtube_minutes": 0,
     }
 
 
@@ -161,48 +164,54 @@ def sample(hour: int, minute: int, second: int, state: str, app: str | None, sit
     return line
 
 
-def test_minutes_per_site_only_count_time_at_the_desk():
+def test_time_per_app_and_on_youtube_only_counts_time_at_the_desk():
     lines = [line(9, 0, "state", state="working")]
-    lines += [sample(9, minute, second, "working", "Google Chrome", "github.com") for minute in range(10) for second in (0, 30)]  # 10 min
+    lines += [sample(9, minute, second, "working", "Cursor") for minute in range(10) for second in (0, 30)]  # 10 min
     lines += [sample(10, minute, second, "phone", "Google Chrome", "youtube.com") for minute in range(4) for second in (0, 30)]  # 4 min
+    lines += [sample(10, minute, 0, "working", "Arc", "m.youtube.com") for minute in range(10, 12)]  # 1 min, another browser
+    lines += [sample(10, minute, 0, "working", "Google Chrome", "github.com") for minute in range(20, 26)]  # 3 min, not YouTube
     lines += [sample(11, minute, 0, "away", "Google Chrome", "youtube.com") for minute in range(30)]  # not at the desk
-    lines += [sample(12, minute, 0, "unknown", "Google Chrome", "youtube.com") for minute in range(30)]  # camera down
-    lines += [sample(13, minute, 0, "working", "Locked", "youtube.com") for minute in range(30)]  # screen locked
-    lines += [sample(14, minute, 0, "working", "Code") for minute in range(30)]  # no site
+    lines += [sample(12, minute, 0, "unknown", "Cursor") for minute in range(30)]  # camera down
+    lines += [sample(13, minute, 0, "working", "Locked") for minute in range(30)]  # screen locked
+    lines += [sample(14, minute, 0, "working", None) for minute in range(30)]  # Mac not reporting
     page = build_day_page(lines, DAY)
-    assert "## Sites\n- github.com: 10m\n- youtube.com: 4m\n" in page
+    assert "## Apps\n- Cursor: 10m\n- Google Chrome: 7m\n- Arc: 1m\n" in page
+    assert "- YouTube: 5m\n" in page, "4 min in Chrome and 1 in Arc; github.com doesn't count"
+    assert "youtube_minutes: 5\n" in page
+    assert "github.com" not in page, "other sites aren't on the page"
 
 
-def test_only_the_top_ten_sites_make_the_page():
-    lines = [sample(9, index, 0, "working", "Arc", f"site{index:02d}.com") for index in range(12) for _ in range(index + 1)]
-    sites_part = build_day_page(lines, DAY).split("## Sites\n")[1]
-    listed = [entry.split(":")[0].removeprefix("- ") for entry in sites_part.strip().splitlines()]
-    assert listed == [f"site{index:02d}.com" for index in range(11, 1, -1)]
+def test_only_the_top_ten_apps_make_the_page():
+    lines = [sample(9, index, 0, "working", f"App {index:02d}") for index in range(12) for _ in range(index + 1)]
+    apps_part = build_day_page(lines, DAY).split("## Apps\n")[1]
+    listed = [entry.split(":")[0].removeprefix("- ") for entry in apps_part.strip().splitlines()]
+    assert listed == [f"App {index:02d}" for index in range(11, 1, -1)]
 
 
-def test_an_old_log_without_sites_still_makes_a_page():
+def test_an_old_log_without_apps_still_makes_a_page():
     old_lines = [
         line(9, 0, "state", state="working"),
-        line(9, 0, "mac_app", app="Google Chrome"),
-        {**line(9, 30, "sample", state="working", app="Google Chrome", person=0.9)},
+        {**line(9, 30, "sample", state="working", person=0.9)},
     ]
     page = build_day_page(old_lines, DAY)
     assert "- Focus: 30m" in page
-    assert page.endswith("## Sites\n- None\n")
+    assert "- YouTube: 0s" in page
+    assert page.endswith("## Apps\n- None\n")
 
 
-def test_paused_mac_tracking_counts_toward_no_site_and_the_page_says_how_long():
+def test_paused_mac_tracking_counts_toward_no_app_and_the_page_says_how_long():
     lines = [line(9, 0, "state", state="working")]
-    lines += [sample(9, minute, 30, "working", "Google Chrome", "github.com") for minute in range(10)]  # 5 min
+    lines += [sample(9, minute, 30, "working", "Cursor") for minute in range(10)]  # 5 min
     lines.append(line(9, 10, "mac_tracking", enabled=False))
     lines += [sample(9, minute, 30, "working", "Google Chrome", "youtube.com") for minute in range(10, 60)]  # paused
     lines.append(line(10, 10, "mac_tracking", enabled=True))
-    lines += [sample(10, minute, 30, "working", "Google Chrome", "github.com") for minute in range(10, 14)]  # 2 min
+    lines += [sample(10, minute, 30, "working", "Cursor") for minute in range(10, 14)]  # 2 min
     page = build_day_page(lines, DAY)
-    sites_part = page.split("## Sites\n")[1]
-    assert sites_part.startswith("Mac tracking was paused for 1h00, so that time isn't counted.\n")
-    assert "youtube.com" not in sites_part
-    assert "- github.com: 7m" in sites_part
+    apps_part = page.split("## Apps\n")[1]
+    assert apps_part.startswith("Mac tracking was paused for 1h00, so that time isn't counted.\n")
+    assert "Google Chrome" not in apps_part
+    assert "- Cursor: 7m" in apps_part
+    assert "- YouTube: 0s" in page
 
 
 def test_a_pause_still_on_at_the_end_of_the_day_runs_to_the_last_line():
@@ -211,7 +220,8 @@ def test_a_pause_still_on_at_the_end_of_the_day_runs_to_the_last_line():
 
 
 def test_an_old_log_without_tracking_lines_counts_as_on():
-    lines = [line(9, 0, "state", state="working")] + [sample(9, minute, 0, "working", "Arc", "github.com") for minute in range(4)]
+    lines = [line(9, 0, "state", state="working")] + [sample(9, minute, 0, "working", "Arc", "youtube.com") for minute in range(4)]
     page = build_day_page(lines, DAY)
     assert "paused" not in page
-    assert "- github.com: 2m" in page
+    assert "- Arc: 2m" in page
+    assert "- YouTube: 2m" in page

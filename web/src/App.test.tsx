@@ -95,10 +95,17 @@ it("shows the last gesture or hand sign for a few seconds", () => {
   expect(screen.getByRole("status")).toBeEmptyDOMElement();
 });
 
-it("shows the browser's site next to the Mac app", () => {
+it("puts what's in front on the Mac at the top, the site big when it's a browser", () => {
   render(<App />);
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: "Google Chrome", site: "youtube.com" })));
-  expect(document.getElementById("mac")).toHaveTextContent("Google Chrome · youtube.com");
+  const card = screen.getByRole("region", { name: "On the Mac" });
+  expect(document.getElementById("mac")).toHaveTextContent(/^youtube\.com$/);
+  expect(card).toHaveTextContent("in Google Chrome");
+  expect(card.compareDocumentPosition(document.getElementById("focus-card")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(document.querySelector("#pi dt")?.parentElement?.parentElement).not.toHaveTextContent(/Mac/);
+
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: null })));
+  expect(document.getElementById("mac")).toHaveTextContent("Not reporting");
 });
 
 it("pauses the Mac tracker from its switch, flipping right away", async () => {

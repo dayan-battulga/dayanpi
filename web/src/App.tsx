@@ -2,6 +2,7 @@ import { CalendarCard } from "@/components/calendar/CalendarCard";
 import { CameraCard } from "@/components/camera/CameraCard";
 import { FocusCard } from "@/components/focus/FocusCard";
 import { Header } from "@/components/header/Header";
+import { MacCard } from "@/components/mac/MacCard";
 import { PiSection } from "@/components/pi/PiSection";
 import { GestureToast } from "@/components/shared/GestureToast";
 import { TodoCard } from "@/components/todo/TodoCard";
@@ -25,13 +26,14 @@ export function App() {
   return (
     <div className="shell">
       <Header connection={connection} undervoltage={snapshot?.throttle.is_undervoltage ?? false} theme={theme} onToggleTheme={toggleTheme} />
+      <MacCard focus={focus} now={now} />
       <FocusCard focus={focus} segments={segments} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} />
       <div className="row">
         <CameraCard focus={focus} />
         <TodoCard todos={focus?.todos} known={known} now={now} />
       </div>
       <CalendarCard todayFocusSeconds={focus?.today.working_seconds} now={now} />
-      <PiSection stats={snapshot} now={now} />
+      <PiSection stats={snapshot} />
       <footer className="footer mono muted small">
         <span>dayanpi · served from the Pi on your desk</span>
         <span>tailscale serve · private</span>
