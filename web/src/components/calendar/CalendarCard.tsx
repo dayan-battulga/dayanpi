@@ -5,22 +5,12 @@ import { riseDelay } from "@/components/shared/rise";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { WEEKDAYS, buildMonthWeeks, formatCompactMinutes, formatDayKey, formatMonthLabel, readShade, shiftMonth } from "@/lib/calendar";
+import { fetchJson } from "@/lib/http";
 import type { DayPageReply, MonthDays } from "@/lib/types";
 
 const MONTH_REFRESH_S = 300; // also how soon yesterday's page shows up after midnight
 const TODAY_REFRESH_S = 60;
 const SHADE_CLASSES = ["", "bg-work/10", "bg-work/25", "bg-work/40", "bg-work/60"];
-
-async function fetchJson<T>(path: string): Promise<T | null> {
-  let reply: T | null = null;
-  try {
-    const response = await fetch(path);
-    reply = response.ok ? ((await response.json()) as T) : null;
-  } catch {
-    reply = null;
-  }
-  return reply;
-}
 
 interface CalendarCardProps {
   todayFocusSeconds: number | undefined;

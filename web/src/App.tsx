@@ -1,3 +1,4 @@
+import { AppsCard } from "@/components/apps/AppsCard";
 import { CalendarCard } from "@/components/calendar/CalendarCard";
 import { CameraCard } from "@/components/camera/CameraCard";
 import { FocusCard } from "@/components/focus/FocusCard";
@@ -28,6 +29,7 @@ export function App() {
       <Header connection={connection} undervoltage={snapshot?.throttle.is_undervoltage ?? false} theme={theme} onToggleTheme={toggleTheme} />
       <MacCard focus={focus} now={now} />
       <FocusCard focus={focus} segments={segments} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} />
+      <AppsCard now={now} />
       <div className="row">
         <CameraCard focus={focus} />
         <TodoCard todos={focus?.todos} known={known} now={now} />

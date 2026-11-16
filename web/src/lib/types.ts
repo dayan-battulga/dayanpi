@@ -109,3 +109,18 @@ export interface DayPageReply {
   today: boolean;
   markdown: string;
 }
+
+export type AppsRange = "today" | "week";
+
+// Only an app that had a site in the range carries the two site fields; "Other apps" never does.
+export interface AppUsage {
+  app: string;
+  total_seconds: number;
+  youtube_seconds?: number;
+  other_sites_seconds?: number;
+}
+
+export interface AppsReply {
+  range: AppsRange;
+  apps: AppUsage[];
+}

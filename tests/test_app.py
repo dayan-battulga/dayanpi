@@ -576,3 +576,70 @@ def test_starting_up_switched_off_logs_that_it_is_paused(fresh_mac_tracking):
         pass
     lines = [line for line in fresh_mac_tracking.read_day(format_day(time.time())) if line["event"] == "mac_tracking"]
     assert [line["enabled"] for line in lines] == [False]
+
+
+def write_app_samples(log, day: str, ts: float, app_name: str, count: int, site=None, state="working") -> None:
+    for index in range(count):
+        log.write({"ts": ts + index, "day": day, "event": "sample", "state": state, "app": app_name, "site": site})
+
+
+def test_apps_route_ranks_the_top_eight_and_sums_the_rest(monkeypatch, tmp_path):
+    from dayanpi.focus.tracker import FocusLog, format_day
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "focus_log", log)
+    now = time.time()
+    today = format_day(now)
+    for index in range(9):  # App 0 has 1 sample ... App 8 has 9
+        write_app_samples(log, today, now - 5000, f"App {index}", index + 1)
+    write_app_samples(log, today, now - 4000, "Chrome", 20, "youtube.com")
+    write_app_samples(log, today, now - 3000, "Chrome", 5, "github.com")
+    write_app_samples(log, today, now - 2000, "Tie A", 9)
+    write_app_samples(log, today, now - 1000, "Away App", 50, state="away")
+
+    with TestClient(app.app) as client:
+        assert client.get("/api/apps").status_code == 401
+        reply = client.get("/api/apps?range=today", auth=AUTH).json()
+        default = client.get("/api/apps", auth=AUTH).json()
+        bad = client.get("/api/apps?range=month", auth=AUTH)
+
+    assert default == reply and reply["range"] == "today" and bad.status_code == 422
+    names = [row["app"] for row in reply["apps"]]
+    assert names == ["Chrome", "App 8", "Tie A", "App 7", "App 6", "App 5", "App 4", "App 3", "Other apps"]
+    assert reply["apps"][0] == {"app": "Chrome", "total_seconds": 750.0, "youtube_seconds": 600.0, "other_sites_seconds": 150.0}
+    assert reply["apps"][1] == {"app": "App 8", "total_seconds": 270.0}, "no site, so no split fields"
+    assert reply["apps"][-1] == {"app": "Other apps", "total_seconds": 3 * 30.0 + 2 * 30 + 1 * 30}, "App 2, App 1, App 0"
+
+
+def test_apps_route_week_sums_seven_days_and_ignores_the_eighth(monkeypatch, tmp_path):
+    from datetime import datetime, timedelta
+
+    from dayanpi.focus.tracker import FocusLog
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "focus_log", log)
+    now = time.time()
+    today = datetime.fromtimestamp(now).date()
+    for offset, samples in ((0, 2), (3, 4), (6, 1), (7, 100)):
+        day = (today - timedelta(days=offset)).strftime("%Y-%m-%d")
+        write_app_samples(log, day, now - 1000, "Cursor", samples)
+        write_app_samples(log, day, now - 500, "Arc", 1, "youtube.com")
+
+    with TestClient(app.app) as client:
+        week = client.get("/api/apps?range=week", auth=AUTH).json()
+        today_only = client.get("/api/apps?range=today", auth=AUTH).json()
+
+    assert week["range"] == "week"
+    assert week["apps"] == [
+        {"app": "Cursor", "total_seconds": 7 * 30.0},
+        {"app": "Arc", "total_seconds": 3 * 30.0, "youtube_seconds": 3 * 30.0, "other_sites_seconds": 0.0},
+    ]
+    assert today_only["apps"][0] == {"app": "Cursor", "total_seconds": 60.0}
+
+
+def test_apps_route_on_an_empty_day_has_no_apps(monkeypatch, tmp_path):
+    from dayanpi.focus.tracker import FocusLog
+
+    monkeypatch.setattr(app, "focus_log", FocusLog(tmp_path / "focus_log"))
+    with TestClient(app.app) as client:
+        assert client.get("/api/apps?range=week", auth=AUTH).json() == {"range": "week", "apps": []}

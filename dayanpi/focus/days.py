@@ -20,6 +20,9 @@ DAYS_DIR_NAME = "days"
 DAY_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MONTH_PATTERN = r"^\d{4}-\d{2}$"
 TOP_APPS = 10
+CHART_APPS = 8  # /api/apps names this many apps, the rest are summed
+OTHER_APPS = "Other apps"
+WEEK_DAYS = 7
 YOUTUBE = "youtube.com"  # and its subdomains (m., music.), in any browser; the only site the day page counts
 AT_DESK_STATES = ("working", "phone")
 LOCKED_APP = "Locked"
@@ -58,27 +61,82 @@ def is_youtube(site: str | None) -> bool:
     return youtube
 
 
-def count_mac_seconds(lines: list[dict], day: str) -> MacTime:
-    """Time per Mac app, and on YouTube, while you were at the desk.
+@dataclass
+class AppSeconds:
+    total: float = 0.0
+    youtube: float = 0.0  # of total, with YouTube in front (any browser)
+    has_site: bool = False  # a sample named a site, so the app is a browser
+
+
+def count_app_seconds(lines: list[dict], day: str) -> dict[str, AppSeconds]:
+    """Seconds per Mac app (every app, no cutoff) while you were at the desk. The day page and /api/apps both use this.
 
     From the sample lines: each one stands for the SAMPLE_LOG_INTERVAL_S before it, and
     counts when you were working or on your phone (not away or unknown), the Mac wasn't
-    locked, and Mac tracking wasn't paused. Other sites aren't counted. Older logs without
-    an app on their samples count nothing.
+    locked, and Mac tracking wasn't paused. Older logs without an app on their samples
+    count nothing; without a site, all the time is plain app time.
     """
-    apps: dict[str, float] = {}
-    youtube = 0.0
+    apps: dict[str, AppSeconds] = {}
     paused = False
     for line in list_day_lines(lines, day):
         app = line.get("app")
         if line.get("event") == "mac_tracking":
             paused = line.get("enabled") is False
         if line.get("event") == "sample" and app and not paused and line.get("state") in AT_DESK_STATES and app != LOCKED_APP:
-            apps[app] = apps.get(app, 0.0) + SAMPLE_LOG_INTERVAL_S
-            youtube += SAMPLE_LOG_INTERVAL_S if is_youtube(line.get("site")) else 0.0
-    top = dict(sorted(apps.items(), key=lambda item: (-item[1], item[0]))[:TOP_APPS])
-    mac_time = MacTime(apps=top, youtube=youtube)
+            counted = apps.setdefault(app, AppSeconds())
+            counted.total += SAMPLE_LOG_INTERVAL_S
+            counted.youtube += SAMPLE_LOG_INTERVAL_S if is_youtube(line.get("site")) else 0.0
+            counted.has_site = counted.has_site or bool(line.get("site"))
+    return apps
+
+
+def rank_apps(apps: dict[str, AppSeconds]) -> list[str]:
+    """App names, most seconds first, ties by name."""
+    names = sorted(apps, key=lambda app: (-apps[app].total, app))
+    return names
+
+
+def count_mac_seconds(lines: list[dict], day: str) -> MacTime:
+    """Time per Mac app (the TOP_APPS) and on YouTube while you were at the desk. Other sites aren't counted."""
+    apps = count_app_seconds(lines, day)
+    top = {app: apps[app].total for app in rank_apps(apps)[:TOP_APPS]}
+    mac_time = MacTime(apps=top, youtube=sum(counted.youtube for counted in apps.values()))
     return mac_time
+
+
+def merge_app_seconds(parts: list[dict[str, AppSeconds]]) -> dict[str, AppSeconds]:
+    merged: dict[str, AppSeconds] = {}
+    for part in parts:
+        for app, counted in part.items():
+            into = merged.setdefault(app, AppSeconds())
+            into.total += counted.total
+            into.youtube += counted.youtube
+            into.has_site = into.has_site or counted.has_site
+    return merged
+
+
+def list_range_days(now: float, range_name: str) -> list[str]:
+    """Local days of the range, today first. A week is the last 7 days including today."""
+    today = datetime.fromtimestamp(now).date()
+    count = WEEK_DAYS if range_name == "week" else 1
+    range_days = [(today - timedelta(days=offset)).strftime(DAY_FORMAT) for offset in range(count)]
+    return range_days
+
+
+def build_apps_chart(log: FocusLog, now: float, range_name: str) -> list[dict]:
+    """The Apps card's rows: the CHART_APPS biggest apps, then the rest summed as "Other apps"."""
+    apps = merge_app_seconds([count_app_seconds(log.read_day(day), day) for day in list_range_days(now, range_name)])
+    ranked = rank_apps(apps)
+    rows = []
+    for app in ranked[:CHART_APPS]:
+        counted = apps[app]
+        row = {"app": app, "total_seconds": counted.total}
+        if counted.has_site:
+            row |= {"youtube_seconds": counted.youtube, "other_sites_seconds": counted.total - counted.youtube}
+        rows.append(row)
+    if len(ranked) > CHART_APPS:
+        rows.append({"app": OTHER_APPS, "total_seconds": sum(apps[app].total for app in ranked[CHART_APPS:])})
+    return rows
 
 
 def count_paused_seconds(lines: list[dict], day: str) -> float:

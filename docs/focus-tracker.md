@@ -231,6 +231,20 @@ cat data/todos.json
 grep '"todo"' data/focus_log/$(date +%F).jsonl
 ```
 
+## Apps card
+
+A bar chart of how long each Mac app was in front, right under the Focus card. App names run down the left with the longest on top, and the time runs along the bottom in minutes (or hours once the longest bar passes 2 h). The **Today / This week** buttons pick the range (This week is the last 7 days including today), and the page remembers your pick. It refreshes every minute while the page is open. With nothing to show (or the Mac helper isn't running) it just says "Nothing from the Mac yet today".
+
+A browser's bar has two pieces, YouTube and Other sites, so you can see how much of the browser was YouTube. Every other app is one solid bar. Hover or tap a bar for the exact time of each piece; each bar's total sits at its right end. Long app names get cut off with "..." on the chart, and the tooltip has the full name.
+
+It counts the same way as the day page: from the 30-second sample lines, only while you're working or on your phone, the Mac isn't locked, and Mac tracking isn't switched off. Both share one counter in `focus/days.py`.
+
+The route, behind the login: `GET /api/apps?range=today|week` (anything else is a 422). It gives `{"range", "apps"}` with the apps sorted by time, most first: the top 8, then everything else summed into one last entry called "Other apps". Each app has `total_seconds`. An app that ever had a site in the range (a browser) also has `youtube_seconds` and `other_sites_seconds`. An empty range gives `"apps": []`.
+
+```bash
+curl -s -u YOURUSER:YOURPASS "localhost:8000/api/apps?range=week" | python3 -m json.tool
+```
+
 ## Calendar
 
 Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in `DAYANPI_DATA_DIR`). It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:

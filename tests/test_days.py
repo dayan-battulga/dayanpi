@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 from dayanpi.focus.days import (
+    count_app_seconds,
     build_day_page,
     find_finished_todos,
     find_seconds_until_midnight,
@@ -225,3 +226,29 @@ def test_an_old_log_without_tracking_lines_counts_as_on():
     assert "paused" not in page
     assert "- Arc: 2m" in page
     assert "- YouTube: 2m" in page
+
+
+def count(lines: list[dict]) -> dict[str, tuple[float, float, bool]]:
+    counted = count_app_seconds(lines, DAY)
+    return {app: (seconds.total, seconds.youtube, seconds.has_site) for app, seconds in counted.items()}
+
+
+def test_the_shared_counter_splits_a_browser_into_youtube_and_the_rest():
+    lines = [sample(9, 0, 0, "working", "Chrome", "youtube.com")] * 2  # 1 min
+    lines += [sample(9, 5, 0, "phone", "Chrome", "m.youtube.com")]  # 30 s, a subdomain
+    lines += [sample(9, 10, 0, "working", "Chrome", "github.com")] * 3  # 1.5 min
+    lines += [sample(9, 15, 0, "working", "Chrome", None)]  # a browser sample with no site: other
+    lines += [sample(9, 20, 0, "working", "Cursor")] * 4
+    assert count(lines) == {"Chrome": (210, 90, True), "Cursor": (120, 0, False)}
+
+
+def test_the_shared_counter_skips_away_unknown_locked_and_paused_time():
+    lines = [sample(9, 0, 0, "away", "Cursor"), sample(9, 1, 0, "unknown", "Cursor"), sample(9, 2, 0, "working", "Locked")]
+    lines += [line(9, 3, "mac_tracking", enabled=False), sample(9, 4, 0, "working", "Cursor"), line(9, 5, "mac_tracking", enabled=True)]
+    lines += [sample(9, 6, 0, "working", "Cursor")]
+    assert count(lines) == {"Cursor": (30, 0, False)}
+
+
+def test_the_shared_counter_reads_old_logs_without_sites_or_apps():
+    old = [{"ts": at(9), "day": DAY, "event": "sample", "state": "working", "app": "Arc"}, {"ts": at(9, 1), "day": DAY, "event": "sample", "state": "working"}]
+    assert count(old) == {"Arc": (30, 0, False)}

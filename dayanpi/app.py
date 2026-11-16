@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool, StringConstraints
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from dayanpi.hardware import collector
 from dayanpi.focus import days
@@ -343,6 +343,13 @@ def month_days(month: Annotated[str, Query(pattern=days.MONTH_PATTERN)]):
     if today.startswith(month + "-"):
         found[today] = days.read_page_totals(build_today_page(now))
     return {"month": month, "today": today, "days": found}
+
+
+@app.get("/api/apps")
+def list_apps(range: Annotated[Literal["today", "week"], Query()] = "today"):
+    """Time per Mac app for the Apps card, biggest first: the top 8, then the rest as "Other apps"."""
+    apps = days.build_apps_chart(focus_log, time.time(), range)
+    return {"range": range, "apps": apps}
 
 
 @app.get("/api/days/{day}")
