@@ -33,7 +33,7 @@ export function App() {
       </div>
       <CalendarCard todayFocusSeconds={focus?.today.working_seconds} now={now} />
       <SignCard sign={focus?.sign} now={now} />
-      <PiSection stats={snapshot} />
+      <PiSection stats={snapshot} now={now} />
       <footer className="footer mono muted small">
         <span>dayanpi · served from the Pi on your desk</span>
         <span>tailscale serve · private</span>

@@ -500,3 +500,33 @@ def test_toggle_block_flips_under_the_lock(tmp_path):
     assert tracker.toggle_block(NOON, source="gesture") is True
     assert tracker.toggle_block(NOON + 1, source="api") is False
     assert [event["action"] for event in log.read_day("2026-10-29") if event["event"] == "block"] == ["start", "stop"]
+
+
+def test_paused_mac_tracking_drops_reports_and_clears_the_current_app(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    tracker = FocusTracker(log=log, started_at=NOON)
+    tracker.record_app("Google Chrome", NOON, site="youtube.com")
+    tracker.set_mac_tracking(False, NOON + 1)
+    assert (tracker.status(NOON + 2)["app"], tracker.status(NOON + 2)["site"]) == (None, None), "cleared right away"
+    assert tracker.record_app("Code", NOON + 3) is False
+    assert tracker.status(NOON + 4)["app"] is None
+    tracker.set_mac_tracking(True, NOON + 5)
+    assert tracker.record_app("Code", NOON + 6) is True
+    lines = [(event["event"], event.get("app"), event.get("enabled")) for event in log.read_day("2026-10-29")]
+    assert lines == [
+        ("mac_app", "Google Chrome", None),
+        ("mac_tracking", None, False),
+        ("mac_tracking", None, True),
+        ("mac_app", "Code", None),
+    ]
+
+
+def test_a_new_day_that_starts_paused_says_so(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    desk = Desk(log=log)
+    desk.tracker.set_mac_tracking(False, desk.now)
+    midnight = datetime(2026, 10, 30, 0, 0, 5).timestamp()
+    desk.tracker.update(make_reading(), midnight)
+    next_day = [event["event"] for event in log.read_day("2026-10-30")]
+    assert next_day[:2] == ["day_start", "mac_tracking"]
+    assert [event for event in log.read_day("2026-10-30") if event["event"] == "mac_tracking"][0]["enabled"] is False

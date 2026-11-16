@@ -310,6 +310,7 @@ class FocusTracker:
         self._block_active = False
         self._current_app: str | None = None
         self._current_site: str | None = None
+        self._mac_tracking = True  # the dashboard's switch; off drops the Mac helper's reports
         self._last_sample_at = started_at
         self._last_check: CheckSummary | None = None
         self._totals = DayTotals(day=format_day(started_at))
@@ -323,14 +324,30 @@ class FocusTracker:
         return update
 
     def record_app(self, app: str, now: float, site: str | None = None) -> bool:
-        """The Mac's front app, and the site when it's a browser. A line in the log when either changes."""
+        """The Mac's front app, and the site when it's a browser. A line in the log when either changes.
+
+        While Mac tracking is off it's dropped: no line, no current app, and False back.
+        """
         with self._lock:
-            changed = (app, site) != (self._current_app, self._current_site)
+            changed = self._mac_tracking and (app, site) != (self._current_app, self._current_site)
             if changed:
                 self._current_app = app
                 self._current_site = site
                 self._write({"event": "mac_app", "app": app, "site": site}, now)
         return changed
+
+    def set_mac_tracking(self, enabled: bool, now: float) -> None:
+        """Logs a mac_tracking line. Off clears the current app and site right away.
+
+        The caller decides when: on each switch, and at startup when it starts off. While it's
+        off, every new day gets a line too, so the day page knows the day started paused.
+        """
+        with self._lock:
+            self._mac_tracking = enabled
+            if not enabled:
+                self._current_app = None
+                self._current_site = None
+            self._write({"event": "mac_tracking", "enabled": enabled}, now)
 
     def record_gesture(self, name: str, now: float, **details) -> None:
         """details go on the same line, like spoken="llm" for the peace sign."""
@@ -604,6 +621,8 @@ class FocusTracker:
             if self._state == "working":
                 self._streak_start = now
             self._write({"event": "day_start", "state": self._state}, now)
+            if not self._mac_tracking:
+                self._write({"event": "mac_tracking", "enabled": False}, now)
 
     def _trim_segments(self) -> None:
         if len(self._segments) > MAX_SEGMENTS:

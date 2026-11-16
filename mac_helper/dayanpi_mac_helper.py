@@ -7,6 +7,10 @@ plus a heartbeat every 60 seconds. Never a full URL, a path, a query or a page t
 and nothing at all from incognito/private windows. Safari and Firefox send no site:
 Safari can't tell a script which windows are private, and Firefox has no tabs to ask.
 
+The dashboard has a switch for it. The helper asks the Pi every 10 seconds (and reads the
+answer off every report too); while it's off, it doesn't look at the front app or any
+browser at all, and when it comes back on it sends the app in front right away.
+
     python3 dayanpi_mac_helper.py --once      # print the app in front and quit
     python3 dayanpi_mac_helper.py --dry-run   # keep watching, only print what it would send
     python3 dayanpi_mac_helper.py             # the real thing (DAYANPI_USER + Keychain password)
@@ -36,6 +40,7 @@ from typing import Callable
 
 DEFAULT_BASE_URL = "https://dayoon.tail279594.ts.net"
 APP_ROUTE = "/api/mac/app"
+TRACKING_ROUTE = "/api/mac/tracking"
 KEYCHAIN_SERVICE = "dayanpi"
 
 POLL_INTERVAL_S = 2.0
@@ -43,6 +48,8 @@ HEARTBEAT_INTERVAL_S = 60.0
 FIRST_BACKOFF_S = 2.0
 MAX_BACKOFF_S = 60.0
 HTTP_TIMEOUT_S = 5.0
+TRACKING_CHECK_S = 10.0  # how often it asks the Pi whether the dashboard's switch is on
+MAX_REPLY_BYTES = 4096
 COMMAND_TIMEOUT_S = 5.0
 
 MAX_APP_NAME_LENGTH = 100
@@ -120,10 +127,17 @@ class SiteDetection:
 class SendResult:
     delivered: bool
     problem: str = ""
+    enabled: bool | None = None  # the dashboard's switch, when the reply said
+
+
+@dataclass
+class Reply:
+    status: int
+    body: bytes = b""
 
 
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess]
-RequestSender = Callable[[urllib.request.Request, float], int]
+RequestSender = Callable[[urllib.request.Request, float], Reply]
 
 
 def run_command(args: list[str]) -> subprocess.CompletedProcess:
@@ -146,15 +160,25 @@ def run_command(args: list[str]) -> subprocess.CompletedProcess:
     return output
 
 
-def send_request(request: urllib.request.Request, timeout_s: float) -> int:
-    """Sends one request and returns the HTTP status. Network trouble raises OSError."""
+def send_request(request: urllib.request.Request, timeout_s: float) -> Reply:
+    """Sends one request and returns the HTTP status and the start of the body. Network trouble raises OSError."""
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            status = response.status
+            reply = Reply(status=response.status, body=response.read(MAX_REPLY_BYTES))
     except urllib.error.HTTPError as error:
-        status = error.code
+        reply = Reply(status=error.code)
         error.close()
-    return status
+    return reply
+
+
+def read_enabled(body: bytes) -> bool | None:
+    """The "enabled" in a reply from the Pi, or None when it doesn't say (an older Pi, an error page)."""
+    try:
+        enabled = json.loads(body or b"{}").get("enabled")
+    except (ValueError, AttributeError):
+        enabled = None
+    switch = enabled if isinstance(enabled, bool) else None
+    return switch
 
 
 @dataclass
@@ -316,10 +340,11 @@ def describe_status(status: int, user: str) -> SendResult:
 
 
 class PiClient:
-    """Posts the front app to the dashboard, logging in like the browser does (Basic Auth)."""
+    """Posts the front app to the dashboard and asks about its switch, logging in like the browser does (Basic Auth)."""
 
     def __init__(self, app_url: str, user: str, run: CommandRunner, send: RequestSender) -> None:
         self.app_url = app_url
+        self.tracking_url = app_url[: -len(APP_ROUTE)] + TRACKING_ROUTE
         self.user = user
         self.run = run
         self.send = send
@@ -329,16 +354,37 @@ class PiClient:
         self.password = read_keychain_password(self.run, self.user)
 
     def build_request(self, app_name: str, site: str | None = None) -> urllib.request.Request:
-        token = base64.b64encode(f"{self.user}:{self.password}".encode("utf-8")).decode("ascii")
         request = urllib.request.Request(
             self.app_url,
             data=encode_app(app_name, site),
             method="POST",
             headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
         )
+        self.add_login(request)
+        return request
+
+    def add_login(self, request: urllib.request.Request) -> None:
+        token = base64.b64encode(f"{self.user}:{self.password}".encode("utf-8")).decode("ascii")
         # urllib copies ordinary headers onto a redirect, even to another host; this one stays behind.
         request.add_unredirected_header("Authorization", f"Basic {token}")
-        return request
+
+    def read_tracking(self) -> bool | None:
+        """GET the dashboard's switch: True or False, or None when the Pi can't say (out of reach, wrong login)."""
+        status = 0
+        enabled = None
+        try:
+            if self.password is None:
+                self.load_password()
+            request = urllib.request.Request(self.tracking_url, method="GET", headers={"User-Agent": USER_AGENT})
+            self.add_login(request)
+            reply = self.send(request, HTTP_TIMEOUT_S)
+            status = reply.status
+            enabled = read_enabled(reply.body) if 200 <= status < 300 else None
+        except (SetupError, OSError, http.client.HTTPException):
+            enabled = None
+        if status == HTTPStatus.UNAUTHORIZED:
+            self.password = None
+        return enabled
 
     def send_app(self, app_name: str, site: str | None = None) -> SendResult:
         """One POST. After a 401 the Keychain is read again on the next try, so fixing it there is enough."""
@@ -346,8 +392,10 @@ class PiClient:
         try:
             if self.password is None:
                 self.load_password()
-            status = self.send(self.build_request(app_name, site), HTTP_TIMEOUT_S)
+            reply = self.send(self.build_request(app_name, site), HTTP_TIMEOUT_S)
+            status = reply.status
             result = describe_status(status, self.user)
+            result.enabled = read_enabled(reply.body) if result.delivered else None
         except SetupError as error:
             result = SendResult(delivered=False, problem=str(error))
         except (OSError, http.client.HTTPException) as error:
@@ -373,6 +421,11 @@ class AppReporter:
         self.retry_at = 0.0
         self.backoff_s = 0.0
         self.failures = 0
+
+    def resend(self) -> None:
+        """Sends the next report right away, even if nothing changed: tracking just came back on."""
+        self.sent_front = None
+        self.retry_at = 0.0
 
     def report(self, app_name: str, site: str | None = None) -> None:
         now = self.clock()
@@ -407,29 +460,67 @@ class AppReporter:
             )
 
 
-def watch_front_app(tools: HelperTools, reporter: AppReporter) -> None:
-    """Checks the front app every POLL_INTERVAL_S until Ctrl+C or launchd stops it."""
+class TrackingSwitch:
+    """The dashboard's on/off switch for this helper, as last heard from the Pi.
+
+    It starts on. refresh() asks the Pi every TRACKING_CHECK_S, and hear() also takes the
+    answer off each report's reply. When the Pi can't say, the last answer stands.
+    """
+
+    def __init__(self, check: Callable[[], bool | None], clock: Callable[[], float], on_resume: Callable[[], None]) -> None:
+        self.check = check
+        self.clock = clock
+        self.on_resume = on_resume
+        self.enabled = True
+        self.checked_at: float | None = None
+
+    def refresh(self) -> None:
+        now = self.clock()
+        if self.checked_at is None or now - self.checked_at >= TRACKING_CHECK_S:
+            self.checked_at = now
+            self.hear(self.check())
+
+    def hear(self, enabled: bool | None) -> None:
+        if enabled is not None and enabled != self.enabled:
+            self.enabled = enabled
+            if enabled:
+                logger.info("tracking is back on from the dashboard, sending the app in front")
+                self.on_resume()
+            else:
+                logger.info("tracking paused from the dashboard: not looking at the front app or any browser")
+
+
+def watch_front_app(tools: HelperTools, reporter: AppReporter, switch: TrackingSwitch | None = None) -> None:
+    """Checks the front app every POLL_INTERVAL_S until Ctrl+C or launchd stops it.
+
+    With a switch that's off, it looks at nothing and only asks the Pi again every TRACKING_CHECK_S.
+    """
     detection_failing = False
     site_problems: dict[str, str] = {}  # the last no-site reason logged per browser, so each is said once
     while True:
         started = tools.clock()
-        detection = detect_front_app(tools.run)
-        if detection.app_name is None:
-            if not detection_failing:
-                logger.warning(
-                    "can't tell which app is in front, skipping until that works again (%s)", detection.problem
-                )
-            detection_failing = True
-        else:
-            if detection_failing:
-                logger.info("can tell which app is in front again")
-            detection_failing = False
-            site_detection = detect_site(tools.run, detection.app_name)
-            if site_detection.problem and site_problems.get(detection.app_name) != site_detection.problem:
-                logger.info("no site from %s: %s", detection.app_name, site_detection.problem)
-                site_problems[detection.app_name] = site_detection.problem
-            reporter.report(detection.app_name, site_detection.site)
-        tools.sleep(max(0.0, POLL_INTERVAL_S - (tools.clock() - started)))
+        if switch is not None:
+            switch.refresh()
+        tracking = switch is None or switch.enabled
+        if tracking:
+            detection = detect_front_app(tools.run)
+            if detection.app_name is None:
+                if not detection_failing:
+                    logger.warning(
+                        "can't tell which app is in front, skipping until that works again (%s)", detection.problem
+                    )
+                detection_failing = True
+            else:
+                if detection_failing:
+                    logger.info("can tell which app is in front again")
+                detection_failing = False
+                site_detection = detect_site(tools.run, detection.app_name)
+                if site_detection.problem and site_problems.get(detection.app_name) != site_detection.problem:
+                    logger.info("no site from %s: %s", detection.app_name, site_detection.problem)
+                    site_problems[detection.app_name] = site_detection.problem
+                reporter.report(detection.app_name, site_detection.site)
+        interval = POLL_INTERVAL_S if tracking else TRACKING_CHECK_S
+        tools.sleep(max(0.0, interval - (tools.clock() - started)))
 
 
 def show_front_app(run: CommandRunner) -> int:
@@ -462,7 +553,15 @@ def run_for_real(tools: HelperTools) -> None:
     client = PiClient(app_url, user, tools.run, tools.send)
     client.load_password()
     logger.info("sending the front app to %s as %s", app_url, user)
-    watch_front_app(tools, AppReporter(client.send_app, tools.clock))
+    switch = TrackingSwitch(client.read_tracking, tools.clock, on_resume=lambda: reporter.resend())
+
+    def deliver(app_name: str, site: str | None) -> SendResult:
+        result = client.send_app(app_name, site)
+        switch.hear(result.enabled)
+        return result
+
+    reporter = AppReporter(deliver, tools.clock)
+    watch_front_app(tools, reporter, switch)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

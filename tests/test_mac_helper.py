@@ -105,20 +105,41 @@ class FakeMac:
 
 
 class FakePi:
-    """Records every request and answers with the scripted statuses or errors, repeating the last one."""
+    """Records every report (POST) and answers with the scripted statuses or errors, repeating the last one.
 
-    def __init__(self, answers=(200,)):
+    switch is what GET /api/mac/tracking says, one answer per ask (repeating the last; an exception means
+    out of reach). Each report's reply says whatever the switch said last.
+    """
+
+    def __init__(self, answers=(200,), switch=(True,), report_enabled=None):
         self.answers = list(answers)
+        self.switch = list(switch)
+        self.report_enabled = report_enabled  # what each report's reply says, when it shouldn't follow the switch
+        self.enabled = True
         self.requests = []
         self.timeouts = []
+        self.tracking_requests = []
 
     def send(self, request, timeout_s):
+        reply = self.answer_tracking(request) if request.get_method() == "GET" else self.answer_report(request, timeout_s)
+        return reply
+
+    def answer_tracking(self, request):
+        self.tracking_requests.append(request)
+        answer = self.switch.pop(0) if len(self.switch) > 1 else self.switch[0]
+        if isinstance(answer, Exception):
+            raise answer
+        self.enabled = answer
+        return helper.Reply(200, json.dumps({"enabled": answer}).encode())
+
+    def answer_report(self, request, timeout_s):
         self.requests.append(request)
         self.timeouts.append(timeout_s)
         answer = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        enabled = self.enabled if self.report_enabled is None else self.report_enabled
+        return helper.Reply(answer, json.dumps({"status": "ok", "enabled": enabled}).encode())
 
     def read_sent_apps(self):
         sent_apps = [json.loads(request.data)["app"] for request in self.requests]
@@ -166,9 +187,13 @@ class FakeDelivery:
 
 
 class FakeResponse:
-    def __init__(self, status):
+    def __init__(self, status, body=b'{"enabled": true}'):
         self.status = status
+        self.body = body
         self.closed = False
+
+    def read(self, limit):
+        return self.body[:limit]
 
     def __enter__(self):
         return self
@@ -418,7 +443,7 @@ def test_live_run_keeps_going_through_401s(caplog):
     run_until_stopped([], mac, pi, FakeClock(stop_after_sleeps=60))
     assert len(pi.requests) == 6
     assert caplog.text.count("the Pi said 401, wrong login for 'dayan'") == 6
-    assert mac.count_runs("security") == 6
+    assert mac.count_runs("security") == 1 + len(pi.requests), "read at start, then again after each 401"
 
 
 def test_password_never_shows_up_in_the_output(caplog, capsys):
@@ -511,6 +536,7 @@ def test_dry_run_prints_what_it_would_send_and_sends_nothing(monkeypatch, caplog
         f'dry run, would POST {{"app": "Slack", "site": null}} to {APP_URL}',
     ]
     assert pi.requests == []
+    assert pi.tracking_requests == [], "the dry run doesn't ask the Pi about the switch either"
     assert mac.count_runs("security") == 0
 
 
@@ -543,7 +569,7 @@ def test_run_command_decodes_utf8_and_replaces_bad_bytes():
 def test_send_request_returns_the_status_and_closes_the_response(monkeypatch):
     response = FakeResponse(200)
     monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout: response)
-    assert helper.send_request(urllib.request.Request(APP_URL), 5.0) == 200
+    assert helper.send_request(urllib.request.Request(APP_URL), 5.0) == helper.Reply(200, b'{"enabled": true}')
     assert response.closed
 
 
@@ -552,7 +578,7 @@ def test_send_request_turns_http_errors_into_their_status(monkeypatch):
         raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, io.BytesIO(b"Unauthorized"))
 
     monkeypatch.setattr(urllib.request, "urlopen", reject)
-    assert helper.send_request(urllib.request.Request(APP_URL), 5.0) == 401
+    assert helper.send_request(urllib.request.Request(APP_URL), 5.0).status == 401
 
 
 
@@ -672,3 +698,63 @@ def test_firefox_says_once_that_it_sends_no_site(caplog):
     run_until_stopped([], FakeMac(front_apps=["Firefox"]), pi, FakeClock(stop_after_sleeps=10))
     assert caplog.text.count("no site from Firefox") == 1
     assert pi.read_sent_bodies()[0] == {"app": "Firefox", "site": None}
+
+
+# ----- the dashboard's on/off switch -----
+
+
+def count_detection_runs(mac):
+    runs = mac.count_runs("lsappinfo") + mac.count_runs("osascript")
+    return runs
+
+
+def test_switched_off_it_looks_at_nothing_and_only_asks_every_ten_seconds(caplog):
+    caplog.set_level(logging.INFO)
+    mac = FakeMac(front_apps=["Google Chrome"], tab_urls=["https://www.youtube.com/"])
+    pi = FakePi(switch=[False])
+    clock = FakeClock(stop_after_sleeps=6)
+    run_until_stopped([], mac, pi, clock)
+    assert count_detection_runs(mac) == 0, "no lsappinfo, no osascript, no browser URL"
+    assert pi.requests == []
+    assert len(pi.tracking_requests) == 6
+    assert clock.now == 1000.0 + 5 * helper.TRACKING_CHECK_S
+    assert caplog.text.count("tracking paused from the dashboard") == 1
+
+
+def test_switched_back_on_it_sends_the_app_in_front_right_away(caplog):
+    caplog.set_level(logging.INFO)
+    mac = FakeMac(front_apps=["Code"])
+    pi = FakePi(switch=[True, False, True])
+    clock = FakeClock(stop_after_sleeps=9)
+    run_until_stopped([], mac, pi, clock)
+    assert pi.read_sent_apps() == ["Code", "Code"], "the second one is the resume, long before the heartbeat"
+    assert clock.now < 1000.0 + helper.HEARTBEAT_INTERVAL_S
+    assert caplog.text.count("tracking paused from the dashboard") == 1
+    assert caplog.text.count("tracking is back on from the dashboard") == 1
+
+
+def test_a_report_reply_saying_off_pauses_without_waiting_for_the_next_check():
+    mac = FakeMac(front_apps=["Code"])
+    pi = FakePi(report_enabled=False)
+    run_until_stopped([], mac, pi, FakeClock(stop_after_sleeps=2))
+    assert pi.read_sent_apps() == ["Code"]
+    assert len(pi.tracking_requests) == 1, "the next check isn't due for 10 s"
+    assert mac.count_runs("lsappinfo") == 2, "one look (front + info), then nothing on the next round"
+
+
+@pytest.mark.parametrize(("switch", "looks"), [([OSError("no route to host")], True), ([False, OSError("no route to host")], False)])
+def test_out_of_reach_keeps_the_last_answer(switch, looks):
+    mac = FakeMac(front_apps=["Code"])
+    run_until_stopped([], mac, FakePi(switch=switch), FakeClock(stop_after_sleeps=12))
+    assert (count_detection_runs(mac) > 0) == looks
+
+
+def test_the_switch_reads_the_pis_answer_or_none():
+    pi = FakePi(switch=[False])
+    client = helper.PiClient(APP_URL, USER, FakeMac().run, pi.send)
+    assert client.read_tracking() is False
+    assert pi.tracking_requests[0].full_url == helper.DEFAULT_BASE_URL + helper.TRACKING_ROUTE
+    assert pi.tracking_requests[0].get_header("Authorization") == make_auth_header(PASSWORD)
+    assert helper.PiClient(APP_URL, USER, FakeMac().run, FakePi(switch=[OSError("down")]).send).read_tracking() is None
+    assert helper.read_enabled(b"<html>404</html>") is None
+    assert helper.read_enabled(b'{"status": "ok"}') is None, "an older Pi's reply doesn't say"

@@ -35,7 +35,8 @@ Always use the **`main`** branch on both machines.
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise) |
 | `/api/focus` | Focus state, today's totals, timeline, and the last gesture or hand sign (`gesture`) |
 | `/api/focus/block` | Start/stop a work block (POST) |
-| `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name) |
+| `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name). While Mac tracking is off it's dropped, still a 200, with `"enabled": false` |
+| `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/sign/page` | Flip the LED sign to the next or previous page (POST `{"step": 1}` or `-1`) |

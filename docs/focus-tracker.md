@@ -165,6 +165,15 @@ What it records, and what it never does:
 
 Logs from before sites existed just have no `site`, and everything still reads them fine.
 
+**The on/off switch.** The Mac entry in the status bar has a switch. Off pauses Mac tracking:
+
+- **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the Mac entry says **Paused**.
+- **On the Mac, within 10 seconds:** the helper stops looking at the front app and the browser entirely, and only asks the Pi every 10 seconds whether it's back on. Flip it on and it sends the app in front straight away.
+- **It sticks.** The setting is kept in `data/mac_tracking.json` on the Pi (or in `DAYANPI_DATA_DIR`), so restarts keep it. It's on until you first switch it off.
+- **In the log** every flip writes a `mac_tracking` line with `"enabled": true` or `false`, and while it's off, each new day starts with one too. The day page doesn't count paused time toward any site, and says how long tracking was paused. Logs from before the switch count as on.
+
+The routes, behind the login: `GET /api/mac/tracking` gives `{"enabled": true}` or `false`, and `POST /api/mac/tracking` with `{"enabled": false}` (a real true or false, nothing else) flips it. While it's off, `POST /api/mac/app` still answers 200, with `"enabled": false` in its reply, so the helper knows to stop.
+
 **Deploy it:**
 
 ```bash
@@ -232,7 +241,7 @@ Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in
 - **Totals:** the same numbers, readable.
 - **Focus blocks:** each block's start and end time and how long it ran. A block still on at midnight shows up in both days: one ends "still on at the end of the day", the next starts at 00:00.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
-- **Sites:** the top 10 websites by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site). Only time at the desk counts: you're working or on your phone, not away, and the Mac isn't locked. It's counted from the 30-second sample lines, so it's accurate to about half a minute. Days from before sites existed just say "None".
+- **Sites:** the top 10 websites by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site). Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked, and Mac tracking isn't switched off (if it was, the section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. Days from before sites existed just say "None".
 
 It's all built from that day's focus log (the to-dos come from its `todo` lines), with the same math the restart and the stats tool use.
 

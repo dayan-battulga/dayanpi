@@ -1,4 +1,5 @@
 import gc
+import json
 import os
 import re
 import tempfile
@@ -609,3 +610,63 @@ def test_day_routes_serve_past_pages_and_build_today_live(monkeypatch, tmp_path)
     assert all(code in (404, 422) for code in bad_names)
     assert bad_names[:3] == [422, 422, 422]
     assert bad_month.status_code == 422
+
+
+@pytest.fixture
+def fresh_mac_tracking(monkeypatch, tmp_path):
+    """Its own setting file and tracker, so one test switching it off can't leak into the next."""
+    from dayanpi.focus.mac_tracking import MacTrackingSetting
+    from dayanpi.focus.tracker import FocusLog, FocusTracker
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "mac_tracking", MacTrackingSetting(tmp_path / "mac_tracking.json"))
+    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    return log
+
+
+def test_the_mac_tracking_switch_routes(fresh_mac_tracking, tmp_path):
+    with TestClient(app.app) as client:
+        assert client.get("/api/mac/tracking").status_code == 401
+        assert client.post("/api/mac/tracking", json={"enabled": False}).status_code == 401
+        assert client.get("/api/mac/tracking", auth=AUTH).json() == {"enabled": True}
+        assert client.post("/api/mac/tracking", json={"enabled": False}, auth=AUTH).json() == {"enabled": False}
+        assert client.get("/api/mac/tracking", auth=AUTH).json() == {"enabled": False}
+        assert client.get("/api/focus", auth=AUTH).json()["mac_tracking"] is False
+        bad = [client.post("/api/mac/tracking", json=body, auth=AUTH).status_code for body in ({}, {"enabled": "no"}, {"enabled": 1}, {"enabled": None})]
+    assert bad == [422, 422, 422, 422]
+    assert json.loads((tmp_path / "mac_tracking.json").read_text()) == {"enabled": False}
+
+
+def test_reports_are_dropped_while_off_and_pausing_clears_the_current_app(fresh_mac_tracking):
+    from dayanpi.focus.tracker import format_day
+
+    with TestClient(app.app) as client:
+        client.post("/api/mac/app", json={"app": "Google Chrome", "site": "youtube.com"}, auth=AUTH)
+        client.post("/api/mac/tracking", json={"enabled": False}, auth=AUTH)
+        cleared = client.get("/api/focus", auth=AUTH).json()
+        dropped = client.post("/api/mac/app", json={"app": "Code"}, auth=AUTH)
+        still_cleared = client.get("/api/focus", auth=AUTH).json()
+        client.post("/api/mac/tracking", json={"enabled": True}, auth=AUTH)
+        back = client.post("/api/mac/app", json={"app": "Code"}, auth=AUTH)
+    assert (cleared["app"], cleared["site"]) == (None, None)
+    assert dropped.status_code == 200
+    assert dropped.json() == {"status": "ok", "changed": False, "enabled": False}
+    assert still_cleared["app"] is None
+    assert back.json() == {"status": "ok", "changed": True, "enabled": True}
+    lines = [(line["event"], line.get("app"), line.get("enabled")) for line in fresh_mac_tracking.read_day(format_day(time.time())) if line["event"] in ("mac_app", "mac_tracking")]
+    assert lines == [
+        ("mac_app", "Google Chrome", None),
+        ("mac_tracking", None, False),
+        ("mac_tracking", None, True),
+        ("mac_app", "Code", None),
+    ]
+
+
+def test_starting_up_switched_off_logs_that_it_is_paused(fresh_mac_tracking):
+    from dayanpi.focus.tracker import format_day
+
+    app.mac_tracking.set(False)
+    with TestClient(app.app):
+        pass
+    lines = [line for line in fresh_mac_tracking.read_day(format_day(time.time())) if line["event"] == "mac_tracking"]
+    assert [line["enabled"] for line in lines] == [False]

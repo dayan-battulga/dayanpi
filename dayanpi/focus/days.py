@@ -74,16 +74,40 @@ def count_site_seconds(lines: list[dict], day: str) -> dict[str, float]:
     """The TOP_SITES sites by time at the desk, most first.
 
     From the sample lines: each one stands for the SAMPLE_LOG_INTERVAL_S before it, and
-    counts when you were working or on your phone (not away or unknown) and the Mac wasn't
-    locked. Older logs have no site on their samples and count nothing.
+    counts when you were working or on your phone (not away or unknown), the Mac wasn't
+    locked, and Mac tracking wasn't paused. Older logs have no site on their samples and
+    count nothing.
     """
     totals: dict[str, float] = {}
+    paused = False
     for line in list_day_lines(lines, day):
         site = line.get("site")
-        if line.get("event") == "sample" and site and line.get("state") in AT_DESK_STATES and line.get("app") != LOCKED_APP:
+        if line.get("event") == "mac_tracking":
+            paused = line.get("enabled") is False
+        if line.get("event") == "sample" and site and not paused and line.get("state") in AT_DESK_STATES and line.get("app") != LOCKED_APP:
             totals[site] = totals.get(site, 0.0) + SAMPLE_LOG_INTERVAL_S
     top = dict(sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:TOP_SITES])
     return top
+
+
+def count_paused_seconds(lines: list[dict], day: str) -> float:
+    """How long Mac tracking was switched off that day, from its mac_tracking lines.
+
+    A pause still on at the end of the day runs to the day's last line. Older logs have no
+    such lines, so they were never paused.
+    """
+    todays = list_day_lines(lines, day)
+    paused = 0.0
+    paused_since = None
+    for line in todays:
+        if line.get("event") == "mac_tracking" and line.get("enabled") is False and paused_since is None:
+            paused_since = line["ts"]
+        elif line.get("event") == "mac_tracking" and line.get("enabled") is True and paused_since is not None:
+            paused += line["ts"] - paused_since
+            paused_since = None
+    if paused_since is not None:
+        paused += todays[-1]["ts"] - paused_since
+    return paused
 
 
 def read_midnight(day: str) -> float:
@@ -107,6 +131,7 @@ def build_day_page(lines: list[dict], day: str) -> str:
     blocks = find_blocks(lines, day)
     todos = find_finished_todos(lines, day)
     sites = count_site_seconds(lines, day)
+    paused = count_paused_seconds(lines, day)
     date = datetime.strptime(day, DAY_FORMAT)
     parts = [
         "---",
@@ -147,6 +172,7 @@ def build_day_page(lines: list[dict], day: str) -> str:
             *([] if todos else ["- None"]),
             "",
             "## Sites",
+            *([f"Mac tracking was paused for {format_duration(paused)}, so that time isn't counted."] if paused > 0 else []),
             *[f"- {site}: {format_duration(seconds)}" for site, seconds in sites.items()],
             *([] if sites else ["- None"]),
         ]

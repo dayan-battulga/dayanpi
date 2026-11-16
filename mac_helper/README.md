@@ -4,6 +4,8 @@ A tiny script for the focus tracker. The Pi's camera can tell whether I'm workin
 
 Every 2 seconds it asks macOS for the name of the app in front. When that's a browser it can ask (Google Chrome, Brave Browser, Microsoft Edge or Arc), it also asks for the site of the active tab: just the host name, like `youtube.com`. When either changes, it sends both to the Pi (`POST /api/mac/app`). It also re-sends them every 60 seconds as a heartbeat, so the Pi knows the Mac is still there. A locked screen shows up as `Locked`.
 
+**The switch on the dashboard.** The Mac entry in the status bar at the bottom of the dashboard has an on/off switch. Off pauses the helper: it stops looking at the front app and the browser altogether (no `lsappinfo`, no AppleScript, nothing sent) and only asks the Pi every 10 seconds whether it's back on. So flipping it takes up to 10 seconds to reach the Mac; the Pi stops counting right away either way. Flip it back on and the helper sends the app in front straight away. The setting lives on the Pi, so it survives restarts of both. If the Pi can't be reached, the helper keeps whatever it last heard (on, the first time).
+
 If the Pi can't be reached (Tailscale off, Pi rebooting), it doesn't crash. It waits and tries again (2 s, 4 s, 8 s... up to a minute between tries), and it only ever sends whatever app is in front *by then*, so nothing piles up.
 
 It's plain Python with nothing to install, so macOS's own `/usr/bin/python3` runs it.
@@ -116,6 +118,8 @@ You want `state = running`. The log gets a line per app switch, plus warnings wh
 2026-10-29 10:14:40 INFO front app: Slack
 2026-10-29 10:20:11 WARNING couldn't send 'Slack', trying again in 2 s: can't reach the Pi (...). Is Tailscale connected and the dayanpi service running?
 2026-10-29 10:20:15 INFO reached the Pi again after 2 failed tries
+2026-10-29 12:00:04 INFO tracking paused from the dashboard: not looking at the front app or any browser
+2026-10-29 13:10:08 INFO tracking is back on from the dashboard, sending the app in front
 ```
 
 It grows slowly. Empty it whenever you like: `: > ~/Library/Logs/dayanpi-mac-helper.log`

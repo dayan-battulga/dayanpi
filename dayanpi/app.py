@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StrictBool, StringConstraints
 
 from typing import Annotated, Literal
 
@@ -22,6 +22,7 @@ from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
 from dayanpi.focus.coach import TodoCoach, read_bedtime
+from dayanpi.focus.mac_tracking import MacTrackingSetting, find_mac_tracking_path
 from dayanpi.focus.todos import TEXT_MAX, TodoList, find_todo_path
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
@@ -57,6 +58,7 @@ latest_snapshot: dict | None = None
 focus_log = FocusLog(FOCUS_LOG_DIR)
 tracker = FocusTracker(focus_log, started_at=time.time())
 todos = TodoList(find_todo_path(), focus_log)
+mac_tracking = MacTrackingSetting(find_mac_tracking_path())
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
 LLM_MODEL = read_llm_model()
@@ -109,6 +111,7 @@ def build_focus_status() -> dict:
     status["gesture"] = stamp_age(None if worker is None else worker.last_gesture, now)
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     status["todos"] = todos.snapshot(now)
+    status["mac_tracking"] = mac_tracking.enabled
     version = sign_preview.version if sign_controller is not None else None
     status["sign"] = {"mode": SIGN_MODE, "page": None if sign_controller is None else sign_controller.page, "version": version}
     return status
@@ -227,6 +230,9 @@ async def lifespan(app: FastAPI):
             "(e.g. via EnvironmentFile=/etc/dayanpi.env)"
         )
     sampler.sample()
+    if not mac_tracking.enabled:
+        tracker.set_mac_tracking(False, time.time())
+        logger.info("Mac tracking is paused (switched off on the dashboard)")
     stream.start()
     if side_stream is not None:
         side_stream.start()
@@ -456,10 +462,27 @@ class AppReport(BaseModel):
     site: Annotated[str, StringConstraints(max_length=SITE_MAX, pattern=SITE_PATTERN)] | None = None
 
 
+class MacTrackingChange(BaseModel):
+    enabled: StrictBool
+
+
 @app.post("/api/mac/app")
 def mac_app(report: AppReport):
+    """While Mac tracking is off the tracker drops the report; "enabled" tells the helper to stop asking."""
     changed = tracker.record_app(report.app.strip(), time.time(), site=report.site)
-    return {"status": "ok", "changed": changed}
+    return {"status": "ok", "changed": changed, "enabled": mac_tracking.enabled}
+
+
+@app.get("/api/mac/tracking")
+def get_mac_tracking():
+    return {"enabled": mac_tracking.enabled}
+
+
+@app.post("/api/mac/tracking")
+def set_mac_tracking(change: MacTrackingChange):
+    if mac_tracking.set(change.enabled):
+        tracker.set_mac_tracking(change.enabled, time.time())
+    return {"enabled": mac_tracking.enabled}
 
 
 @app.get("/api/sign.png")

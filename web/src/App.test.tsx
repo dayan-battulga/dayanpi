@@ -122,3 +122,48 @@ it("offers Show pose only with the pose model, and draws the skeleton over the f
   expect(document.querySelectorAll(".feed-frame svg.pose circle")).toHaveLength(17);
   expect(window.localStorage.getItem("dayanpi.pose")).toBe("1");
 });
+
+it("pauses the Mac tracker from its switch, flipping right away", async () => {
+  const user = userEvent.setup();
+  const posts: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init?: RequestInit) => {
+      if (path === "/api/mac/tracking") posts.push(String(init?.body));
+      return { ok: true, json: async () => ({ segments: [], enabled: false }) };
+    }),
+  );
+  render(<App />);
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: true })));
+  const toggle = screen.getByRole("switch", { name: "Mac tracking" });
+  expect(toggle).toHaveAttribute("aria-checked", "true");
+
+  await user.click(toggle);
+
+  expect(posts).toEqual(['{"enabled":false}']);
+  expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
+  expect(document.getElementById("mac")).toHaveTextContent("Paused");
+});
+
+it("puts the switch back when the Pi doesn't take it", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) => {
+      if (path === "/api/mac/tracking") throw new TypeError("Failed to fetch");
+      return { ok: true, json: async () => ({ segments: [] }) };
+    }),
+  );
+  render(<App />);
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: true })));
+  await user.click(screen.getByRole("switch", { name: "Mac tracking" }));
+  await waitFor(() => expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "true"));
+  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+});
+
+it("says Paused when the Pi says the switch is off", () => {
+  render(<App />);
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: false })));
+  expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
+  expect(document.getElementById("mac")).toHaveTextContent("Paused");
+});

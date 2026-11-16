@@ -205,3 +205,29 @@ def test_an_old_log_without_sites_still_makes_a_page():
     page = build_day_page(old_lines, DAY)
     assert "- Focus: 30m" in page
     assert page.endswith("## Sites\n- None\n")
+
+
+def test_paused_mac_tracking_counts_toward_no_site_and_the_page_says_how_long():
+    lines = [line(9, 0, "state", state="working")]
+    lines += [sample(9, minute, 30, "working", "Google Chrome", "github.com") for minute in range(10)]  # 5 min
+    lines.append(line(9, 10, "mac_tracking", enabled=False))
+    lines += [sample(9, minute, 30, "working", "Google Chrome", "youtube.com") for minute in range(10, 60)]  # paused
+    lines.append(line(10, 10, "mac_tracking", enabled=True))
+    lines += [sample(10, minute, 30, "working", "Google Chrome", "github.com") for minute in range(10, 14)]  # 2 min
+    page = build_day_page(lines, DAY)
+    sites_part = page.split("## Sites\n")[1]
+    assert sites_part.startswith("Mac tracking was paused for 1h00, so that time isn't counted.\n")
+    assert "youtube.com" not in sites_part
+    assert "- github.com: 7m" in sites_part
+
+
+def test_a_pause_still_on_at_the_end_of_the_day_runs_to_the_last_line():
+    lines = [line(9, 0, "state", state="working"), line(22, 0, "mac_tracking", enabled=False), line(23, 30, "sample", state="working")]
+    assert "Mac tracking was paused for 1h30" in build_day_page(lines, DAY)
+
+
+def test_an_old_log_without_tracking_lines_counts_as_on():
+    lines = [line(9, 0, "state", state="working")] + [sample(9, minute, 0, "working", "Arc", "github.com") for minute in range(4)]
+    page = build_day_page(lines, DAY)
+    assert "paused" not in page
+    assert "- github.com: 2m" in page

@@ -63,6 +63,7 @@ export interface FocusStatus {
   block: { active: boolean };
   app: string | null;
   site?: string | null; // the browser tab's host name, when the Mac's front app is a browser that says
+  mac_tracking?: boolean; // the dashboard's switch for the Mac helper
   camera_ok: boolean;
   last_check: CheckSummary | null;
   enabled: boolean;
