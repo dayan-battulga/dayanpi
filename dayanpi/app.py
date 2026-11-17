@@ -33,6 +33,7 @@ from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
+from dayanpi.vision import detector, hands
 
 # uvicorn only configures its own loggers; without this the app's INFO lines
 # ("focus tracker running", "voice off, would say ...") never reach journalctl.
@@ -70,6 +71,10 @@ MEMBER_WRITES = re.compile(
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
+# The models the tracker pages run in the browser, by file name: nothing else in models/ is served. The page keeps
+# them in Cache Storage under this name, so a changed model needs a new file name.
+MODEL_FILES = {path.name: path for path in (detector.OBJECT_MODEL_PATH, detector.FACE_MODEL_PATH, hands.PALM_MODEL_PATH, hands.HAND_MODEL_PATH)}
+MODEL_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 sampler = collector.RateSampler("wlan0")
 stream = create_stream()
@@ -463,6 +468,13 @@ async def session_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     # Without it a browser can keep last week's focus.js against today's index.html after a git pull.
     response.headers.setdefault("Cache-Control", "no-cache")
+    # The tracker pages run the models on threads, which only an isolated page gets. Their workers load from /assets/,
+    # and a worker in an isolated page only starts if its own script says COEP too; any other page ignores it there.
+    path = request.scope["path"]
+    if path.startswith("/track/"):
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    if path.startswith(("/track/", "/assets/")):
+        response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     return response
 
 
@@ -732,11 +744,21 @@ def side_video(request: Request):
     return stream_video(side_stream, _side_video_slots, request)
 
 
+@app.get("/api/models/{name}")
+def model_file(name: str):
+    """One of the four ONNX files, for the tracker pages. Signed in only, like every /api/ route."""
+    path = MODEL_FILES.get(name)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return FileResponse(path, media_type="application/octet-stream", headers={"Cache-Control": MODEL_CACHE_CONTROL})
+
+
 @app.get("/login")
 @app.get("/join/{code}")
 @app.get("/settings")
 @app.get("/me")
 @app.get("/pi")
+@app.get("/track/test")
 def page():
     """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""
     return FileResponse(INDEX_PAGE)

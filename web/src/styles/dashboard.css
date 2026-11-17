@@ -344,6 +344,67 @@ ol {
   margin-top: 28px;
 }
 
+/* ---------- the camera test (components/track/TrackTestPage.tsx): a tool with no mockup, in the sign-in frame ---------- */
+
+.auth-card.track-card {
+  max-width: 720px;
+}
+
+.track-card .button-block {
+  margin-top: 28px;
+}
+
+.track-section {
+  margin-top: 36px;
+}
+
+.track-heading {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.track-live {
+  font-variant-numeric: tabular-nums;
+}
+
+.track-rows,
+.track-steps {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.track-rows strong {
+  font-weight: 600;
+}
+
+.track-steps {
+  padding-left: 20px;
+  color: var(--muted);
+  list-style: decimal;
+}
+
+.track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.track-results {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- the frame: top bar, tabs, dock ---------- */
 
 .topbar {

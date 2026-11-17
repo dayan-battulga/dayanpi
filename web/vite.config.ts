@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: { alias: { "@": path.resolve(webDir, "src") } },
+    // ES workers, so the camera test's worker can import ONNX Runtime, whose threads load that same file.
+    worker: { format: "es" },
     build: {
       // Straight into the folder app.py already serves, so the Pi needs no Node and no new route.
       outDir: path.resolve(webDir, "../dayanpi/static"),

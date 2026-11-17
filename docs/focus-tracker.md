@@ -368,3 +368,65 @@ Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (whic
 | `HOLD_SECONDS["peace"]` | `vision/gestures.py` | `1.0` | How long you hold it |
 | `V_SPREAD` | `vision/gestures.py` | `1.8` | How wide the V has to be (fingertip gap over knuckle gap). Raise it if it still goes off by accident; lower it if a real peace sign gets no `peace` box. |
 | `SPOKEN_MAX` | `focus/coach.py` | `5` | How many to-dos of each list it reads before "and N more" |
+
+## The camera test (study room step 4, part 1)
+
+Before anyone else's desk gets a tracker, we need to know their laptop can run the Pi's models in Chrome, once a second, without cooking itself, and keep doing it when the tab isn't in front. `/track/test` measures exactly that. Nothing from it reaches the Pi: no frames, no numbers. The numbers stay on the page until they press **Copy** and send them to you.
+
+### How they run it
+
+1. Turn on Funnel if they're not on your tailnet (see the [manual](MANUAL.md)), and send them an invite from Settings.
+2. They sign in on a laptop, in **Chrome** (it needs Chrome's camera-frame reader; Safari and Firefox get a "needs Chrome" line), and open **https://dayoon.tail279594.ts.net/track/test**. Typing the address matters: the page needs a full page load to get its headers, so there's no link to it from the other pages yet.
+3. **Start the test**, allow the camera. The first visit downloads the three models (about 18 MB) and keeps them in the browser, so the next visit doesn't.
+4. **Speed**, about 4 minutes: each way the browser can run the models gets a minute of one check a second, with the tab in front. They just sit at the desk like normal.
+5. **In the background**, about 11 minutes, if they have the time: press Start, then follow the steps on the page (tab in front for a minute, another tab for 6 minutes, minimized for 2, then **Pop out** and another app for 2), then **Stop**. Six minutes on another tab is on purpose: Chrome slows hidden pages down harder after 5.
+6. **Copy**, and send it to you. The results box fills in as it goes, so they can copy after the speed part if they're out of time.
+
+If the camera's blocked, missing or busy in another app, the page says which and offers Start again. Clearing the site's data in Chrome removes the kept models.
+
+### What the numbers mean
+
+**Speed**, one line per way of running the models:
+
+- **WebGPU** runs them on the graphics chip. **WASM, N threads** on N processor cores at once (that needs the page's special headers, so "isolated: yes" on the second line). **WASM, 1 thread** on one core: the slowest, but it works everywhere.
+- **median / slowest**: how long one whole check took (grabbing the frame, YOLO on the whole frame, the zoomed phone pass, the palm model and a hand model per palm), counted after 3 warm-up checks. **first scan** is the very first one, with WebGPU's setup in it.
+- **late N of 60**: checks that started over 1.25 s after the one before. A check that takes longer than a second pushes the next one back.
+- **no frame**: checks where the camera hadn't sent a new picture. The very first check is often one (the camera's still waking up); more than that means the camera stalls.
+- **person seen**: how often it saw someone at 0.5 or more. They sat there the whole time, so it should be close to 100%. If one way says much less than the others, that way computes something wrong; don't use it.
+- **memory**: the page and its workers, from Chrome. The graphics chip's own memory isn't in it.
+
+**Fast enough** means, for the best way on the list:
+
+| | Good | Workable | Not yet |
+| --- | --- | --- | --- |
+| median | under 300 ms | 300 to 600 ms (fans, battery) | over 600 ms |
+| slowest | under 1 s | | over 1 s more than once |
+| late | 0 to 2 of 60 | | more than 3 |
+| memory | under 300 MB | | over 1 GB |
+
+For comparison, a recent Mac in headless Chrome came out at 103 ms (WebGPU), 133 ms (4 threads) and 328 ms (1 thread), 51 to 88 MB.
+
+**In the background**, two copies run at once with the fastest way: one on a **page timer** (the plain way: a timer on the page) and one on a **worker timer** (the timer lives in a background worker). Each line is a stretch of time in one place, in order, so for someone who followed the steps that's: tab in front, other tab, tab in front, minimized, tab in front, popped out. ("Other tab" and "minimized" both show as *other tab or minimized*; Chrome can't tell them apart.)
+
+- **gap median / longest**: time between checks. About 1.00 s is perfect. The tracker copes with up to about 2 s; at 30 s with no check it gives up and says "unknown".
+- **late**: gaps over 1.25 s.
+- **no frame** in a hidden stretch means Chrome stopped sending camera frames to a hidden page. That would sink background tracking whichever timer we pick.
+
+What we're looking for: one of the two timers holding about 1 s everywhere, with no "no frame" in the hidden stretches. The page timer slowing down while hidden is expected (Chrome throttles hidden pages' timers); that's why the worker timer is there.
+
+### If it isn't fast enough
+
+In rough order of how cheap they are:
+
+1. **Run the hand models less.** They run on every check today (the palm model, then a hand model per palm), but phones only need them when the zoomed pass found a phone, and the peace sign survives one missed check. Running them only then, or every other check, takes out most of a check.
+2. **Check every 2 seconds.** The rules count checks, so the phone rule would need 3 of the last 5 to mean 10 s instead of 5. Still fine for a study tracker.
+3. **Smaller models**: YOLO at 320x240, or the models quantized to int8 for WASM. Both mean re-measuring accuracy on real desk frames first, like step 1 did.
+4. If only the background part fails: the real tracker uses whichever timer held up. If frames stop while hidden, the pop-out window (or a pinned tab in front) becomes part of the setup.
+
+### How it works (for changing it)
+
+- `GET /api/models/<name>` serves the four ONNX files in `models/` (signed in, read-only, cached for a year). Nothing else in that folder is reachable. A changed model needs a new file name, because browsers keep the old one.
+- The `/track/` pages get `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which is what gives WASM its threads. Files under `/assets/` get the embedder header too, because a worker inside an isolated page only starts when its own script says so; other pages ignore it there. An isolated page refuses anything from another site, which is fine: everything it loads comes off the Pi.
+- The browser runs the same pipeline as the Pi, ported to TypeScript in `web/src/lib/vision/`: `detector.ts`, `hands.ts`, `gestures.ts`, and `worker.ts` (the per-frame part of `focus/worker.py`), with `image.ts` standing in for the few OpenCV calls. Same constants, same steps. The face model isn't ported: the tracker only logs its turn and tilt, and nothing reads them. ONNX Runtime Web runs the models, from npm, with its WASM file in `dayanpi/static/assets/`, and only the camera test's worker loads it.
+- **The port is checked against the Pi's code.** `.venv/bin/python -m dayanpi.vision.export_fixture` runs made-up model outputs, boxes and hands through the Python and saves what comes out to `web/src/lib/vision/python-fixture.json`; the TypeScript tests (`npm test`) run the same inputs and have to match. Change anything in `dayanpi/vision/` and `tests/test_vision_fixture.py` fails until you re-run the export, and then `npm test` tells you what the TypeScript side needs.
+- Each way of running the models gets its own worker (ONNX Runtime fixes its thread count once it starts). Camera frames get to the workers through Chrome's `MediaStreamTrackProcessor`, and like the Pi, a frame is never scanned twice.

@@ -28,6 +28,7 @@ from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
 from dayanpi.focus.desks import Desks  # noqa: E402
+from dayanpi.paths import MODELS_DIR  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
 BASE_URL = "https://testserver"  # the session cookie is Secure, so an http client would never send it back
@@ -1193,6 +1194,8 @@ ACCESS = {
     ("GET", "/settings"): ("/settings", None, 303, 200, 200),
     ("GET", "/me"): ("/me", None, 303, 200, 200),
     ("GET", "/pi"): ("/pi", None, 303, 200, 200),  # members get the page too; it sends them on to /me
+    ("GET", "/track/test"): ("/track/test", None, 303, 200, 200),
+    ("GET", "/api/models/{name}"): ("/api/models/palm_detection_mediapipe_2023feb.onnx", None, 401, 200, 200),
     ("GET", "/"): ("/", None, 303, 200, 200),  # the static mount: the dashboard and its files
 }
 
@@ -1224,15 +1227,49 @@ def test_the_owner_only_reads_turn_a_member_away():
         assert (reply.status_code, reply.json()) == (403, {"detail": "only the owner can do that"}), path
 
 
-@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi"])
+@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track/test"])
 def test_the_page_routes_serve_the_page(path):
     signed_in = let_in(stranger(), find_owner()).get(path)
     signed_out = stranger().get(path, follow_redirects=False)
     assert (signed_in.status_code, signed_in.text) == (200, app.INDEX_PAGE.read_text())
-    if path in ("/settings", "/me", "/pi"):
+    if path in ("/settings", "/me", "/pi", "/track/test"):
         assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=" + quote(path, safe=""))
     else:
         assert (signed_out.status_code, signed_out.text) == (200, app.INDEX_PAGE.read_text())
+
+
+MODEL_NAMES = {
+    "yolo26n_480x640.onnx",
+    "face_detection_yunet_2023mar.onnx",
+    "palm_detection_mediapipe_2023feb.onnx",
+    "handpose_estimation_mediapipe_2023feb.onnx",
+}
+
+
+def test_the_models_route_serves_the_four_models_and_nothing_else():
+    client = let_in(stranger(), add_member())
+    assert set(app.MODEL_FILES) == MODEL_NAMES
+    for name in MODEL_NAMES:
+        reply = client.get(f"/api/models/{name}")
+        assert reply.status_code == 200, name
+        assert reply.content == (MODELS_DIR / name).read_bytes()
+        assert reply.headers["cache-control"] == "private, max-age=31536000, immutable"
+        assert reply.headers["content-type"] == "application/octet-stream"
+    others = ["yolo26n_480x640.onnx.bak", "x.onnx", "..%2Fpaths.py", "%2E%2E%2Fdayanpi%2Fapp.py", "README.md", ""]
+    assert [client.get(f"/api/models/{name}").status_code for name in others] == [404] * len(others)
+    assert stranger().get("/api/models/yolo26n_480x640.onnx").status_code == 401
+
+
+def test_only_the_tracker_pages_are_cross_origin_isolated():
+    client = let_in(stranger(), find_owner())
+    page = client.get("/track/test")
+    asset = next(path for path in re.findall(r'src="([^"]+\.js)"', page.text))
+    isolated = {path: client.get(path).headers for path in ("/track/test", asset, "/me", "/", "/login", "/api/focus", "/api/models/yolo26n_480x640.onnx")}
+    coop = {path: headers.get("cross-origin-opener-policy") for path, headers in isolated.items()}
+    coep = {path: headers.get("cross-origin-embedder-policy") for path, headers in isolated.items()}
+    assert coop == {path: "same-origin" if path == "/track/test" else None for path in isolated}
+    # A worker in an isolated page only starts when its own script says COEP too; the other pages ignore it on an asset.
+    assert coep == {path: "require-corp" if path in ("/track/test", asset) else None for path in isolated}
 
 
 def test_without_a_session_pages_go_to_the_sign_in_and_the_api_says_401():
