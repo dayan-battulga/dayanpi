@@ -398,6 +398,19 @@ def test_sign_in_refuses_the_right_password_during_a_wait_and_clears_on_success(
     assert check_sign_in(store, lockout, "dayan", "the owner password", NOW + 31) is not None, "a success starts the count over"
 
 
+def test_from_my_devices_a_sign_in_never_waits_and_its_misses_do_not_count(store):
+    store.seed_owner("dayan", "the owner password", NOW)
+    lockout = LoginLockout()
+    for _ in range(10):
+        assert check_sign_in(store, lockout, "dayan", "my typo", NOW, from_my_devices=True) is None
+    assert check_sign_in(store, lockout, "dayan", "the owner password", NOW) is not None, "the typos never counted"
+    for _ in range(5):
+        check_sign_in(store, lockout, "dayan", "a stranger's guess", NOW)
+    assert check_sign_in(store, lockout, "dayan", "the owner password", NOW + 1) is None, "the internet waits"
+    assert check_sign_in(store, lockout, "Dayan", "the owner password", NOW + 1, from_my_devices=True).username == "dayan"
+    assert check_sign_in(store, lockout, "dayan", "the owner password", NOW + 2) is None, "and still waits after I sign in"
+
+
 def test_unknown_usernames_get_the_same_lockout(store):
     lockout = LoginLockout()
     for _ in range(5):

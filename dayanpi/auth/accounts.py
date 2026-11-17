@@ -472,10 +472,19 @@ class LoginLockout:
             self._counts.pop(bucket, None)
 
 
-def check_sign_in(store: AccountStore, lockout: LoginLockout, username: str, password: str, now: float) -> User | None:
-    """The user, or None for an unknown name, a wrong password or a wait alike. During a wait the password isn't checked."""
+def check_sign_in(
+    store: AccountStore, lockout: LoginLockout, username: str, password: str, now: float, from_my_devices: bool = False
+) -> User | None:
+    """The user, or None for an unknown name, a wrong password or a wait alike. During a wait the password isn't checked.
+
+    From the owner's own Tailscale devices the lockout isn't touched at all: no wait, a miss doesn't count, and a
+    success doesn't clear the wait strangers ran up, so the internet still waits it out.
+    """
     key = normalize_username(username)
-    user = store.check_login(key, password) if lockout.reserve_attempt(key, now) else None
-    if user is not None:
-        lockout.clear(key)
+    if from_my_devices:
+        user = store.check_login(key, password)
+    else:
+        user = store.check_login(key, password) if lockout.reserve_attempt(key, now) else None
+        if user is not None:
+            lockout.clear(key)
     return user

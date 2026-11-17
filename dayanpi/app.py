@@ -57,10 +57,6 @@ logger = logging.getLogger(__name__)
 # Only used to make the owner account when accounts.db has no users (the first start, or after it's deleted).
 AUTH_USER = os.environ.get("DAYANPI_USER", "")
 AUTH_PASSWORD = os.environ.get("DAYANPI_PASSWORD", "")
-# Tailscale Serve sets Tailscale-User-Login on requests from your own tailnet devices and drops any copy a
-# client sends; Funnel (the public internet) never has it. The full camera feeds only answer when it matches.
-TAILSCALE_LOGIN = os.environ.get("DAYANPI_TAILSCALE_LOGIN", "").strip()
-TAILSCALE_HEADER = "Tailscale-User-Login"
 
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 PUBLIC_PAGES = {"/login", "/api/health"}
@@ -136,7 +132,7 @@ def find_camera_access(request: Request) -> str:
     viewer = auth_routes.read_viewer(request)
     if viewer.user.role != "owner" or viewer.session is None:
         access = "owner_only"
-    elif TAILSCALE_LOGIN and request.headers.getlist(TAILSCALE_HEADER) != [TAILSCALE_LOGIN]:
+    elif auth_routes.TAILSCALE_LOGIN and not auth_routes.is_from_my_devices(request):
         access = "tailscale_only"
     else:
         access = "open"
@@ -250,8 +246,8 @@ async def lifespan(app: FastAPI):
         )
     if auth_routes.accounts.seed_owner(AUTH_USER, AUTH_PASSWORD, time.time()):
         logger.info("made the owner account from DAYANPI_USER and DAYANPI_PASSWORD")
-    if TAILSCALE_LOGIN:
-        logger.info("camera locked to Tailscale login %s", TAILSCALE_LOGIN)
+    if auth_routes.TAILSCALE_LOGIN:
+        logger.info("camera locked to Tailscale login %s", auth_routes.TAILSCALE_LOGIN)
     else:
         logger.warning("camera not locked to Tailscale, don't turn on Funnel")
     sampler.sample()

@@ -49,7 +49,7 @@ def fresh_accounts(monkeypatch, tmp_path):
     monkeypatch.setattr(auth_routes, "accounts", AccountStore(tmp_path / "accounts.db"))
     monkeypatch.setattr(auth_routes, "lockout", LoginLockout())
     monkeypatch.setattr(auth_routes, "password_lockout", LoginLockout())
-    monkeypatch.setattr(app, "TAILSCALE_LOGIN", "")
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", "")
 
 
 def find_owner():
@@ -905,6 +905,34 @@ def test_five_wrong_passwords_lock_the_username_with_the_same_message():
     assert "set-cookie" not in locked.headers and "www-authenticate" not in locked.headers
 
 
+@pytest.mark.parametrize(
+    "lock, copies, skips",
+    [
+        (MY_LOGIN, [MY_LOGIN], True),
+        (MY_LOGIN, [], False),
+        (MY_LOGIN, ["someone@example.com"], False),
+        (MY_LOGIN, [MY_LOGIN, MY_LOGIN], False),
+        ("", [MY_LOGIN], False),  # the variable unset: the header means nothing
+    ],
+)
+def test_a_sign_in_from_my_devices_skips_the_lockout(monkeypatch, caplog, lock, copies, skips):
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", lock)
+    find_owner()
+    funnel = stranger()
+    for _ in range(5):
+        funnel.post("/api/login", json={"username": AUTH[0], "password": "a stranger's guess"})
+    mine, headers = stranger(), [(auth_routes.TAILSCALE_HEADER, copy) for copy in copies]
+    with caplog.at_level(logging.DEBUG, logger="dayanpi"):
+        typos = [mine.post("/api/login", json={"username": AUTH[0], "password": "my typo"}, headers=headers) for _ in range(3)]
+        right = mine.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]}, headers=headers)
+    still_locked = funnel.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
+    assert {(typo.status_code, typo.text) for typo in typos} == {(401, '{"detail":"wrong username or password"}')}
+    assert right.status_code == (200 if skips else 401)
+    assert (COOKIE in right.cookies) is skips
+    assert still_locked.status_code == 401, "the internet still waits either way"
+    assert caplog.records == [], "nothing new in the journal"
+
+
 def test_joining_from_an_invite_signs_the_member_in():
     with open_client() as owner:
         made = owner.post("/api/invites", json={}).json()
@@ -1207,10 +1235,10 @@ def test_a_members_token_is_read_only_and_their_own(fresh_mac_tracking):
     ],
 )
 def test_the_camera_only_answers_the_owner_on_their_own_devices(monkeypatch, role, header, expected):
-    monkeypatch.setattr(app, "TAILSCALE_LOGIN", MY_LOGIN)
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", MY_LOGIN)
     monkeypatch.setattr(app, "side_stream", FakeCamera())
     monkeypatch.setattr(app, "frame_generator", lambda camera, token: iter([b"frame"]))
-    headers = {} if header is None else {app.TAILSCALE_HEADER: header}
+    headers = {} if header is None else {auth_routes.TAILSCALE_HEADER: header}
     client = let_in(stranger(headers=headers), find_owner() if role == "owner" else add_member())
     feeds = [client.get(path) for path in ("/video", "/video/side")]
     access = client.get("/api/focus").json()["camera_access"]
@@ -1221,10 +1249,10 @@ def test_the_camera_only_answers_the_owner_on_their_own_devices(monkeypatch, rol
 
 
 def test_a_second_copy_of_the_tailscale_header_does_not_count(monkeypatch):
-    monkeypatch.setattr(app, "TAILSCALE_LOGIN", MY_LOGIN)
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", MY_LOGIN)
     monkeypatch.setattr(app, "frame_generator", lambda camera, token: iter([b"frame"]))
     client = let_in(stranger(), find_owner())
-    reply = client.get("/video", headers=[(app.TAILSCALE_HEADER, MY_LOGIN), (app.TAILSCALE_HEADER, "someone@example.com")])
+    reply = client.get("/video", headers=[(auth_routes.TAILSCALE_HEADER, MY_LOGIN), (auth_routes.TAILSCALE_HEADER, "someone@example.com")])
     assert reply.status_code == 404
 
 
@@ -1235,7 +1263,7 @@ def test_without_the_lock_the_owner_gets_the_camera_like_before(monkeypatch, cap
         with open_client() as client:
             feeds = [client.get(path).status_code for path in ("/video", "/video/side")]
             access = client.get("/api/focus").json()["camera_access"]
-    member = let_in(stranger(headers={app.TAILSCALE_HEADER: MY_LOGIN}), add_member())
+    member = let_in(stranger(headers={auth_routes.TAILSCALE_HEADER: MY_LOGIN}), add_member())
     assert feeds == [200, 200] and access == "open"
     assert member.get("/video").status_code == 404 and member.get("/api/focus").json()["camera_access"] == "owner_only"
     lines = [record for record in caplog.records if "Tailscale" in record.getMessage()]
@@ -1243,7 +1271,7 @@ def test_without_the_lock_the_owner_gets_the_camera_like_before(monkeypatch, cap
 
 
 def test_with_the_lock_startup_says_so_once(monkeypatch, caplog):
-    monkeypatch.setattr(app, "TAILSCALE_LOGIN", MY_LOGIN)
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", MY_LOGIN)
     with caplog.at_level(logging.INFO):
         with TestClient(app.app):
             pass
@@ -1257,14 +1285,14 @@ def test_the_boxes_only_go_where_the_feed_does(monkeypatch):
             raise AssertionError("no frames here")
 
     monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
-    monkeypatch.setattr(app, "TAILSCALE_LOGIN", MY_LOGIN)
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", MY_LOGIN)
     overlay = {"at": time.time(), "frame_width": 640, "frame_height": 480, "boxes": [{"kind": "phone", "x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2}]}
-    with open_client(headers={app.TAILSCALE_HEADER: MY_LOGIN}) as client:
+    with open_client(headers={auth_routes.TAILSCALE_HEADER: MY_LOGIN}) as client:
         app.worker.last_overlay = overlay
         app.worker.last_side_overlay = overlay
         mine = client.get("/api/focus").json()
         away = let_in(stranger(), find_owner()).get("/api/focus").json()
-        member = let_in(stranger(headers={app.TAILSCALE_HEADER: MY_LOGIN}), add_member()).get("/api/focus").json()
+        member = let_in(stranger(headers={auth_routes.TAILSCALE_HEADER: MY_LOGIN}), add_member()).get("/api/focus").json()
     assert mine["camera_access"] == "open" and mine["overlay"]["boxes"] and mine["side_overlay"]["boxes"]
     assert (away["camera_access"], away["overlay"], away["side_overlay"]) == ("tailscale_only", None, None)
     assert (member["camera_access"], member["overlay"], member["side_overlay"]) == ("owner_only", None, None)

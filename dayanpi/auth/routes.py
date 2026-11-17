@@ -6,6 +6,7 @@ check what's yours. The store and the lockout live here, and the middleware read
 """
 
 import asyncio
+import os
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +38,10 @@ SESSION_COOKIE = "__Host-dayanpi_session"
 MAC_PREFIX = "/api/mac/"
 WRONG_LOGIN = "wrong username or password"
 ROOM_FULL = "the room is full"
+# Tailscale Serve sets Tailscale-User-Login on requests from your own tailnet devices and drops any copy a
+# client sends; Funnel (the public internet) never has it. The camera lock and the sign-in both go by it.
+TAILSCALE_LOGIN = os.environ.get("DAYANPI_TAILSCALE_LOGIN", "").strip()
+TAILSCALE_HEADER = "Tailscale-User-Login"
 
 accounts = AccountStore(find_accounts_path())
 lockout = LoginLockout()
@@ -63,6 +68,12 @@ class Viewer:
 
     user: User
     session: Session | None
+
+
+def is_from_my_devices(request: Request) -> bool:
+    """Exactly one Tailscale-User-Login header, exactly DAYANPI_TAILSCALE_LOGIN (no case folding). Never when it's unset."""
+    mine = bool(TAILSCALE_LOGIN) and request.headers.getlist(TAILSCALE_HEADER) == [TAILSCALE_LOGIN]
+    return mine
 
 
 def read_bearer(request: Request) -> str | None:
@@ -136,9 +147,10 @@ class TokenNew(BaseModel):
 
 
 @router.post("/api/login")
-async def log_in(body: LoginBody, response: Response):
+async def log_in(body: LoginBody, request: Request, response: Response):
     now = time.time()
-    user = await run_scrypt_work(check_sign_in, accounts, lockout, body.username, body.password, now)
+    mine = is_from_my_devices(request)
+    user = await run_scrypt_work(check_sign_in, accounts, lockout, body.username, body.password, now, mine)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=WRONG_LOGIN)
     set_session_cookie(response, accounts.create_session(user.id, now))
