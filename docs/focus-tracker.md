@@ -139,20 +139,24 @@ Your best streak is still counted and still on each day's page, it's just not on
 
 Hand signs get a `gesture` line in the log too.
 
-**The log** lives in `data/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, hand signs, the Mac's front app (and the site, for a browser), a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks, and `block` lines from when it had work blocks; the restart, the stats tool and the day pages just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+**Everyone has their own desk**: their own focus log, to-do list, Mac tracking switch and day pages, all in their own folder, `data/users/<username>/` on the Pi (`focus_log/`, `todos.json`, `mac_tracking.json`, `days/`). Usernames can't change, so neither does the folder. The Pi's cameras, the voice and the peace sign only feed **your** desk (the owner's); everyone else's desk sits in "Waiting" and says "No camera on your desk yet" until their own camera comes in a later step, and their Apps stay empty until then, because apps only count while you're working or on your phone. A member's Mac helper token reports to their own desk.
 
-Check it's filling up:
+**The log** lives in `data/users/<you>/focus_log/`, one file per day (`2026-10-29.jsonl`), one JSON line per event: state changes, pickups, callouts, hand signs, the Mac's front app (and the site, for a browser), a day summary at midnight, and a `sample` line every 30 seconds with the latest detector numbers (person / phone confidence, face turn and tilt, plus the side camera's own numbers when you [run both cameras](#with-both-cameras)). Older files still have `snack` lines and `food` / `drink` / `side_food` numbers from when it tracked snacks, and `block` lines from when it had work blocks; the restart, the stats tool and the day pages just skip them. **Never frames or images.** It's gitignored. `DAYANPI_DATA_DIR` in `/etc/dayanpi.env` moves the whole data folder somewhere else.
+
+Check it's filling up (in the commands in this guide, `ME` is your username, the folder's name under `data/users/`):
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
-.venv/bin/python -m dayanpi.focus.stats            # today
-.venv/bin/python -m dayanpi.focus.stats --days 7   # the week, plus focus by hour of day
-tail -3 data/focus_log/$(date +%F).jsonl   # the raw lines
+ME=yourusername
+.venv/bin/python -m dayanpi.focus.stats              # today, on your desk
+.venv/bin/python -m dayanpi.focus.stats --days 7     # the week, plus focus by hour of day
+.venv/bin/python -m dayanpi.focus.stats --user sam   # someone else's desk
+tail -3 data/users/$ME/focus_log/$(date +%F).jsonl   # the raw lines
 ```
 
-If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point it at the folder: `.venv/bin/python -m dayanpi.focus.stats --log-dir /your/folder/focus_log`.
+If you moved the data folder with `DAYANPI_DATA_DIR` in `/etc/dayanpi.env`, your shell doesn't see that file, so point it at the folder: `DAYANPI_DATA_DIR=/your/folder .venv/bin/python -m dayanpi.focus.stats`.
 
-**Routes** (all behind the sign-in; members can read them all, but every write in this guide is yours only for now). The `curl` lines in this guide run on the Pi and expect you to have signed in once, as in [Using the API from a terminal](MANUAL.md#using-the-api-from-a-terminal), which leaves your sign-in in `~/.dayanpi-cookies`.
+**Routes** (all behind the sign-in). Every desk route answers for whoever is signed in: their own focus, to-dos, days, apps and Mac tracking, and members can change their own. Only the Pi's numbers, the camera, invites and accounts are yours alone. The `curl` lines in this guide run on the Pi and expect you to have signed in once, as in [Using the API from a terminal](MANUAL.md#using-the-api-from-a-terminal), which leaves your sign-in in `~/.dayanpi-cookies`.
 
 | Route | What |
 | --- | --- |
@@ -176,7 +180,7 @@ Logs from before sites existed just have no `site`, and everything still reads t
 
 - **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the line says **Mac tracking paused**.
 - **On the Mac, within 10 seconds:** the helper stops looking at the front app and the browser entirely, and only asks the Pi every 10 seconds whether it's back on. Flip it on and it sends the app in front straight away.
-- **It sticks.** The setting is kept in `data/mac_tracking.json` on the Pi (or in `DAYANPI_DATA_DIR`), so restarts keep it. It's on until you first switch it off.
+- **It sticks.** Each desk keeps its own, in `data/users/<username>/mac_tracking.json` on the Pi, so restarts keep it. It's on until you first switch it off.
 - **In the log** every flip writes a `mac_tracking` line with `"enabled": true` or `false`, and while it's off, each new day starts with one too. The day page doesn't count paused time toward any site, and says how long tracking was paused. Logs from before the switch count as on.
 
 The routes, behind the login: `GET /api/mac/tracking` gives `{"enabled": true}` or `false`, and `POST /api/mac/tracking` with `{"enabled": false}` (a real true or false, nothing else) flips it. While it's off, `POST /api/mac/app` still answers 200, with `"enabled": false` in its reply, so the helper knows to stop.
@@ -250,7 +254,7 @@ What that means day to day:
 
 ```bash
 cd ~/Desktop/site-page/dayanpi
-grep '"sample"' data/focus_log/$(date +%F).jsonl | tail -3
+grep '"sample"' data/users/$ME/focus_log/$(date +%F).jsonl | tail -3
 curl -s -b ~/.dayanpi-cookies localhost:8000/api/focus | python3 -c "import json, sys; print(json.load(sys.stdin)['last_check'])"
 ```
 
@@ -272,15 +276,15 @@ One running to-do list on the left of your desk page, under the totals, with App
 - **Members** see the list and what's current, but get no checkboxes, buttons or add line.
 - The old "Today" list of state changes is gone: the timeline at the top shows the same thing.
 - **Midnight.** Done shows what you finished today. At local midnight those items leave the list, and that day's [calendar page](#calendar) keeps them. Unfinished ones stay put.
-- **Where it lives.** `data/todos.json` on the Pi (or in `DAYANPI_DATA_DIR`). Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
+- **Where it lives.** `data/users/<username>/todos.json` on the Pi: everyone has their own list. Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
 - **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
 
 The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the page keeps up.
 
 ```bash
 curl -s -b ~/.dayanpi-cookies localhost:8000/api/todos | python3 -m json.tool
-cat data/todos.json
-grep '"todo"' data/focus_log/$(date +%F).jsonl
+cat data/users/$ME/todos.json
+grep '"todo"' data/users/$ME/focus_log/$(date +%F).jsonl
 ```
 
 ## Apps
@@ -299,7 +303,7 @@ curl -s -b ~/.dayanpi-cookies "localhost:8000/api/apps?range=week" | python3 -m 
 
 ## Calendar
 
-Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in `DAYANPI_DATA_DIR`). It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
+Every finished day gets its own page, on every desk: `data/users/<username>/days/YYYY-MM-DD.md` on the Pi. It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
 
 - **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos. Obsidian shows these as properties, and the calendar reads them back.
 - **Totals:** the same numbers, readable.
@@ -315,11 +319,11 @@ It's all built from that day's focus log (the to-dos come from its `todo` lines)
 
 Click a day and its page opens in a popup: the totals (focused, phone, away), the to-dos you finished that day with their time, and the apps. Esc, the ×, or a click outside closes it. Today works too, built live, and it refreshes every minute while it's open.
 
-The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from `data/days`. A day with no page is a 404.
+The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from your own desk's `days/`. A day with no page is a 404.
 
 ```bash
-ls data/days/
-cat data/days/$(date -d yesterday +%F).md
+ls data/users/$ME/days/
+cat data/users/$ME/days/$(date -d yesterday +%F).md
 journalctl -u dayanpi --no-pager | grep "day pages"
 curl -s -b ~/.dayanpi-cookies "localhost:8000/api/days?month=$(date +%Y-%m)" | python3 -m json.tool
 ```
@@ -347,7 +351,7 @@ It runs on two small hand models (see [Where the models come from](#where-the-mo
 
 ```bash
 journalctl -u dayanpi -n 50 --no-pager | grep -iE "hand|gesture|would say"
-grep '"gesture"' data/focus_log/$(date +%F).jsonl
+grep '"gesture"' data/users/$ME/focus_log/$(date +%F).jsonl
 ```
 
 ### Adding a sign

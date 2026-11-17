@@ -9,14 +9,9 @@ import { formatShortDate } from "@/lib/format";
 import { fetchJson, request } from "@/lib/http";
 import type { ApiToken } from "@/lib/types";
 
-interface MacHelperSectionProps {
-  owner: boolean; // the tracking switch is the owner's desk's, so only the owner gets it
-  macTracking: MacTracking;
-}
-
-// The Mac helper: the same tracking switch as the Mac line and ⌘K, and the helper's logins. A token works for the
-// Mac's reports only, is shown once when made, and can be revoked any time.
-export function MacHelperSection({ owner, macTracking }: MacHelperSectionProps) {
+// The Mac helper: the same tracking switch as the Mac line and ⌘K (your own desk's), and the helper's logins. A
+// token reports to your own desk only, is shown once when made, and can be revoked any time.
+export function MacHelperSection({ macTracking }: { macTracking: MacTracking }) {
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -65,12 +60,10 @@ export function MacHelperSection({ owner, macTracking }: MacHelperSectionProps) 
         Mac helper
       </h2>
       <div className="settings-rows">
-        {owner && (
-          <div className="setting-row">
-            Track apps and sites
-            <Switch label="Track apps and sites" checked={macTracking.tracking} onCheckedChange={(enabled) => macTracking.flipTracking(enabled)} />
-          </div>
-        )}
+        <div className="setting-row">
+          Track apps and sites
+          <Switch label="Track apps and sites" checked={macTracking.tracking} onCheckedChange={(enabled) => macTracking.flipTracking(enabled)} />
+        </div>
         <ul aria-label="Tokens">
           {(tokens ?? []).map((token) => (
             <li key={token.id} className="setting-row is-tall">

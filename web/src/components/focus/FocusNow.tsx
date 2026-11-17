@@ -78,12 +78,11 @@ interface FocusNowProps {
   midnight: number;
   receivedAt: number;
   macTracking: MacTracking;
-  readOnly: boolean;
 }
 
 // The top of the Desk, on the page with no card around it: the state word and its timer, today's timeline, the stats
 // with the Mac line, and a quiet line for anything that's wrong.
-export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macTracking, readOnly }: FocusNowProps) {
+export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macTracking }: FocusNowProps) {
   const state = focus?.state ?? "unknown";
   const word = (STATE_COPY[state] ?? STATE_COPY.unknown).label;
   const problems = focus == null ? "" : describeProblems(focus);
@@ -102,7 +101,7 @@ export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macT
       <Timeline known={known} loaded={loaded} now={now} midnight={midnight} />
       <div className="focus-row">
         {focus != null && <StatsLine today={focus.today} />}
-        <MacLine focus={focus} macTracking={macTracking} readOnly={readOnly} />
+        <MacLine focus={focus} macTracking={macTracking} />
       </div>
       {problems && <p className="focus-note">{problems}</p>}
     </section>

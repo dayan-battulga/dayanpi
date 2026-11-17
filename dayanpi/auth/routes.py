@@ -47,6 +47,9 @@ TAILSCALE_LOGIN = os.environ.get("DAYANPI_TAILSCALE_LOGIN", "").strip()
 TAILSCALE_HEADER = "Tailscale-User-Login"
 
 accounts = AccountStore(find_accounts_path())
+# app.py hangs each person's desk on these: opened when they join, its folder moved aside when they're removed.
+on_join: Callable[[User], None] = lambda user: None
+on_remove: Callable[[User], None] = lambda user: None
 lockout = LoginLockout()
 # The password change's own waits, so strangers missing at /api/login can't stop a signed-in user changing it.
 password_lockout = LoginLockout()
@@ -187,6 +190,7 @@ async def join(body: JoinBody, response: Response):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ROOM_FULL) from None
     except UsernameTaken:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="that username is taken") from None
+    on_join(user)
     set_session_cookie(response, accounts.create_session(user.id, now))
     return {"user": describe_user(user)}
 
@@ -283,4 +287,5 @@ def delete_account(account_id: RowId):
     if user.role == "owner":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="the owner can't be removed")
     accounts.delete_member(account_id)
+    on_remove(user)
     return {"status": "ok"}

@@ -89,7 +89,7 @@ it("shows a member only their own things, and never asks for the owner's lists",
   expect(sectionNames()).toEqual(["Profile", "Mac helper"]);
   const mac = await openSection(user, "Mac helper");
   expect(await mac.findByText("MacBook")).toBeInTheDocument();
-  expect(mac.queryByRole("switch")).toBeNull(); // the tracking switch is the owner's desk's
+  expect(mac.getByRole("switch", { name: "Track apps and sites" })).toBeInTheDocument(); // their own desk's
   expect(sent.map((request) => request.path)).not.toContain("/api/invites");
   expect(sent.map((request) => request.path)).not.toContain("/api/accounts");
 });

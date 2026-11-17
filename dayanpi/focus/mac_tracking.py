@@ -1,6 +1,6 @@
 """The dashboard's switch for the Mac helper: whether its app and site reports count.
 
-Kept in data/mac_tracking.json (DAYANPI_DATA_DIR overrides data/) as {"enabled": true|false},
+Each desk keeps its own, in its folder's mac_tracking.json (focus/desks.py), as {"enabled": true|false},
 saved whole on every change, so a restart keeps the last pick. No file means on; a file
 that can't be read also means on, with one warning.
 """
@@ -10,17 +10,11 @@ import logging
 import threading
 from pathlib import Path
 
-from dayanpi.focus.tracker import find_data_dir
 from dayanpi.utils.files import write_atomically
 
 MAC_TRACKING_FILE = "mac_tracking.json"
 
 logger = logging.getLogger(__name__)
-
-
-def find_mac_tracking_path() -> Path:
-    path = find_data_dir() / MAC_TRACKING_FILE
-    return path
 
 
 class MacTrackingSetting:

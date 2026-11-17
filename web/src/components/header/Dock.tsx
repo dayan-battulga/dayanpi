@@ -4,7 +4,7 @@ import { PillLink } from "@/components/header/Header";
 import { openNewTodo } from "@/lib/todos";
 
 // On a phone the pages sit in a frosted dock at the bottom (RoomPhone), with a + for a new to-do.
-export function Dock({ canAdd }: { canAdd: boolean }) {
+export function Dock() {
   const navigate = useNavigate();
   const addTodo = () => openNewTodo(navigate);
   return (
@@ -15,11 +15,9 @@ export function Dock({ canAdd }: { canAdd: boolean }) {
           <path d="M12 7v5l3 2" />
         </svg>
       </PillLink>
-      {canAdd && (
-        <button type="button" className="dock-add" aria-label="New to-do" onClick={addTodo}>
-          <Plus size={20} strokeWidth={2} aria-hidden="true" />
-        </button>
-      )}
+      <button type="button" className="dock-add" aria-label="New to-do" onClick={addTodo}>
+        <Plus size={20} strokeWidth={2} aria-hidden="true" />
+      </button>
       <PillLink to="/settings" kind="dock" label="Settings">
         <Settings2 size={20} strokeWidth={1.8} aria-hidden="true" />
       </PillLink>

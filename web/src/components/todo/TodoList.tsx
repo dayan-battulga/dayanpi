@@ -12,12 +12,11 @@ interface TodoListProps {
   todos: Todos | undefined;
   state: FocusState; // tints the current row, and says Working or Paused on it
   now: number;
-  readOnly: boolean; // a member: the list is the owner's
 }
 
 // Desk's to-do list, on the page next to Apps: open rows, the Done ones under them, and the add box at the bottom.
 // Checked rows slide between the two lists and the rest close up behind them (Motion layout, the "layout" spring).
-export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProps) {
+export function TodoList({ todos: streamed, state, now }: TodoListProps) {
   const { todos, addTodo, changeTodo, deleteTodo } = useTodos(streamed, now);
   const [newText, setNewText] = useState("");
   // Rows on screen before this render; any other row is one you just added, so it rises in.
@@ -59,7 +58,6 @@ export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProp
       done={done}
       current={item.id === todos.current}
       focused={state === "working"}
-      readOnly={readOnly}
       isNew={seen.current != null && !seen.current.has(item.id)}
       onChange={(change) => changeTodo(item.id, change)}
       onDelete={() => deleteTodo(item.id)}
@@ -69,7 +67,7 @@ export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProp
   // Like the mockup: with nothing current yet, a nudge to start one; otherwise how many are open.
   const count = todos.open.length;
   let hint: ReactNode = null;
-  if (count > 0 && todos.current == null && !readOnly) {
+  if (count > 0 && todos.current == null) {
     hint = "Start one to collect its time";
   } else if (count > 0) {
     hint = (
@@ -108,22 +106,20 @@ export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProp
           {todos.done.map((item) => showRow(item, true))}
         </AnimatePresence>
       </ul>
-      {!readOnly && (
-        <m.form layout="position" className="todo-add" onSubmit={submit}>
-          <label htmlFor={NEW_TODO_ID} className="sr-only">
-            New to-do
-          </label>
-          <input
-            id={NEW_TODO_ID}
-            className="todo-add-input"
-            value={newText}
-            onChange={(event) => setNewText(event.target.value)}
-            maxLength={TODO_TEXT_MAX}
-            placeholder="Add a to-do"
-            autoComplete="off"
-          />
-        </m.form>
-      )}
+      <m.form layout="position" className="todo-add" onSubmit={submit}>
+        <label htmlFor={NEW_TODO_ID} className="sr-only">
+          New to-do
+        </label>
+        <input
+          id={NEW_TODO_ID}
+          className="todo-add-input"
+          value={newText}
+          onChange={(event) => setNewText(event.target.value)}
+          maxLength={TODO_TEXT_MAX}
+          placeholder="Add a to-do"
+          autoComplete="off"
+        />
+      </m.form>
     </section>
   );
 }

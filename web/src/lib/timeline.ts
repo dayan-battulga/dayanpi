@@ -90,7 +90,10 @@ export function describeStartHour(hour: number): string {
 // What's wrong that the Desk should mention under its stats, quietly; "" when nothing is.
 export function describeProblems(focus: FocusStatus): string {
   const problems: string[] = [];
-  if (!focus.enabled) {
+  // Only the owner's desk has the Pi's cameras for now; everyone else's says so instead of looking broken.
+  if (focus.camera_access === "owner_only") {
+    problems.push("No camera on your desk yet, so time isn't counted");
+  } else if (!focus.enabled) {
     problems.push("The detector isn't running on the Pi");
   } else if (!focus.camera_ok) {
     problems.push("No camera frames, so time isn't counted");

@@ -27,12 +27,12 @@ export function useCommands({ user, hasFocus, macTracking }: CommandSources): Pa
   const owner = user?.role === "owner";
   const { tracking, flipTracking } = macTracking;
   const all = [
-    { label: "Add a to-do", keys: ["n"], run: () => openNewTodo(navigate), shown: owner },
+    { label: "Add a to-do", keys: ["n"], run: () => openNewTodo(navigate), shown: true },
     { label: "Go to Desk", keys: ["g", "d"], run: () => void navigate("/me"), shown: true },
     { label: "Go to Pi", keys: ["g", "p"], run: () => void navigate("/pi"), shown: owner },
     { label: "Go to Settings", keys: ["g", "s"], run: () => void navigate("/settings"), shown: true },
     { label: "Switch theme", keys: ["t"], run: toggleTheme, shown: true },
-    { label: tracking ? "Pause Mac tracking" : "Resume Mac tracking", keys: [], run: () => void flipTracking(!tracking), shown: owner && hasFocus },
+    { label: tracking ? "Pause Mac tracking" : "Resume Mac tracking", keys: [], run: () => void flipTracking(!tracking), shown: hasFocus },
   ];
   const commands = all.filter((command) => command.shown).map(({ label, keys, run }) => ({ label, keys, run }));
   return commands;

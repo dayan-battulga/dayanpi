@@ -24,11 +24,10 @@ function describeMac(focus: FocusStatus, tracking: boolean): MacWords {
 interface MacLineProps {
   focus: FocusStatus | undefined;
   macTracking: MacTracking; // the frame's, so ⌘K's command and this button flip the same thing
-  readOnly: boolean; // a member: the button is the owner's
 }
 
-// What's in front on the Mac, at the right of the Desk's stats, with the owner's Pause/Resume.
-export function MacLine({ focus, macTracking, readOnly }: MacLineProps) {
+// What's in front on the Mac, at the right of the Desk's stats, with Pause/Resume for this desk's Mac tracking.
+export function MacLine({ focus, macTracking }: MacLineProps) {
   const { tracking, flipTracking } = macTracking;
   const words = focus == null ? null : describeMac(focus, tracking);
   return (
@@ -37,7 +36,7 @@ export function MacLine({ focus, macTracking, readOnly }: MacLineProps) {
         <span className="mac-line-quiet">{words.lead}</span>
         {words.main && <span className="mac-line-main">{words.main}</span>}
         {words.tail && <span className="mac-line-quiet">{words.tail}</span>}
-        {words.action && !readOnly && (
+        {words.action && (
           <button type="button" className="mac-line-button" aria-label={`${words.action} Mac tracking`} onClick={() => void flipTracking(!tracking)}>
             {words.action}
           </button>

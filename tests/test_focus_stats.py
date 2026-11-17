@@ -51,3 +51,27 @@ def test_main_prints_today(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["focus_stats.py", "--log-dir", str(tmp_path / "focus_log")])
     assert focus_stats.main() == 0
     assert "No focus log lines" in capsys.readouterr().out
+
+
+def test_main_reads_the_owners_desk_by_default_and_anyones_with_user(tmp_path, monkeypatch, capsys):
+    from dayanpi.auth.accounts import AccountStore
+
+    monkeypatch.setenv("DAYANPI_DATA_DIR", str(tmp_path))
+    AccountStore(tmp_path / "accounts.db").seed_owner("Dayan", "a password", 0)
+    for name in ("dayan", "sam"):
+        FocusLog(tmp_path / "users" / name / "focus_log").write({"ts": 0, "day": datetime.now().strftime("%Y-%m-%d"), "event": "state", "state": "working"})
+    reports = {}
+    for argv in ([], ["--user", "sam"], ["--user", "nobody"]):
+        monkeypatch.setattr("sys.argv", ["focus_stats.py", *argv])
+        assert focus_stats.main() == 0
+        reports[" ".join(argv)] = capsys.readouterr().out
+    assert "No focus log lines" not in reports[""] and "No focus log lines" not in reports["--user sam"]
+    assert str(tmp_path / "users" / "nobody" / "focus_log") in reports["--user nobody"]
+
+
+def test_main_without_accounts_asks_whose_desk(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("DAYANPI_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("sys.argv", ["focus_stats.py"])
+    assert focus_stats.main() == 2
+    assert "pass --user" in capsys.readouterr().err
+    assert not (tmp_path / "accounts.db").exists(), "it never makes one"

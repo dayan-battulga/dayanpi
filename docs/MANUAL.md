@@ -44,7 +44,7 @@ Always use the **`main`** branch on both machines.
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
-| `/api/days/YYYY-MM-DD` | One day's page from `data/days/` as markdown (today's built live; 404 when there's no page) |
+| `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page) |
 | `/docs` | Disabled (404 on purpose) |
 
 ### How you open it
@@ -276,11 +276,13 @@ Up to 4 accounts in all: you (the owner) plus 3 members.
 
 A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). A link that's used up or past its week shows **This invite expired** instead of the form, and a full room shows **The room is full**, both with a way back to sign in. Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
 
-**What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the Mac line) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
+**Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras, the voice and the peace sign only feed yours, so for now their desk says "No camera on your desk yet" and their time and apps don't count until their own camera comes. They can't see anyone else's desk yet either.
 
-**What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
+**What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
 
-**Removing someone:** Settings → Room and invites, **Remove** next to their name, then **Yes, remove**. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. The owner can't be removed.
+**Removing someone:** Settings → Room and invites, **Remove** next to their name, then **Yes, remove**. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. Their desk isn't deleted: its folder moves to `data/users/removed/<username>-<date>/` (with `-2`, `-3` if that day already has one) and stays there until you delete it yourself, so someone who later picks the same username starts with an empty desk. The owner can't be removed.
+
+**When this first started:** the first start with everyone's own desk moved your old `data/focus_log/`, `data/todos.json`, `data/days/` and `data/mac_tracking.json` into `data/users/<your username>/`, once, and said so in the journal (`moved focus_log, todos.json, days, mac_tracking.json from ...`). It only ever moves, never copies or deletes. If something was already in both places, it moved nothing and logged an error instead, so you can sort it out by hand: `journalctl -u dayanpi --no-pager | grep "didn't move"`.
 
 ### Using the API from a terminal
 

@@ -43,7 +43,7 @@ export function SettingsPage() {
           </nav>
           <div key={section} className="settings-section rise">
             {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
-            {section === "mac" && <MacHelperSection owner={owner} macTracking={macTracking} />}
+            {section === "mac" && <MacHelperSection macTracking={macTracking} />}
             {section === "room" && owner && <RoomSection />}
           </div>
         </div>

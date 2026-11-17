@@ -53,10 +53,10 @@ function holdTodos() {
   );
 }
 
-function renderList({ todos = TODOS, state = "working", readOnly = false }: { todos?: Todos; state?: FocusState; readOnly?: boolean } = {}) {
+function renderList({ todos = TODOS, state = "working" }: { todos?: Todos; state?: FocusState } = {}) {
   render(
     <>
-      <TodoList todos={todos} state={state} now={Date.now() / 1000} readOnly={readOnly} />
+      <TodoList todos={todos} state={state} now={Date.now() / 1000} />
       <Toaster />
     </>,
   );
@@ -220,15 +220,6 @@ it("edits a row's text with Enter, and Esc leaves it alone", async () => {
   expect(screen.getByRole("button", { name: "finish the big report" })).toBeInTheDocument();
 });
 
-it("shows a member the list and what's current, with nothing to press", () => {
-  renderList({ readOnly: true });
-  expect(openRows()[0]).toHaveTextContent("finish the report12mWorking");
-  expect(document.querySelector(".todos-hint .sr-only")).toHaveTextContent("2 open");
-  expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
-  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-  expect(screen.queryAllByRole("button")).toHaveLength(0);
-});
-
 const ONE_LEFT: Todos = { current: null, open: [{ id: "a1", text: "finish the report", seconds: 754, done_at: null }], done: [{ id: "b2", text: "reply to emails", seconds: 60, done_at: 1 }] };
 const confetti = () => document.querySelectorAll(".confetti span").length;
 
@@ -263,7 +254,7 @@ it("says All done without the confetti with reduced motion", async () => {
   holdTodos();
   render(
     <MotionConfig reducedMotion="always">
-      <TodoList todos={ONE_LEFT} state="working" now={Date.now() / 1000} readOnly={false} />
+      <TodoList todos={ONE_LEFT} state="working" now={Date.now() / 1000} />
     </MotionConfig>,
   );
   await userEvent.setup().click(screen.getByRole("checkbox", { name: "Done: finish the report" }));

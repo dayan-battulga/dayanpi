@@ -67,7 +67,7 @@ export function Frame() {
         </ViewTransition>
       </Suspense>
       <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} />
-      {phone && <Dock canAdd={user?.role === "owner"} />}
+      {phone && <Dock />}
       {palette.used && (
         <Suspense fallback={null}>
           <CommandPalette open={palette.open} onOpenChange={setPaletteOpen} commands={commands} />

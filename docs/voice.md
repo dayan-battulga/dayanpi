@@ -219,7 +219,7 @@ How it works, so the speaker can answer right away even though the model is slow
 Each peace sign's line in the focus log says which one you heard: `"spoken": "llm"` or `"spoken": "template"`.
 
 ```bash
-grep '"gesture"' data/focus_log/$(date +%F).jsonl
+grep '"gesture"' data/users/$ME/focus_log/$(date +%F).jsonl   # ME=your username
 journalctl -u dayanpi -n 100 --no-pager | grep "peace sign"
 ```
 

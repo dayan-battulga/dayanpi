@@ -48,17 +48,13 @@ MAX_SEGMENTS = 2000
 
 DAY_FORMAT = "%Y-%m-%d"
 DATA_DIR_ENV = "DAYANPI_DATA_DIR"
+FOCUS_LOG_DIR_NAME = "focus_log"  # in each desk's folder (focus/desks.py)
 
 
 def find_data_dir() -> Path:
     """DAYANPI_DATA_DIR, or data/ at the repo root."""
     data_dir = Path(os.environ.get(DATA_DIR_ENV, "").strip() or DEFAULT_DATA_DIR)
     return data_dir
-
-
-def find_focus_log_dir() -> Path:
-    log_dir = find_data_dir() / "focus_log"
-    return log_dir
 
 
 @dataclass

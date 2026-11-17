@@ -20,15 +20,15 @@ from pydantic import BaseModel, Field, StrictBool, StringConstraints
 from typing import Annotated, Literal
 
 from dayanpi.auth import routes as auth_routes
-from dayanpi.auth.accounts import SESSION_REFRESH_S
+from dayanpi.auth.accounts import SESSION_REFRESH_S, User
 from dayanpi.hardware import collector
 from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
-from dayanpi.focus.tracker import FocusLog, FocusTracker, FocusUpdate, find_focus_log_dir, format_day
+from dayanpi.focus.desks import Desk, Desks, move_owner_data
+from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import TodoCoach, read_bedtime
-from dayanpi.focus.mac_tracking import MacTrackingSetting, find_mac_tracking_path
-from dayanpi.focus.todos import TEXT_MAX, TodoList, find_todo_path
+from dayanpi.focus.todos import TEXT_MAX
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import VoiceAnnouncer
@@ -37,9 +37,6 @@ from dayanpi.paths import STATIC_DIR
 # uvicorn only configures its own loggers; without this the app's INFO lines
 # ("focus tracker running", "voice off, would say ...") never reach journalctl.
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-
-FOCUS_LOG_DIR = find_focus_log_dir()
-DAYS_DIR = days.find_days_dir()
 
 FRAME_BOUNDARY = "frame"
 FRAME_TIMEOUT_S = 5.0
@@ -65,25 +62,27 @@ JOIN_PAGE = re.compile(r"/join/[A-Za-z0-9_-]{1,64}")
 CONTENT_LENGTH = re.compile(r"[0-9]{1,9}")
 # A join link, in a path or inside a query (a stray "/" on the link turns it into /login?next=%2Fjoin%2F...).
 JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
-# Members can read the owner's data but not change it. These writes are their own account things; every
-# other write is the owner's, so a new write route stays owner-only until it's added here.
-MEMBER_WRITES = re.compile(r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+")
+# Members change their own account and their own desk. Every other write is the owner's, so a new write route
+# stays owner-only until it's added here as "METHOD /path".
+MEMBER_WRITES = re.compile(
+    r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
+    r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
+)
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
 
 sampler = collector.RateSampler("wlan0")
 stream = create_stream()
 side_stream = create_side_stream()
-latest_snapshot: dict | None = None
-focus_log = FocusLog(FOCUS_LOG_DIR)
-tracker = FocusTracker(focus_log, started_at=time.time())
-todos = TodoList(find_todo_path(), focus_log)
-mac_tracking = MacTrackingSetting(find_mac_tracking_path())
+latest_snapshot: dict | None = None  # the Pi's numbers, which only the owner gets
+latest_focus: dict[str, dict] = {}  # every desk's focus status by username, made once a second
+desks = Desks(find_data_dir())
+owner_desk: Desk | None = None  # the desk the Pi's cameras, the voice and the peace sign feed; opened at startup
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
 last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill
 LLM_MODEL = read_llm_model()
-coach = TodoCoach(todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
+coach: TodoCoach | None = None  # it reads the owner's to-dos, so it's made at startup
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
@@ -112,21 +111,42 @@ def stamp_age(event: dict | None, now: float) -> dict | None:
     return stamped
 
 
-def build_focus_status() -> dict:
-    """The focus status for the API and the stats stream."""
-    now = time.time()
-    status = tracker.status(now)
-    status["enabled"] = worker is not None and worker.running
-    status["side_camera"] = side_stream is not None
-    status["overlay"] = stamp_age(None if worker is None else worker.last_overlay, now)
-    status["side_overlay"] = stamp_age(None if worker is None else worker.last_side_overlay, now)
-    status["gesture"] = stamp_age(None if worker is None else worker.last_gesture, now)
+# A desk the Pi's cameras don't watch: everyone's but the owner's, until each desk gets its own camera.
+NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None, "spoken": None, "voice": None}
+
+
+def build_camera_status(now: float) -> dict:
+    """The owner's desk's parts that come off the Pi's cameras and voice."""
+    running = worker
     spoken = last_spoken
-    status["spoken"] = None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])}
-    status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
-    status["todos"] = todos.snapshot(now)
-    status["mac_tracking"] = mac_tracking.enabled
+    camera = {
+        "enabled": running is not None and running.running,
+        "side_camera": side_stream is not None,
+        "overlay": stamp_age(None if running is None else running.last_overlay, now),
+        "side_overlay": stamp_age(None if running is None else running.last_side_overlay, now),
+        "gesture": stamp_age(None if running is None else running.last_gesture, now),
+        "spoken": None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])},
+        "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem},
+    }
+    return camera
+
+
+def build_desk_status(desk: Desk, now: float) -> dict:
+    """One desk's focus status, for the API and the stats stream."""
+    status = desk.tracker.status(now) | {"todos": desk.todos.snapshot(now), "mac_tracking": desk.mac_tracking.enabled}
+    status |= build_camera_status(now) if desk is owner_desk else NO_CAMERA
     return status
+
+
+def find_desk(request: Request) -> Desk:
+    """The signed-in person's own desk (a Mac token's account's, for the helper's reports)."""
+    desk = desks.open(auth_routes.read_viewer(request).user.username, time.time())
+    return desk
+
+
+def find_owner() -> User:
+    owner = next(user for user in auth_routes.accounts.list_users() if user.role == "owner")
+    return owner
 
 
 def find_camera_access(request: Request) -> str:
@@ -151,10 +171,16 @@ def shape_focus(focus: dict, access: str) -> dict:
     return shaped
 
 
-def shape_snapshot(snapshot: dict, request: Request) -> dict:
-    """The owner gets the Pi's numbers too; a member only the focus status."""
-    focus = shape_focus(snapshot["focus"], find_camera_access(request))
-    shaped = {**snapshot, "focus": focus} if auth_routes.read_viewer(request).user.role == "owner" else {"focus": focus}
+def shape_snapshot(request: Request) -> dict | None:
+    """One viewer's copy of the latest snapshot: their own desk's focus, plus the Pi's numbers for the owner.
+    None until the first one's made (or the first second after someone joins)."""
+    viewer = auth_routes.read_viewer(request)
+    snapshot = latest_snapshot
+    focus = latest_focus.get(viewer.user.username)
+    shaped = None
+    if snapshot is not None and focus is not None:
+        mine = shape_focus(focus, find_camera_access(request))
+        shaped = {**snapshot, "focus": mine} if viewer.user.role == "owner" else {"focus": mine}
     return shaped
 
 
@@ -164,7 +190,7 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
         logger.info("focus callout %s: %s", callout.name, callout.text)
         if callout.speak:
             voice.say(callout.text)
-    todos.track(update.state == "working", now)
+    owner_desk.todos.track(update.state == "working", now)
 
 
 def say_todos(now: float) -> dict:
@@ -186,21 +212,22 @@ SIGN_ACTIONS = {"peace": say_todos}
 def handle_gesture(name: str, now: float) -> None:
     """Runs on the worker thread when a hand sign fires."""
     details = SIGN_ACTIONS[name](now) if name in SIGN_ACTIONS else {}
-    tracker.record_gesture(name, now, **details)
+    owner_desk.tracker.record_gesture(name, now, **details)
 
 
-def start_focus_worker() -> FocusWorker | None:
+def start_focus_worker(desk: Desk) -> FocusWorker | None:
+    """The Pi's cameras feed this desk: the owner's."""
     started = None
     scanner = focus_worker.build_scanner()
     if scanner is not None:
         now = time.time()
-        restored = tracker.restore(focus_log.read_day(format_day(now)), now)
+        restored = desk.tracker.restore(desk.log.read_day(format_day(now)), now)
         if restored:
             logger.info("focus tracker restored %s events from today's log", restored)
         started = FocusWorker(
             stream,
             scanner,
-            tracker,
+            desk.tracker,
             on_update=handle_focus_update,
             on_gesture=handle_gesture,
             wait_for_clock_first=True,
@@ -208,43 +235,79 @@ def start_focus_worker() -> FocusWorker | None:
             hand_scanner=focus_worker.build_hand_scanner(),
         )
         started.start()
-        logger.info("focus tracker running; log in %s", FOCUS_LOG_DIR)
+        logger.info("focus tracker running; log in %s", desk.log.directory)
     return started
 
 
 async def snapshot_producer() -> None:
-    """One owner of the sampler; SSE clients only read latest_snapshot."""
-    global latest_snapshot
+    """One owner of the sampler, and every desk's status once a second; SSE clients only read what it made."""
+    global latest_snapshot, latest_focus
     while True:
         try:
             snapshot = collector.snapshot(sampler)
-            snapshot["focus"] = build_focus_status()
+            now = time.time()
+            latest_focus = {desk.username: build_desk_status(desk, now) for desk in desks.list()}
             latest_snapshot = snapshot
         except Exception:
             logger.exception("snapshot producer failed")
         await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
 
+def write_day_pages(now: float) -> None:
+    """Every desk's missing day pages. One desk's trouble doesn't stop the others'."""
+    for desk in desks.list():
+        try:
+            written = days.write_missing_pages(desk.log, desk.days_dir, now)
+            if written:
+                logger.info("day pages written for %s: %s", desk.username, ", ".join(written))
+        except Exception:
+            logger.exception("day pages failed for %s", desk.username)
+
+
 async def day_page_writer() -> None:
-    """Writes the missing day pages at startup, then again just after each local midnight.
+    """Writes every desk's missing day pages at startup, then again just after each local midnight.
 
     It waits for the network clock first, like the focus worker: before that, "today" can
     be a day that's already over.
     """
     await asyncio.to_thread(focus_worker.wait_for_clock)
     while True:
-        try:
-            written = await asyncio.to_thread(days.write_missing_pages, focus_log, DAYS_DIR, time.time())
-            if written:
-                logger.info("day pages written: %s", ", ".join(written))
-        except Exception:
-            logger.exception("day pages failed")
+        await asyncio.to_thread(write_day_pages, time.time())
         await asyncio.sleep(days.find_seconds_until_midnight(time.time()) + AFTER_MIDNIGHT_S)
+
+
+def open_joined_desk(user: User) -> None:
+    desks.open(user.username, time.time())
+
+
+def move_removed_desk(user: User) -> None:
+    """The account is gone already; a folder that won't move only costs a line in the journal."""
+    try:
+        moved = desks.remove(user.username, time.time())
+    except OSError:
+        logger.exception("couldn't move %s's desk aside", user.username)
+    else:
+        if moved is not None:
+            logger.info("moved %s's desk to %s", user.username, moved)
+
+
+auth_routes.on_join = open_joined_desk
+auth_routes.on_remove = move_removed_desk
+
+
+def open_desks(now: float) -> Desk:
+    """Moves the owner's old data into their folder (once), opens everyone's desk and returns the owner's."""
+    owner = find_owner()
+    move_owner_data(desks.data_dir, desks.find_folder(owner.username))
+    for user in auth_routes.accounts.list_users():
+        desks.open(user.username, now)
+    opened = desks.open(owner.username, now)
+    return opened
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global worker
+    global worker, owner_desk, coach
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -257,14 +320,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("camera not locked to Tailscale, don't turn on Funnel")
     sampler.sample()
-    if not mac_tracking.enabled:
-        tracker.set_mac_tracking(False, time.time())
-        logger.info("Mac tracking is paused (switched off on the dashboard)")
+    owner_desk = open_desks(time.time())
+    coach = TodoCoach(owner_desk.todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
     stream.start()
     if side_stream is not None:
         side_stream.start()
     voice.start()
-    worker = start_focus_worker()
+    worker = start_focus_worker(owner_desk)
     if coach.llm is not None:
         coach.start()
         logger.info("peace sign: writing messages ahead with %s through Ollama", coach.llm.model)
@@ -281,7 +343,8 @@ async def lifespan(app: FastAPI):
         worker.stop()
         worker = None
     coach.stop()
-    todos.save(time.time())
+    for desk in desks.list():
+        desk.todos.save(time.time())
     voice.stop()
     stream.stop()
     if side_stream is not None:
@@ -432,7 +495,7 @@ def frame_generator(camera: CameraStream, token: str) -> Iterator[bytes]:
 
 
 async def event_stream(request: Request) -> AsyncIterator[bytes]:
-    """Each viewer gets their own copy of the shared snapshot, and the stream ends once their session is gone."""
+    """Each viewer gets their own desk's copy of the latest snapshot, and the stream ends once their session is gone."""
     token = request.cookies.get(auth_routes.SESSION_COOKIE, "")
     try:
         yield b"retry: 5000\n\n"
@@ -443,9 +506,9 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
             if auth_routes.accounts.find_session(token, time.time()) is None:
                 break
 
-            snapshot = latest_snapshot
-            if snapshot is not None:
-                yield f"data: {json.dumps(shape_snapshot(snapshot, request))}\n\n".encode("utf-8")
+            shaped = shape_snapshot(request)
+            if shaped is not None:
+                yield f"data: {json.dumps(shaped)}\n\n".encode("utf-8")
             else:
                 yield b": ping\n\n"
 
@@ -457,7 +520,7 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
 @app.get("/api/stats")
 def stats(request: Request):
     """Owner only (OWNER_READS)."""
-    return shape_snapshot(latest_snapshot, request) if latest_snapshot is not None else {}
+    return shape_snapshot(request) or {}
 
 
 @app.get("/api/health")
@@ -467,8 +530,9 @@ def health():
 
 @app.get("/api/focus")
 def focus_now(request: Request):
-    status = shape_focus(build_focus_status(), find_camera_access(request))
-    status["segments"] = tracker.segments()
+    desk = find_desk(request)
+    status = shape_focus(build_desk_status(desk, time.time()), find_camera_access(request))
+    status["segments"] = desk.tracker.segments()
     return status
 
 
@@ -485,38 +549,40 @@ class TodoChange(BaseModel):
     current: bool | None = None
 
 
-def build_today_page(now: float) -> str:
+def build_today_page(desk: Desk, now: float) -> str:
     today = format_day(now)
-    page = days.build_day_page(focus_log.read_day(today), today)
+    page = days.build_day_page(desk.log.read_day(today), today)
     return page
 
 
 @app.get("/api/days")
-def month_days(month: Annotated[str, Query(pattern=days.MONTH_PATTERN)]):
+def month_days(request: Request, month: Annotated[str, Query(pattern=days.MONTH_PATTERN)]):
     """A month's numbers for the calendar, one entry per day with a page. Today's comes live from the log."""
+    desk = find_desk(request)
     now = time.time()
     today = format_day(now)
-    found = days.read_month(DAYS_DIR, month)
+    found = days.read_month(desk.days_dir, month)
     if today.startswith(month + "-"):
-        found[today] = days.read_page_totals(build_today_page(now))
+        found[today] = days.read_page_totals(build_today_page(desk, now))
     return {"month": month, "today": today, "days": found}
 
 
 @app.get("/api/apps")
-def list_apps(range: Annotated[Literal["today", "week"], Query()] = "today"):
+def list_apps(request: Request, range: Annotated[Literal["today", "week"], Query()] = "today"):
     """Time per Mac app for the Apps card, biggest first: the top 8, then the rest as "Other apps"."""
-    apps = days.build_apps_chart(focus_log, time.time(), range)
+    apps = days.build_apps_chart(find_desk(request).log, time.time(), range)
     return {"range": range, "apps": apps}
 
 
 @app.get("/api/days/{day}")
-def day_page(day: Annotated[str, PathParam(pattern=days.DAY_PATTERN)]):
-    """One day's page as markdown. The pattern keeps the name to digits and dashes, so it can only be a file in data/days."""
+def day_page(request: Request, day: Annotated[str, PathParam(pattern=days.DAY_PATTERN)]):
+    """One day's page as markdown. The pattern keeps the name to digits and dashes, so it can only be a file in the desk's days/."""
+    desk = find_desk(request)
     now = time.time()
     today = format_day(now)
-    path = DAYS_DIR / f"{day}.md"
+    path = desk.days_dir / f"{day}.md"
     if day == today:
-        page = build_today_page(now)
+        page = build_today_page(desk, now)
     elif path.is_file():
         page = path.read_text(encoding="utf-8")
     else:
@@ -525,19 +591,21 @@ def day_page(day: Annotated[str, PathParam(pattern=days.DAY_PATTERN)]):
 
 
 @app.get("/api/todos")
-def list_todos():
-    return todos.snapshot(time.time())
+def list_todos(request: Request):
+    return find_desk(request).todos.snapshot(time.time())
 
 
 @app.post("/api/todos")
-def add_todo(new: TodoNew):
+def add_todo(request: Request, new: TodoNew):
+    todos = find_desk(request).todos
     now = time.time()
     item = todos.add(new.text, now)
     return {"status": "ok", "item": item, "todos": todos.snapshot(now)}
 
 
 @app.patch("/api/todos/{item_id}")
-def change_todo(item_id: str, change: TodoChange):
+def change_todo(request: Request, item_id: str, change: TodoChange):
+    todos = find_desk(request).todos
     now = time.time()
     if not todos.change(item_id, now, text=change.text, done=change.done, current=change.current):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such to-do")
@@ -545,7 +613,8 @@ def change_todo(item_id: str, change: TodoChange):
 
 
 @app.delete("/api/todos/{item_id}")
-def delete_todo(item_id: str):
+def delete_todo(request: Request, item_id: str):
+    todos = find_desk(request).todos
     now = time.time()
     if not todos.delete(item_id, now):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such to-do")
@@ -568,22 +637,24 @@ class MacTrackingChange(BaseModel):
 
 
 @app.post("/api/mac/app")
-def mac_app(report: AppReport):
-    """While Mac tracking is off the tracker drops the report; "enabled" tells the helper to stop asking."""
-    changed = tracker.record_app(report.app.strip(), time.time(), site=report.site)
-    return {"status": "ok", "changed": changed, "enabled": mac_tracking.enabled}
+def mac_app(request: Request, report: AppReport):
+    """The token's own desk. While its Mac tracking is off the tracker drops the report; "enabled" tells the helper to stop asking."""
+    desk = find_desk(request)
+    changed = desk.tracker.record_app(report.app.strip(), time.time(), site=report.site)
+    return {"status": "ok", "changed": changed, "enabled": desk.mac_tracking.enabled}
 
 
 @app.get("/api/mac/tracking")
-def get_mac_tracking():
-    return {"enabled": mac_tracking.enabled}
+def get_mac_tracking(request: Request):
+    return {"enabled": find_desk(request).mac_tracking.enabled}
 
 
 @app.post("/api/mac/tracking")
-def set_mac_tracking(change: MacTrackingChange):
-    if mac_tracking.set(change.enabled):
-        tracker.set_mac_tracking(change.enabled, time.time())
-    return {"enabled": mac_tracking.enabled}
+def set_mac_tracking(request: Request, change: MacTrackingChange):
+    desk = find_desk(request)
+    if desk.mac_tracking.set(change.enabled):
+        desk.tracker.set_mac_tracking(change.enabled, time.time())
+    return {"enabled": desk.mac_tracking.enabled}
 
 
 class SlotResponse(StreamingResponse):

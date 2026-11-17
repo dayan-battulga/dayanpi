@@ -16,7 +16,6 @@ interface TodoRowProps {
   done: boolean;
   current: boolean;
   focused: boolean; // Working while you are, Paused otherwise
-  readOnly: boolean; // a member: no checkbox, Start, × or editing
   isNew: boolean; // just added, so it rises in
   onChange: (change: TodoChange) => void;
   onDelete: () => void;
@@ -25,7 +24,7 @@ interface TodoRowProps {
 
 // One to-do, like Desk's: the checkbox, the text (click it to edit), its time, and Start, or Working/Paused on the
 // current one. layoutId lets a checked row slide down into Done and back up.
-export function TodoRow({ item, done, current, focused, readOnly, isNew, onChange, onDelete, ref }: TodoRowProps) {
+export function TodoRow({ item, done, current, focused, isNew, onChange, onDelete, ref }: TodoRowProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const finished = useRef(false);
 
@@ -58,9 +57,7 @@ export function TodoRow({ item, done, current, focused, readOnly, isNew, onChang
       {item.text}
     </button>
   );
-  if (readOnly) {
-    text = <span className="todo-text">{item.text}</span>;
-  } else if (draft != null) {
+  if (draft != null) {
     text = (
       <input
         autoFocus
@@ -89,20 +86,15 @@ export function TodoRow({ item, done, current, focused, readOnly, isNew, onChang
       exit={ROW_LEAVING}
       transition={{ layout: SPRINGS.layout }}
     >
-      {!readOnly && <input type="checkbox" className="todo-check" checked={done} onChange={() => onChange({ done: !done })} aria-label={`${done ? "Not done" : "Done"}: ${item.text}`} />}
+      <input type="checkbox" className="todo-check" checked={done} onChange={() => onChange({ done: !done })} aria-label={`${done ? "Not done" : "Done"}: ${item.text}`} />
       {text}
       <span className="todo-time">{item.seconds > 0 ? formatDuration(item.seconds) : "—"}</span>
-      {!done && current && readOnly && (
-        <span className="todo-pill" data-working={focused || undefined}>
-          {pill}
-        </span>
-      )}
-      {!done && current && !readOnly && (
+      {!done && current && (
         <button type="button" className="todo-pill" data-working={focused || undefined} aria-pressed="true" aria-label={`Stop working on ${item.text}`} onClick={() => onChange({ current: false })}>
           {pill}
         </button>
       )}
-      {!done && !current && !readOnly && (
+      {!done && !current && (
         <button type="button" className="todo-start" aria-pressed="false" aria-label={`Work on ${item.text}`} onClick={() => onChange({ current: true })}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <polygon points="6 3 20 12 6 21 6 3" />
@@ -110,11 +102,9 @@ export function TodoRow({ item, done, current, focused, readOnly, isNew, onChang
           Start
         </button>
       )}
-      {!readOnly && (
-        <button type="button" className="todo-delete" aria-label={`Delete ${item.text}`} onClick={onDelete}>
-          <X size={16} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-      )}
+      <button type="button" className="todo-delete" aria-label={`Delete ${item.text}`} onClick={onDelete}>
+        <X size={16} strokeWidth={1.8} aria-hidden="true" />
+      </button>
     </m.li>
   );
 }

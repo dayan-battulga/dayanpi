@@ -1,10 +1,11 @@
 """Reads the focus log and prints what the days looked like.
 
-    .venv/bin/python -m dayanpi.focus.stats            # today
-    .venv/bin/python -m dayanpi.focus.stats --days 7   # the last week, plus focus by hour of day
+    .venv/bin/python -m dayanpi.focus.stats              # today, on the owner's desk
+    .venv/bin/python -m dayanpi.focus.stats --days 7     # the last week, plus focus by hour of day
+    .venv/bin/python -m dayanpi.focus.stats --user sam   # someone else's desk
 
-Reads data/focus_log/ (or DAYANPI_DATA_DIR/focus_log). It only looks at the log, so it
-can run while the service is up.
+Reads the desk's focus log, data/users/<username>/focus_log/ (DAYANPI_DATA_DIR overrides data/).
+It only looks at the log, so it can run while the service is up.
 """
 
 import argparse
@@ -13,7 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, DayReplay, DayTotals, FocusLog, Segment, find_focus_log_dir, format_duration, replay_day, total_day
+from dayanpi.auth.accounts import AccountStore, find_accounts_path
+from dayanpi.focus.desks import Desks
+from dayanpi.focus.tracker import DAY_FORMAT, FOCUS_LOG_DIR_NAME, DayReplay, DayTotals, FocusLog, Segment, find_data_dir, format_duration, replay_day, total_day
 
 HOURS = 24
 
@@ -89,14 +92,29 @@ def build_report(log: FocusLog, days: list[str]) -> str:
     return report
 
 
+def find_owner_username(accounts_path: Path) -> str | None:
+    """From accounts.db, without making one when there isn't one yet."""
+    username = None
+    if accounts_path.is_file():
+        username = next((user.username for user in AccountStore(accounts_path).list_users() if user.role == "owner"), None)
+    return username
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Print focus totals from the log.")
     parser.add_argument("--days", type=int, default=1, help="how many days back to show (default 1 = today)")
-    parser.add_argument("--log-dir", type=Path, default=find_focus_log_dir(), help="where the focus_log folder is (default: DAYANPI_DATA_DIR/focus_log, or data/focus_log)")
+    parser.add_argument("--user", help="whose desk (default: the owner's)")
+    parser.add_argument("--log-dir", type=Path, help="a focus_log folder to read instead of a desk's")
     args = parser.parse_args()
-    log = FocusLog(args.log_dir)
-    print(build_report(log, list_recent_days(datetime.now(), max(1, args.days))))
-    return 0
+    username = args.user or find_owner_username(find_accounts_path())
+    code = 0
+    if args.log_dir is None and username is None:
+        print("No accounts.db yet, so there's no owner to default to: pass --user or --log-dir", file=sys.stderr)
+        code = 2
+    else:
+        log = FocusLog(args.log_dir or Desks(find_data_dir()).find_folder(username) / FOCUS_LOG_DIR_NAME)
+        print(build_report(log, list_recent_days(datetime.now(), max(1, args.days))))
+    return code
 
 
 if __name__ == "__main__":

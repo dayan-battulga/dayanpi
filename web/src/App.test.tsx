@@ -173,16 +173,18 @@ it("marks no tab on Settings, and rings the account button instead", async () =>
   expect(within(screen.getByRole("navigation", { name: "Pages" })).getAllByRole("link").some((link) => link.hasAttribute("aria-current"))).toBe(false);
 });
 
-it("shows a member the desk without the owner's controls, and no Pi tab", async () => {
+it("gives a member the full controls for their own desk on /me, and no Pi tab", async () => {
   servePi(MEMBER);
   renderApp();
   FakeEventSource.latest?.send({ focus: makeFocus({ camera_access: "owner_only" }) });
 
   expect(await screen.findByRole("button", { name: "Account: Sam" })).toBeInTheDocument();
   expect(screen.getByText("finish the report")).toBeInTheDocument();
-  expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
-  expect(screen.queryByRole("checkbox", { name: "Done: finish the report" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Pause Mac tracking" })).toBeNull();
+  expect(screen.getByRole("textbox", { name: "New to-do" })).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Done: finish the report" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Work on reply to emails" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Delete finish the report" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Pause Mac tracking" })).toBeInTheDocument();
   expect(document.getElementById("mac-line")).toHaveTextContent("On the Mac ·Code");
   expect(screen.getByRole("link", { name: "Desk" })).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Pi" })).toBeNull();
@@ -220,12 +222,12 @@ it("focuses the new to-do box right away from the dock on the desk", async () =>
   expect(screen.getByRole("textbox", { name: "New to-do" })).toHaveFocus();
 });
 
-it("has no + in a member's dock: they can't add to the owner's list", async () => {
+it("has a + in a member's dock too, for their own list", async () => {
   usePhone();
   servePi(MEMBER);
   renderApp();
   await screen.findByRole("button", { name: "Account: Sam" });
-  expect(screen.queryByRole("button", { name: "New to-do" })).toBeNull();
+  expect(screen.getByRole("button", { name: "New to-do" })).toBeInTheDocument();
 });
 
 // Every toast Sonner has on screen or waiting, newest first.
@@ -487,11 +489,11 @@ it("runs the highlighted command on Enter and closes", async () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-it("gives a member only the commands that are theirs", async () => {
+it("gives a member every command for their own desk, but not the Pi", async () => {
   const user = userEvent.setup();
   await openDesk(MEMBER);
   await user.keyboard("{Control>}k{/Control}");
-  expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Go to Desk", "Go to Settings", "Switch theme"]);
+  expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Add a to-do", "Go to Desk", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
 });
 
 it("pauses Mac tracking from ⌘K, and the Mac line follows", async () => {

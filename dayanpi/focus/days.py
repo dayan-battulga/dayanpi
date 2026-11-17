@@ -1,4 +1,4 @@
-"""One markdown page per finished day, data/days/YYYY-MM-DD.md, for the calendar card and for reading anywhere.
+"""One markdown page per finished day, days/YYYY-MM-DD.md in each desk's folder, for the calendar and for reading anywhere.
 
 Each page is built from that day's focus log: the totals (the same replay as the restart
 and the stats tool), the to-dos checked off, the apps the Mac had in front while you were at
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dayanpi.focus.tracker import DAY_FORMAT, SAMPLE_LOG_INTERVAL_S, FocusLog, find_data_dir, format_day, format_duration, replay_day, total_day
+from dayanpi.focus.tracker import DAY_FORMAT, SAMPLE_LOG_INTERVAL_S, FocusLog, format_day, format_duration, replay_day, total_day
 from dayanpi.utils.files import write_atomically
 
 DAYS_DIR_NAME = "days"
@@ -26,11 +26,6 @@ WEEK_DAYS = 7
 YOUTUBE = "youtube.com"  # and its subdomains (m., music.), in any browser; the only site the day page counts
 AT_DESK_STATES = ("working", "phone")
 LOCKED_APP = "Locked"
-
-
-def find_days_dir() -> Path:
-    path = find_data_dir() / DAYS_DIR_NAME
-    return path
 
 
 def list_day_lines(lines: list[dict], day: str) -> list[dict]:

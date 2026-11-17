@@ -186,10 +186,18 @@ it("puts the line back and says so when the Pi doesn't take the pause", async ()
   expect(await screen.findByText("Couldn't pause Mac tracking")).toBeInTheDocument();
 });
 
-it("shows a member the Mac line without the button", async () => {
+it("gives a member Pause/Resume for their own desk's Mac tracking", async () => {
   serveDesk(MEMBER);
-  openDesk({ mac_tracking: false, app: null });
+  openDesk({ mac_tracking: false, app: null, camera_access: "owner_only" });
   await screen.findByRole("button", { name: "Account: Sam" });
-  expect(readMacLine()).toBe("Mac tracking paused");
-  expect(screen.queryByRole("button", { name: /Mac tracking/ })).toBeNull();
+  expect(readMacLine()).toBe("Mac tracking pausedResume");
+  expect(screen.getByRole("button", { name: "Resume Mac tracking" })).toBeInTheDocument();
+});
+
+it("says a member's desk has no camera yet, instead of a broken detector", async () => {
+  serveDesk(MEMBER);
+  openDesk({ state: "unknown", enabled: false, camera_ok: false, last_check: null, voice: null, camera_access: "owner_only" });
+  await screen.findByRole("button", { name: "Account: Sam" });
+  expect(screen.getByText("No camera on your desk yet, so time isn't counted")).toBeInTheDocument();
+  expect(screen.queryByText(/detector/)).toBeNull();
 });

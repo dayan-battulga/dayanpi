@@ -1,6 +1,6 @@
 """The running to-do list: one list that carries over from day to day.
 
-It lives in data/todos.json (DAYANPI_DATA_DIR overrides data/). Every save writes a new
+Each desk has one, in its folder's todos.json (focus/desks.py). Every save writes a new
 file and swaps it in with os.replace, so a power cut leaves the old list or the new one,
 never half of one. The current item collects the seconds spent working.
 Checked items stay in Done until local midnight, then leave the list; their "done" lines
@@ -15,7 +15,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from dayanpi.focus.tracker import MAX_STEP_S, FocusLog, find_data_dir, format_day
+from dayanpi.focus.tracker import MAX_STEP_S, FocusLog, format_day
 from dayanpi.utils.files import write_atomically
 
 TODO_FILE = "todos.json"
@@ -23,11 +23,6 @@ TEXT_MAX = 200
 SAVE_EVERY_S = 30.0  # collected time saves this often, like the log's samples; edits save right away
 
 logger = logging.getLogger(__name__)
-
-
-def find_todo_path() -> Path:
-    path = find_data_dir() / TODO_FILE
-    return path
 
 
 @dataclass

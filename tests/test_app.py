@@ -27,6 +27,7 @@ from dayanpi.auth.accounts import SESSION_TTL_S, AccountStore, LoginLockout  # n
 from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
+from dayanpi.focus.desks import Desks  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
 BASE_URL = "https://testserver"  # the session cookie is Secure, so an http client would never send it back
@@ -52,6 +53,28 @@ def fresh_accounts(monkeypatch, tmp_path):
     monkeypatch.setattr(auth_routes, "lockout", LoginLockout())
     monkeypatch.setattr(auth_routes, "password_lockout", LoginLockout())
     monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", "")
+
+
+@pytest.fixture(autouse=True)
+def fresh_desks(monkeypatch, tmp_path):
+    """Every test's own data folder for the desks (tmp_path/users), and no owner's desk until a startup or use_owner_desk()."""
+    monkeypatch.setattr(app, "desks", Desks(tmp_path))
+    monkeypatch.setattr(app, "owner_desk", None)
+    monkeypatch.setattr(app, "coach", None)
+    monkeypatch.setattr(app, "latest_focus", {})
+    monkeypatch.setattr(app, "latest_snapshot", None)
+
+
+def desk_of(user):
+    desk = app.desks.open(user.username, time.time())
+    return desk
+
+
+def use_owner_desk(monkeypatch):
+    """For a test that drives the camera's hooks without a startup: the owner's desk, as the startup would set it."""
+    desk = desk_of(find_owner())
+    monkeypatch.setattr(app, "owner_desk", desk)
+    return desk
 
 
 def find_owner():
@@ -187,11 +210,10 @@ def test_the_mac_app_route_rejects_anything_but_a_plain_host_name(site):
         assert client.post("/api/mac/app", json={"app": "Google Chrome", "site": site}).status_code == 422
 
 
-def test_the_mac_app_route_takes_a_site_or_none_and_logs_it(monkeypatch, tmp_path):
-    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+def test_the_mac_app_route_takes_a_site_or_none_and_logs_it():
+    from dayanpi.focus.tracker import format_day
 
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    log = desk_of(find_owner()).log
     with open_client() as client:
         chrome = client.post("/api/mac/app", json={"app": "Google Chrome", "site": "youtube.com"})
         status = client.get("/api/focus").json()
@@ -212,6 +234,7 @@ def test_focus_status_reports_the_voice():
 def test_callouts_reach_the_voice(monkeypatch):
     from dayanpi.focus import tracker as focus
 
+    use_owner_desk(monkeypatch)
     said = []
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     update = focus.FocusUpdate(
@@ -230,14 +253,12 @@ def test_every_hand_sign_does_something():
 
 def test_peace_speaks_the_coachs_message_and_logs_which_kind(monkeypatch, tmp_path):
     from dayanpi.focus.coach import TodoCoach
-    from dayanpi.focus.todos import TodoList
-    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+    from dayanpi.focus.tracker import format_day
 
     said = []
-    log = FocusLog(tmp_path / "focus_log")
-    todos = TodoList(tmp_path / "todos.json", log)
+    desk = use_owner_desk(monkeypatch)
+    log, todos = desk.log, desk.todos
     monkeypatch.setattr(app, "coach", TodoCoach(todos, 0, None))
-    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     now = time.time()
     todos.add("finish the report", now)
@@ -297,11 +318,13 @@ def test_the_status_says_what_the_peace_sign_is_saying_until_aplay_finishes(monk
     assert (finished["text"], finished["at"], finished["speaking"]) == (playing["text"], playing["at"], False)
 
 
-def test_the_spoken_text_is_never_logged(monkeypatch, tmp_path, caplog):
-    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+def test_the_spoken_text_is_never_logged(monkeypatch, caplog):
+    from dayanpi.focus.coach import TodoCoach
+    from dayanpi.focus.tracker import format_day
 
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    desk = use_owner_desk(monkeypatch)
+    log = desk.log
+    monkeypatch.setattr(app, "coach", TodoCoach(desk.todos, 0, None))
     monkeypatch.setattr(app, "last_spoken", None)
     monkeypatch.setattr(app.voice, "say", lambda text: True)
     now = time.time()
@@ -360,19 +383,19 @@ def test_todo_routes_add_edit_check_current_and_delete():
         assert client.patch(path, json={"text": ""}).status_code == 422
 
 
-def test_working_counts_time_for_the_current_todo():
+def test_working_counts_time_for_the_current_todo(monkeypatch):
     from dayanpi.focus.tracker import FocusUpdate
 
+    todos = use_owner_desk(monkeypatch).todos
     now = time.time()
-    item_id = app.todos.add("hook test", now)["id"]
-    app.todos.change(item_id, now, current=True)
+    item_id = todos.add("hook test", now)["id"]
+    todos.change(item_id, now, current=True)
     for second in range(4):
         app.handle_focus_update(FocusUpdate(state="working"), now + second)
     for second in range(4, 8):
         app.handle_focus_update(FocusUpdate(state="phone"), now + second)
-    open_items = app.todos.snapshot(now + 8)["open"]
+    open_items = todos.snapshot(now + 8)["open"]
     assert [item["seconds"] for item in open_items if item["id"] == item_id] == [4]
-    app.todos.delete(item_id, now + 9)
 
 
 def test_worker_runs_when_a_scanner_exists(monkeypatch):
@@ -564,17 +587,21 @@ def read_events(response, count: int) -> list[dict]:
     return events
 
 
-def test_a_member_streams_only_the_focus_status(real_server, monkeypatch):
+def test_the_stream_sends_each_viewer_their_own_desk_and_the_pi_only_to_the_owner(real_server, monkeypatch):
     box = {"kind": "phone", "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}
-    snapshot = {"temp_c": 51.0, "throttled": {"under_voltage": False}, "focus": {"state": "working", "overlay": {"boxes": [box]}, "side_overlay": None}}
+    member, owner = add_member(), find_owner()
+    snapshot = {"temp_c": 51.0, "throttled": {"under_voltage": False}}
+    mine = {"state": "working", "todos": {"open": ["mine"]}, "overlay": {"boxes": [box]}, "side_overlay": None}
+    theirs = {"state": "unknown", "todos": {"open": ["theirs"]}, "overlay": None, "side_overlay": None}
     monkeypatch.setattr(app, "latest_snapshot", snapshot)
-    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(add_member()), timeout=3) as response:
+    monkeypatch.setattr(app, "latest_focus", {owner.username: mine, member.username: theirs})
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(member), timeout=3) as response:
         [member_event] = read_events(response, 1)
-    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(find_owner()), timeout=3) as response:
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(owner), timeout=3) as response:
         [owner_event] = read_events(response, 1)
-    assert member_event == {"focus": {"state": "working", "overlay": None, "side_overlay": None, "camera_access": "owner_only"}}
-    assert owner_event == {**snapshot, "focus": {**snapshot["focus"], "camera_access": "open"}}
-    assert "camera_access" not in app.latest_snapshot["focus"], "each viewer's copy, never the shared snapshot"
+    assert member_event == {"focus": {**theirs, "camera_access": "owner_only"}}
+    assert owner_event == {**snapshot, "focus": {**mine, "camera_access": "open"}}
+    assert "camera_access" not in app.latest_focus[owner.username], "each viewer's copy, never the shared status"
 
 
 @pytest.mark.parametrize("ending", ["account removed", "signed out"])
@@ -700,19 +727,18 @@ def test_every_response_refuses_to_be_framed_and_sends_no_referrer():
         assert all(response.headers["referrer-policy"] == "no-referrer" for response in responses)
 
 
-def test_day_routes_serve_past_pages_and_build_today_live(monkeypatch, tmp_path):
-    from dayanpi.focus.tracker import FocusLog, format_day
+def test_day_routes_serve_past_pages_and_build_today_live():
+    from dayanpi.focus.tracker import format_day
 
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "focus_log", log)
-    monkeypatch.setattr(app, "DAYS_DIR", tmp_path / "days")
+    desk = desk_of(find_owner())
+    log, days_dir = desk.log, desk.days_dir
     now = time.time()
     today = format_day(now)
     month = today[:7]
     past = f"{month}-01" if today != f"{month}-01" else f"{month}-02"
-    (tmp_path / "days").mkdir()
-    (tmp_path / "days" / f"{past}.md").write_text("---\nfocus_minutes: 95\n---\n\n# A past day\n")
-    (tmp_path / "days" / "notes.md").write_text("not a day")
+    days_dir.mkdir(parents=True)
+    (days_dir / f"{past}.md").write_text("---\nfocus_minutes: 95\n---\n\n# A past day\n")
+    (days_dir / "notes.md").write_text("not a day")
     log.write({"ts": now - 600, "day": today, "event": "state", "state": "working"})
     log.write({"ts": now, "day": today, "event": "sample"})
 
@@ -731,7 +757,7 @@ def test_day_routes_serve_past_pages_and_build_today_live(monkeypatch, tmp_path)
     assert listed["days"][today]["focus_minutes"] == 10, "today comes live from the log"
     assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n"}
     assert live["today"] is True and "- Focus: 10m" in live["markdown"]
-    assert not (tmp_path / "days" / f"{today}.md").exists(), "today's page is never saved"
+    assert not (days_dir / f"{today}.md").exists(), "today's page is never saved"
     assert missing.status_code == 404
     assert all(code in (404, 422) for code in bad_names)
     assert bad_names[:3] == [422, 422, 422]
@@ -739,18 +765,13 @@ def test_day_routes_serve_past_pages_and_build_today_live(monkeypatch, tmp_path)
 
 
 @pytest.fixture
-def fresh_mac_tracking(monkeypatch, tmp_path):
-    """Its own setting file and tracker, so one test switching it off can't leak into the next."""
-    from dayanpi.focus.mac_tracking import MacTrackingSetting
-    from dayanpi.focus.tracker import FocusLog, FocusTracker
-
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "mac_tracking", MacTrackingSetting(tmp_path / "mac_tracking.json"))
-    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+def fresh_mac_tracking():
+    """The owner's desk's focus log; every test has its own desks, so one switching it off can't leak into the next."""
+    log = desk_of(find_owner()).log
     return log
 
 
-def test_the_mac_tracking_switch_routes(fresh_mac_tracking, tmp_path):
+def test_the_mac_tracking_switch_routes(fresh_mac_tracking):
     with open_client() as client:
         assert stranger().get("/api/mac/tracking").status_code == 401
         assert stranger().post("/api/mac/tracking", json={"enabled": False}).status_code == 401
@@ -760,7 +781,7 @@ def test_the_mac_tracking_switch_routes(fresh_mac_tracking, tmp_path):
         assert client.get("/api/focus").json()["mac_tracking"] is False
         bad = [client.post("/api/mac/tracking", json=body).status_code for body in ({}, {"enabled": "no"}, {"enabled": 1}, {"enabled": None})]
     assert bad == [422, 422, 422, 422]
-    assert json.loads((tmp_path / "mac_tracking.json").read_text()) == {"enabled": False}
+    assert json.loads((desk_of(find_owner()).folder / "mac_tracking.json").read_text()) == {"enabled": False}
 
 
 def test_reports_are_dropped_while_off_and_pausing_clears_the_current_app(fresh_mac_tracking):
@@ -788,13 +809,14 @@ def test_reports_are_dropped_while_off_and_pausing_clears_the_current_app(fresh_
     ]
 
 
-def test_starting_up_switched_off_logs_that_it_is_paused(fresh_mac_tracking):
+def test_starting_up_switched_off_logs_that_it_is_paused():
+    from dayanpi.focus.mac_tracking import MacTrackingSetting
     from dayanpi.focus.tracker import format_day
 
-    app.mac_tracking.set(False)
+    MacTrackingSetting(app.desks.find_folder(find_owner().username) / "mac_tracking.json").set(False)
     with TestClient(app.app):
         pass
-    lines = [line for line in fresh_mac_tracking.read_day(format_day(time.time())) if line["event"] == "mac_tracking"]
+    lines = [line for line in desk_of(find_owner()).log.read_day(format_day(time.time())) if line["event"] == "mac_tracking"]
     assert [line["enabled"] for line in lines] == [False]
 
 
@@ -803,11 +825,10 @@ def write_app_samples(log, day: str, ts: float, app_name: str, count: int, site=
         log.write({"ts": ts + index, "day": day, "event": "sample", "state": state, "app": app_name, "site": site})
 
 
-def test_apps_route_ranks_the_top_eight_and_sums_the_rest(monkeypatch, tmp_path):
-    from dayanpi.focus.tracker import FocusLog, format_day
+def test_apps_route_ranks_the_top_eight_and_sums_the_rest():
+    from dayanpi.focus.tracker import format_day
 
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "focus_log", log)
+    log = desk_of(find_owner()).log
     now = time.time()
     today = format_day(now)
     for index in range(9):  # App 0 has 1 sample ... App 8 has 9
@@ -831,13 +852,10 @@ def test_apps_route_ranks_the_top_eight_and_sums_the_rest(monkeypatch, tmp_path)
     assert reply["apps"][-1] == {"app": "Other apps", "total_seconds": 3 * 30.0 + 2 * 30 + 1 * 30}, "App 2, App 1, App 0"
 
 
-def test_apps_route_week_sums_seven_days_and_ignores_the_eighth(monkeypatch, tmp_path):
+def test_apps_route_week_sums_seven_days_and_ignores_the_eighth():
     from datetime import datetime, timedelta
 
-    from dayanpi.focus.tracker import FocusLog
-
-    log = FocusLog(tmp_path / "focus_log")
-    monkeypatch.setattr(app, "focus_log", log)
+    log = desk_of(find_owner()).log
     now = time.time()
     today = datetime.fromtimestamp(now).date()
     for offset, samples in ((0, 2), (3, 4), (6, 1), (7, 100)):
@@ -857,10 +875,7 @@ def test_apps_route_week_sums_seven_days_and_ignores_the_eighth(monkeypatch, tmp
     assert today_only["apps"][0] == {"app": "Cursor", "total_seconds": 60.0}
 
 
-def test_apps_route_on_an_empty_day_has_no_apps(monkeypatch, tmp_path):
-    from dayanpi.focus.tracker import FocusLog
-
-    monkeypatch.setattr(app, "focus_log", FocusLog(tmp_path / "focus_log"))
+def test_apps_route_on_an_empty_day_has_no_apps():
     with open_client() as client:
         assert client.get("/api/apps?range=week").json() == {"range": "week", "apps": []}
 
@@ -1164,12 +1179,12 @@ ACCESS = {
     ("GET", "/api/apps"): ("/api/apps", None, 401, 200, 200),
     ("GET", "/api/days/{day}"): ("/api/days/1999-01-01", None, 401, 404, 404),
     ("GET", "/api/todos"): ("/api/todos", None, 401, 200, 200),
-    ("POST", "/api/todos"): ("/api/todos", {"text": ""}, 401, 403, 422),
-    ("PATCH", "/api/todos/{item_id}"): ("/api/todos/nope", {"done": True}, 401, 403, 404),
-    ("DELETE", "/api/todos/{item_id}"): ("/api/todos/nope", {}, 401, 403, 404),
-    ("POST", "/api/mac/app"): ("/api/mac/app", {"app": ""}, 401, 403, 422),
+    ("POST", "/api/todos"): ("/api/todos", {"text": ""}, 401, 422, 422),  # a member's own desk now
+    ("PATCH", "/api/todos/{item_id}"): ("/api/todos/nope", {"done": True}, 401, 404, 404),
+    ("DELETE", "/api/todos/{item_id}"): ("/api/todos/nope", {}, 401, 404, 404),
+    ("POST", "/api/mac/app"): ("/api/mac/app", {"app": ""}, 401, 422, 422),
     ("GET", "/api/mac/tracking"): ("/api/mac/tracking", None, 401, 200, 200),
-    ("POST", "/api/mac/tracking"): ("/api/mac/tracking", {"enabled": "maybe"}, 401, 403, 422),
+    ("POST", "/api/mac/tracking"): ("/api/mac/tracking", {"enabled": "maybe"}, 401, 422, 422),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
     ("GET", "/video"): ("/video", None, 401, 404, 200),
     ("GET", "/video/side"): ("/video/side", None, 401, 404, 200),
@@ -1276,14 +1291,21 @@ def test_a_mac_token_only_opens_the_mac_routes(fresh_mac_tracking):
     assert none_left == {"tokens": []}
 
 
-def test_a_members_token_is_read_only_and_their_own(fresh_mac_tracking):
+def test_a_members_token_reports_to_their_own_desk_and_manages_only_their_tokens(fresh_mac_tracking):
+    from dayanpi.focus.tracker import format_day
+
     owner_token = auth_routes.accounts.create_token(find_owner().id, "laptop", time.time())
-    member = let_in(stranger(), add_member())
+    bo = add_member()
+    member = let_in(stranger(), bo)
     made = member.post("/api/tokens", json={"name": "mac"}).json()
     mac = stranger(headers={"Authorization": f"Bearer {made['secret']}"})
-    assert mac.post("/api/mac/app", json={"app": "Code"}).status_code == 403
-    assert mac.post("/api/mac/tracking", json={"enabled": False}).status_code == 403
-    assert mac.get("/api/mac/tracking").json() == {"enabled": True}
+    assert mac.post("/api/mac/app", json={"app": "Code"}).json() == {"status": "ok", "changed": True, "enabled": True}
+    assert mac.post("/api/mac/tracking", json={"enabled": False}).json() == {"enabled": False}
+    assert mac.get("/api/mac/tracking").json() == {"enabled": False}
+    today = format_day(time.time())
+    assert [(line["event"], line.get("app")) for line in desk_of(bo).log.read_day(today)] == [("mac_app", "Code"), ("mac_tracking", None)]
+    assert fresh_mac_tracking.read_day(today) == [], "nothing on the owner's desk"
+    assert desk_of(find_owner()).mac_tracking.enabled
     assert delete(member, f"/api/tokens/{owner_token.token.id}").status_code == 404
     assert [token["id"] for token in member.get("/api/tokens").json()["tokens"]] == [made["token"]["id"]]
     assert auth_routes.accounts.find_token_user(owner_token.secret, time.time()) is not None
@@ -1395,3 +1417,152 @@ def test_the_access_log_never_shows_an_invite_code():
         "GET /api/focus HTTP/1.1",
     ]
     assert not any("SECRET" in line for line in seen)
+
+
+# Everyone's own desk (study room step 3).
+
+
+def test_the_first_start_moves_my_data_into_my_folder_and_the_desk_reads_it(caplog):
+    from dayanpi.focus.todos import TodoList
+    from dayanpi.focus.tracker import FocusLog
+
+    data = app.desks.data_dir
+    TodoList(data / "todos.json", FocusLog(data / "focus_log")).add("from before the move", time.time())
+    before = {path.relative_to(data).as_posix(): path.read_bytes() for path in data.rglob("*") if path.is_file() and path.name != "accounts.db"}
+    with caplog.at_level(logging.INFO, logger="dayanpi"):
+        with open_client() as client:
+            listed = client.get("/api/todos").json()
+    folder = data / "users" / find_owner().username
+    after = {path.relative_to(folder).as_posix(): path.read_bytes() for path in folder.rglob("*") if path.is_file()}
+    assert after == before, "the same files, byte for byte"
+    assert not (data / "todos.json").exists() and not (data / "focus_log").exists()
+    assert [item["text"] for item in listed["open"]] == ["from before the move"]
+    assert [record.getMessage() for record in caplog.records if record.getMessage().startswith("moved ")] == [
+        f"moved focus_log, todos.json from {data} into {folder}"
+    ]
+
+
+def test_every_desk_route_answers_with_your_own_desk_and_never_mine():
+    from dayanpi.focus.tracker import format_day
+
+    now = time.time()
+    today, yesterday = format_day(now), format_day(now - 86400)
+    owner, bo = find_owner(), add_member()
+    mine = desk_of(owner)
+    write_app_samples(mine.log, today, now - 600, "Code", 4)
+    mine.days_dir.mkdir(parents=True)
+    (mine.days_dir / f"{yesterday}.md").write_text("---\nfocus_minutes: 95\n---\n\n# Mine\n")
+    with open_client() as me:
+        member = let_in(stranger(), bo)
+        my_item = me.post("/api/todos", json={"text": "mine"}).json()["item"]["id"]
+        their_item = member.post("/api/todos", json={"text": "theirs"}).json()["item"]["id"]
+        assert member.patch(f"/api/todos/{their_item}", json={"current": True}).status_code == 200
+        reads = {
+            "todos": [item["text"] for item in member.get("/api/todos").json()["open"]],
+            "focus": [item["text"] for item in member.get("/api/focus").json()["todos"]["open"]],
+            "apps": member.get("/api/apps").json()["apps"],
+            "month": yesterday in member.get(f"/api/days?month={yesterday[:7]}").json()["days"],
+            "page": member.get(f"/api/days/{yesterday}").status_code,
+        }
+        changes = [member.patch(f"/api/todos/{my_item}", json={"done": True}).status_code, delete(member, f"/api/todos/{my_item}").status_code]
+        member.post("/api/mac/tracking", json={"enabled": False})
+        member.post("/api/mac/app", json={"app": "Notes"})
+        my_view = me.get("/api/focus").json()
+    assert reads == {"todos": ["theirs"], "focus": ["theirs"], "apps": [], "month": False, "page": 404}
+    assert changes == [404, 404], "my to-do is no to-do of theirs"
+    assert [item["text"] for item in my_view["todos"]["open"]] == ["mine"] and my_view["todos"]["current"] is None
+    assert my_view["mac_tracking"] is True and my_view["app"] is None
+    assert [item["text"] for item in desk_of(bo).todos.snapshot(now)["open"]] == ["theirs"]
+    assert desk_of(bo).mac_tracking.enabled is False
+
+
+def test_members_change_their_own_desk_but_the_owners_things_stay_403():
+    with open_client("member") as member:
+        assert member.post("/api/todos", json={"text": "my own"}).status_code == 200
+        assert member.post("/api/mac/tracking", json={"enabled": False}).json() == {"enabled": False}
+        owner_only = [member.get(path).status_code for path in ("/api/stats", "/api/invites", "/api/accounts")]
+        owner_writes = [member.post("/api/invites", json={}).status_code, delete(member, f"/api/accounts/{find_owner().id}").status_code]
+        camera = [member.get("/video").status_code, member.get("/video/side").status_code]
+    assert owner_only == [403, 403, 403]
+    assert owner_writes == [403, 403]
+    assert camera == [404, 404]
+
+
+def test_the_cameras_and_the_peace_sign_only_touch_my_desk(monkeypatch):
+    from dayanpi.focus.coach import TodoCoach
+    from dayanpi.focus.tracker import FocusUpdate, format_day
+
+    mine, theirs = use_owner_desk(monkeypatch), desk_of(add_member())
+    monkeypatch.setattr(app, "coach", TodoCoach(mine.todos, 0, None))
+    monkeypatch.setattr(app.voice, "say", lambda text: True)
+    now = time.time()
+    for desk in (mine, theirs):
+        item = desk.todos.add("counting", now)["id"]
+        desk.todos.change(item, now, current=True)
+    for second in range(3):
+        app.handle_focus_update(FocusUpdate(state="working"), now + second)
+    app.handle_gesture("peace", now + 3)
+    seconds = {desk.username: [item["seconds"] for item in desk.todos.snapshot(now + 4)["open"]] for desk in (mine, theirs)}
+    assert seconds == {mine.username: [2], theirs.username: [0]}, "three checks a second apart are two seconds"
+    gestures = {desk.username: [line["event"] for line in desk.log.read_day(format_day(now)) if line["event"] == "gesture"] for desk in (mine, theirs)}
+    assert gestures == {mine.username: ["gesture"], theirs.username: []}
+
+
+def test_the_worker_feeds_my_desk(monkeypatch):
+    class FakeScanner:
+        def scan(self, image):
+            raise AssertionError("no frames here")
+
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
+    with open_client():
+        assert app.worker._tracker is desk_of(find_owner()).tracker
+
+
+def test_a_members_desk_has_no_camera_yet_and_says_so(monkeypatch):
+    monkeypatch.setattr(app, "last_spoken", {"text": "my peace sign", "at": time.time()})
+    with open_client("member") as member:
+        status = member.get("/api/focus").json()
+    camera_parts = {key: status[key] for key in ("enabled", "side_camera", "overlay", "side_overlay", "gesture", "spoken", "voice", "camera_access")}
+    assert camera_parts == {**app.NO_CAMERA, "camera_access": "owner_only"}
+    assert (status["state"], status["camera_ok"], status["last_check"]) == ("unknown", False, None)
+
+
+def test_the_status_carries_my_cameras_and_voice_and_theirs_none(monkeypatch):
+    mine, theirs = use_owner_desk(monkeypatch), desk_of(add_member())
+    now = time.time()
+    statuses = {desk.username: app.build_desk_status(desk, now) for desk in (mine, theirs)}
+    assert statuses[mine.username]["voice"] == {"enabled": app.voice.enabled, "backend": app.voice.backend, "problem": app.voice.problem}
+    assert {key: statuses[theirs.username][key] for key in app.NO_CAMERA} == app.NO_CAMERA
+
+
+def test_day_pages_are_written_for_every_desk():
+    from dayanpi.focus.tracker import format_day
+
+    yesterday_ts = time.time() - 86400
+    yesterday = format_day(yesterday_ts)
+    desks = [desk_of(find_owner()), desk_of(add_member())]
+    for desk in desks:
+        desk.log.write({"ts": yesterday_ts, "day": yesterday, "event": "todo", "action": "added", "id": "x", "text": desk.username, "seconds": 0})
+    app.write_day_pages(time.time())
+    assert [(desk.days_dir / f"{yesterday}.md").is_file() for desk in desks] == [True, True]
+
+
+def test_removing_someone_moves_their_desk_aside_and_the_name_starts_empty():
+    from dayanpi.focus.tracker import format_day
+
+    def join_as_bo(owner_client):
+        code = owner_client.post("/api/invites", json={}).json()["code"]
+        newcomer = stranger()
+        joined = newcomer.post("/api/join", json={"code": code, "display_name": "Bo", "username": "bo", "password": MEMBER_PASSWORD})
+        return newcomer, joined.json()["user"]["id"]
+
+    with open_client() as owner:
+        bo, bo_id = join_as_bo(owner)
+        assert "bo" in [desk.username for desk in app.desks.list()], "a desk the moment they join"
+        bo.post("/api/todos", json={"text": "the first bo's"})
+        assert delete(owner, f"/api/accounts/{bo_id}").status_code == 200
+        again, _ = join_as_bo(owner)
+        fresh = again.get("/api/todos").json()["open"]
+    removed = app.desks.users_dir / "removed" / f"bo-{format_day(time.time())}"
+    assert "the first bo's" in (removed / "todos.json").read_text(), "moved aside, never deleted"
+    assert fresh == [], "the same username starts empty"

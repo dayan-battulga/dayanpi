@@ -34,6 +34,7 @@ PASSWORD_MAX = 256
 DISPLAY_NAME_MAX = 40
 TOKEN_NAME_MAX = 40
 USERNAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9_.-]{1,31}")
+RESERVED_USERNAMES = {"removed"}  # data/users/removed/ keeps the folders of removed accounts (focus/desks.py)
 
 SCRYPT_N = 2**14
 SCRYPT_R = 8
@@ -195,6 +196,8 @@ def check_username(value: str) -> str:
     name = normalize_username(value)
     if USERNAME_PATTERN.fullmatch(name) is None:
         raise ValueError("a username is 2 to 32 of a-z, 0-9, _ . - and starts with a letter or a digit")
+    if name in RESERVED_USERNAMES:
+        raise ValueError("that username is taken")
     return name
 
 
