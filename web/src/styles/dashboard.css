@@ -2439,6 +2439,445 @@ button.todo-pill:active,
   color: var(--muted);
 }
 
+/* ---------- the room (components/room): Room.dc.html's layout with SeatsInfo.dc.html's seats ---------- */
+
+/* A state's color, for everything that shows one: seats, the faces up top and Settings' preview. */
+:is(.seat, .here-face, .share-tile) {
+  --lamp: var(--muted);
+}
+
+:is(.seat, .here-face, .share-tile)[data-state="working"] {
+  --lamp: var(--work);
+}
+
+:is(.seat, .here-face, .share-tile)[data-state="phone"] {
+  --lamp: var(--phone);
+}
+
+:is(.seat, .here-face, .share-tile)[data-state="away"] {
+  --lamp: var(--away);
+}
+
+.room-head {
+  margin-top: 64px;
+}
+
+.room-total {
+  font-size: clamp(56px, 8vw, 104px);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-caption {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 48px;
+}
+
+/* SPEC's lamp: a ring in the state color that breathes while they work (6 s) or hold their phone (2.4 s). */
+.seat {
+  position: relative;
+  flex: 1 1 480px;
+  min-width: 0;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.seat:is([data-state="working"], [data-state="phone"]) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+    0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent);
+  animation: lamp 6s ease-in-out infinite;
+}
+
+.seat[data-state="phone"] {
+  animation-duration: 2.4s;
+}
+
+.seat-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin: auto;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.seat:is([data-state="working"], [data-state="phone"]) .seat-initial {
+  color: var(--ink);
+}
+
+.seat-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 30px;
+}
+
+.seat-foot {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 20px;
+}
+
+.seat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.seat-name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.seat-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seat-timer::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--lamp);
+}
+
+.seat:not([data-state="working"], [data-state="phone"]) .seat-timer {
+  color: var(--muted);
+}
+
+.seat[data-state="offline"] .seat-timer::before {
+  display: none;
+}
+
+.seat-line {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.seat-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.seat-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--lamp);
+}
+
+.seat:not([data-state="working"], [data-state="phone"]) .seat-bar-fill {
+  background: color-mix(in srgb, var(--lamp) 70%, transparent);
+}
+
+.seat-empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+}
+
+.seat-invite {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.seat-invite svg {
+  width: 22px;
+  height: 22px;
+}
+
+.seat-alone {
+  align-content: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.seat-alone-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+/* Who's here, in the room's top bar: 26 px faces ringed in their state color, overlapping a pixel. */
+.here-faces {
+  display: flex;
+  align-items: center;
+  margin-right: 4px;
+  padding-left: 6px;
+}
+
+.here-face {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: -1px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3.5px var(--lamp);
+}
+
+.here-face:first-child {
+  margin-left: -6px;
+}
+
+/* Settings → Share with the room: the switches on the left, your seat as the room sees it on the right. */
+.settings-lead {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.share-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px 48px;
+  margin-top: 24px;
+}
+
+.share-switches {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.share-preview {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.share-preview-label {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.share-tile {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.share-tile:is([data-state="working"], [data-state="phone"]) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+    0 24px 50px -36px color-mix(in srgb, var(--lamp) 60%, transparent);
+}
+
+.share-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: auto;
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.share-tile-foot {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.share-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.share-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.share-timer::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--lamp);
+}
+
+.share-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.share-piece {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--sunken);
+}
+
+/* RoomPhone: two columns of smaller seats, 20 px in from the sides like its top bar. */
+@media (max-width: 639px) {
+  .room-head {
+    margin-top: 28px;
+    padding: 0 4px;
+  }
+
+  .room-total {
+    font-size: 60px;
+  }
+
+  .room-caption {
+    margin-top: 8px;
+    font-size: 15px;
+  }
+
+  .seats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 30px;
+    padding: 0 4px;
+  }
+
+  .seat {
+    height: 196px;
+    border-radius: 24px;
+  }
+
+  .seat:is([data-state="working"], [data-state="phone"]) {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+      0 22px 44px -32px color-mix(in srgb, var(--lamp) 60%, transparent);
+    animation-name: lamp-small;
+  }
+
+  .seat-initial {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+  }
+
+  .seat-chip {
+    top: 10px;
+    left: 10px;
+    min-height: 24px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 24px;
+  }
+
+  /* No room for "today" or the app on a phone's seat. */
+  .seat-chip-today,
+  .seat-app {
+    display: none;
+  }
+
+  .seat-foot {
+    left: 14px;
+    right: 14px;
+    bottom: 15px;
+  }
+
+  .seat-row {
+    gap: 8px;
+  }
+
+  .seat-name {
+    font-size: 15px;
+    letter-spacing: normal;
+  }
+
+  .seat-timer {
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .seat-timer::before {
+    width: 7px;
+    height: 7px;
+  }
+
+  .seat-line {
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .seat-invite {
+    gap: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+  }
+
+  .seat-invite svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 /* ---------- motion ---------- */
 
 .rise {

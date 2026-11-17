@@ -185,7 +185,10 @@ function serveFixtures(fixture) {
         const pathOnly = url.split("?")[0];
         if (pathOnly === "/api/stream") {
           response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
-          response.write(`data: ${JSON.stringify(fixture.stream ?? {})}\n\n`);
+          // "streamEnds": the Pi goes quiet after one snapshot, and the browser waits ten minutes to retry, so the page
+          // stays on Reconnecting for the shot.
+          response.write(`${fixture.streamEnds ? "retry: 600000\n" : ""}data: ${JSON.stringify(fixture.stream ?? {})}\n\n`);
+          if (fixture.streamEnds) response.end();
         } else if (pathOnly.startsWith("/api/") || pathOnly.startsWith("/video")) {
           const routes = fixture.routes ?? {};
           const body = routes[`${request.method} ${url}`] ?? routes[url] ?? routes[`${request.method} ${pathOnly}`] ?? routes[pathOnly];

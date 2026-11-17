@@ -2,10 +2,10 @@
 per account.
 
 A desk lives in data/users/<username>/ (DAYANPI_DATA_DIR overrides data/), with focus_log/, todos.json,
-days/, mac_tracking.json, camera_source.json and voice.json in it. Usernames can't change, so neither does the folder.
+days/, mac_tracking.json, camera_source.json, voice.json and sharing.json in it. Usernames can't change, so neither does the folder.
 A removed account's folder moves to data/users/removed/<username>-<date>/ and stays there until someone
 deletes it by hand, so whoever picks that username next starts empty. The classes in tracker.py, todos.py,
-mac_tracking.py, camera_source.py and voice_setting.py don't know about desks; they just get their paths from here.
+mac_tracking.py, camera_source.py, voice_setting.py and sharing.py don't know about desks; they just get their paths from here.
 """
 
 import logging
@@ -19,6 +19,7 @@ from dayanpi.focus.camera_source import CAMERA_SOURCE_FILE, CameraSourceSetting
 from dayanpi.focus.coach import TodoCoach
 from dayanpi.focus.days import DAYS_DIR_NAME
 from dayanpi.focus.mac_tracking import MAC_TRACKING_FILE, MacTrackingSetting
+from dayanpi.focus.sharing import SHARING_FILE, SharingSetting
 from dayanpi.focus.todos import TODO_FILE, TodoList
 from dayanpi.focus.tracker import FOCUS_LOG_DIR_NAME, FocusLog, FocusTracker, format_day
 from dayanpi.focus.voice_setting import VOICE_FILE, VoiceSetting
@@ -44,6 +45,8 @@ class Desk:
     camera_source: CameraSourceSetting
     browser: BrowserCamera  # /track's checks, for a desk on a browser's camera
     voice: VoiceSetting  # bedtime and where the peace sign speaks
+    sharing: SharingSetting  # what the room sees (focus/sharing.py)
+    seen_at: float | None = None  # the last second this person's site had the stream open; memory only
     last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill; never logged
     coach: TodoCoach | None = None  # made by app.find_coach the first time it's needed
 
@@ -61,7 +64,8 @@ def open_desk(folder: Path, username: str, now: float) -> Desk:
         logger.info("Mac tracking is paused for %s (switched off on the dashboard)", username)
     todos = TodoList(folder / TODO_FILE, log)
     desk = Desk(
-        username, folder, log, tracker, todos, mac_tracking, CameraSourceSetting(folder / CAMERA_SOURCE_FILE), BrowserCamera(tracker), VoiceSetting(folder / VOICE_FILE)
+        username, folder, log, tracker, todos, mac_tracking, CameraSourceSetting(folder / CAMERA_SOURCE_FILE), BrowserCamera(tracker), VoiceSetting(folder / VOICE_FILE),
+        SharingSetting(folder / SHARING_FILE),
     )
     return desk
 

@@ -28,6 +28,7 @@ export function useCommands({ user, hasFocus, macTracking }: CommandSources): Pa
   const { tracking, flipTracking } = macTracking;
   const all = [
     { label: "Add a to-do", keys: ["n"], run: () => openNewTodo(navigate), shown: true },
+    { label: "Go to Room", keys: ["g", "r"], run: () => void navigate("/"), shown: true },
     { label: "Go to Desk", keys: ["g", "d"], run: () => void navigate("/me"), shown: true },
     { label: "Go to Pi", keys: ["g", "p"], run: () => void navigate("/pi"), shown: owner },
     { label: "Go to Settings", keys: ["g", "s"], run: () => void navigate("/settings"), shown: true },

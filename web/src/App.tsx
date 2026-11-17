@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { DeskPage } from "@/components/desk/DeskPage";
 import { Frame } from "@/components/frame/Frame";
+import { RoomPage } from "@/components/room/RoomPage";
 
 // Downloaded only when you open them, so /me doesn't pay for them.
 const SettingsPage = lazy(() => import("@/components/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
@@ -24,11 +25,12 @@ export function App() {
         <Route path="/track" element={<TrackPage />} />
         <Route path="/track/test" element={<TrackTestPage />} />
         <Route element={<Frame />}>
+          <Route path="/" element={<RoomPage />} />
           <Route path="/me" element={<DeskPage />} />
           <Route path="/pi" element={<PiPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          {/* "/" (and anything unknown) is my desk until the room exists. */}
-          <Route path="*" element={<Navigate to="/me" replace />} />
+          {/* Anything unknown goes to the room, where everyone lands after signing in. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </Suspense>

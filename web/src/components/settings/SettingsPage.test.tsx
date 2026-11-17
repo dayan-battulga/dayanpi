@@ -7,7 +7,7 @@ import { loadPage } from "@/lib/navigation";
 import type { Account, User } from "@/lib/types";
 import { answer, serveApi, type Route } from "@/test/fakeApi";
 import { FakeEventSource } from "@/test/fakeStream";
-import { MEMBER, OWNER, makeFocus, makeSnapshot } from "@/test/fixtures";
+import { MEMBER, OWNER, makeFocus, makeSeat, makeSnapshot } from "@/test/fixtures";
 
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 
@@ -58,7 +58,7 @@ it("starts on Profile, and the list picks a section, marked, rising in fresh", a
   serveSettings(OWNER);
   const user = renderSettings();
   expect(await screen.findByRole("region", { name: "Profile" })).toBeInTheDocument();
-  expect(sectionNames()).toEqual(["Profile", "Camera", "Voice and bedtime", "Mac helper", "Room and invites"]);
+  expect(sectionNames()).toEqual(["Profile", "Sharing", "Camera", "Voice and bedtime", "Mac helper", "Room and invites"]);
   expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByLabelText("Name")).toHaveValue("Dayan");
   const before = document.querySelector(".settings-section");
@@ -86,7 +86,7 @@ it("shows a member only their own things, and never asks for the owner's lists",
   const sent = serveSettings(MEMBER);
   const user = renderSettings();
   await screen.findByRole("region", { name: "Profile" });
-  expect(sectionNames()).toEqual(["Profile", "Camera", "Voice and bedtime", "Mac helper"]);
+  expect(sectionNames()).toEqual(["Profile", "Sharing", "Camera", "Voice and bedtime", "Mac helper"]);
   const mac = await openSection(user, "Mac helper");
   expect(await mac.findByText("MacBook")).toBeInTheDocument();
   expect(mac.getByRole("switch", { name: "Track apps and sites" })).toBeInTheDocument(); // their own desk's
@@ -297,4 +297,36 @@ it("signs out", async () => {
   await user.click(await screen.findByRole("button", { name: "Sign out" }));
   expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/logout", body: {} });
   expect(loadPage).toHaveBeenCalledWith("/login");
+});
+
+it("shares with the room what the switches say, and previews your seat as the room gets it", async () => {
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false };
+  const seat = makeSeat({ focus_seconds: 11538 });
+  const sent = serveSettings(OWNER, undefined, {
+    "POST /api/sharing": answer({ sharing: { ...sharing, apps: true }, seat: { ...seat, app: "Code" } }),
+  });
+  const user = renderSettings();
+  FakeEventSource.latest?.send({ ...makeSnapshot(makeFocus({ sharing })), room: { seats: [seat] } });
+  await user.click(await screen.findByRole("button", { name: "Sharing" }));
+  const section = within(await screen.findByRole("region", { name: "Share with the room" }));
+
+  expect(section.getByText("Always on")).toBeInTheDocument();
+  const switches = section.getAllByRole("switch").map((entry) => [entry.getAttribute("aria-label"), entry.getAttribute("aria-checked")]);
+  expect(switches).toEqual([
+    ["Focus time", "true"],
+    ["To-do list", "true"],
+    ["History", "true"],
+    ["Apps", "false"],
+    ["Sites", "false"],
+    ["Video", "false"],
+  ]);
+  const pieces = () => section.getByRole("list", { name: "What else the room sees" }).textContent;
+  expect(section.getByLabelText("Your seat: Dayan")).toHaveTextContent("Dayan02:05");
+  expect(pieces()).toBe("3h 12m todayfinish the report");
+
+  await user.click(section.getByRole("switch", { name: "Apps" }));
+
+  expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/sharing", body: { apps: true } });
+  expect(section.getByRole("switch", { name: "Apps" })).toHaveAttribute("aria-checked", "true");
+  await waitFor(() => expect(pieces()).toBe("3h 12m todayfinish the reportCode"));
 });

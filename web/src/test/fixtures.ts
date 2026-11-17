@@ -1,4 +1,4 @@
-import type { FocusStatus, Snapshot, Todos, User } from "@/lib/types";
+import type { FocusStatus, Seat, Snapshot, Todos, User } from "@/lib/types";
 
 export const OWNER: User = { id: 1, username: "dayan", display_name: "Dayan", role: "owner" };
 export const MEMBER: User = { id: 2, username: "sam", display_name: "Sam", role: "member" };
@@ -50,4 +50,19 @@ export function makeSnapshot(focus: FocusStatus = makeFocus()): Snapshot {
     focus,
   };
   return snapshot;
+}
+
+// One person as the room sees them: here and working, sharing focus time and to-dos (the defaults), not apps.
+export function makeSeat(changes: Partial<Seat> = {}): Seat {
+  const seat: Seat = {
+    username: "dayan",
+    name: "Dayan",
+    here: true,
+    state: "working",
+    seconds_in_state: 125,
+    focus_seconds: 3900,
+    todos: { current: "finish the report", done: 1, total: 4 },
+    ...changes,
+  };
+  return seat;
 }

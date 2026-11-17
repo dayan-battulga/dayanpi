@@ -131,7 +131,32 @@
       "camera_source": "pi",
       "camera_paused": false,
       "bedtime": "00:00",
-      "voice_output": "pi"
+      "voice_output": "pi",
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": false,
+        "sites": false,
+        "video": false
+      }
+    },
+    "room": {
+      "seats": [
+        {
+          "username": "dayan",
+          "name": "Dayan",
+          "here": true,
+          "state": "working",
+          "seconds_in_state": 2538,
+          "focus_seconds": 11538,
+          "todos": {
+            "current": "Problem set 3",
+            "done": 1,
+            "total": 4
+          }
+        }
+      ]
     }
   },
   "routes": {

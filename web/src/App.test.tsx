@@ -139,12 +139,6 @@ it("warns about undervoltage on the Pi page while it's happening", async () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("sends / to /me until the room exists", async () => {
-  renderApp("/");
-  await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me"));
-  expect(screen.getByRole("link", { name: "Desk" })).toHaveAttribute("aria-current", "page");
-});
-
 it.each([
   ["/me", "Desk"],
   ["/pi", "Pi"],
@@ -577,7 +571,7 @@ it.each(["{Meta>}k{/Meta}", "{Control>}k{/Control}"])("opens ⌘K with %s, filte
   const dialog = await screen.findByRole("dialog", { name: "Commands" });
   const search = within(dialog).getByRole("combobox", { name: "Command" });
   expect(search).toHaveFocus();
-  expect(readCommands(dialog)).toEqual(["Add a to-do", "Go to Desk", "Go to Pi", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
+  expect(readCommands(dialog)).toEqual(["Add a to-do", "Go to Room", "Go to Desk", "Go to Pi", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
   const first = within(dialog).getByRole("option", { selected: true });
   expect(first.querySelector(".palette-label")).toHaveTextContent("Add a to-do");
   expect(first.querySelector(".palette-key")).toHaveTextContent("N");
@@ -607,7 +601,7 @@ it("gives a member every command for their own desk, but not the Pi", async () =
   const user = userEvent.setup();
   await openDesk(MEMBER);
   await user.keyboard("{Control>}k{/Control}");
-  expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Add a to-do", "Go to Desk", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
+  expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Add a to-do", "Go to Room", "Go to Desk", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
 });
 
 it("pauses Mac tracking from ⌘K, and the Mac line follows", async () => {

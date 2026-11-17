@@ -1,0 +1,172 @@
+{
+  "about": "Room.json after the stream drops: the mockup's \"reconnecting\" moment.",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {
+    "people": "3 here",
+    "myState": "working",
+    "moment": "reconnecting"
+  },
+  "stream": {
+    "temperature_celsius": 51.3,
+    "uptime_seconds": 351000,
+    "memory": {
+      "total_mb": 8000,
+      "available_mb": 5100,
+      "percent_used": 36.3
+    },
+    "disk": {
+      "percent_used": 41,
+      "free_gb": 19.8
+    },
+    "throttle": {
+      "is_undervoltage": false,
+      "is_frequency_capped": false,
+      "is_throttled": false,
+      "has_undervoltage_occured": false,
+      "has_throttling_occured": false
+    },
+    "rates": {
+      "cpu_percent": 21.5,
+      "core_percents": [
+        18,
+        25,
+        22,
+        21
+      ],
+      "rx_kbps": 96,
+      "tx_kbps": 640
+    },
+    "focus": {
+      "state": "working",
+      "since": 1794875400,
+      "seconds_in_state": 2538,
+      "today": {
+        "working_seconds": 11538,
+        "phone_seconds": 1440,
+        "pickups": 2,
+        "longest_streak_seconds": 4800,
+        "first_seen": 1794844800
+      },
+      "app": "Code",
+      "site": null,
+      "mac_tracking": true,
+      "camera_source": "pi",
+      "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi",
+      "camera_ok": true,
+      "last_check": {
+        "person": 0.93,
+        "phone": 0.02,
+        "elapsed_ms": 190
+      },
+      "enabled": true,
+      "side_camera": true,
+      "overlay": null,
+      "side_overlay": null,
+      "voice": {
+        "enabled": true,
+        "backend": "piper",
+        "problem": null
+      },
+      "todos": {
+        "current": "t1",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      },
+      "gesture": null,
+      "spoken": null,
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": true,
+        "sites": false,
+        "video": false
+      }
+    },
+    "room": {
+      "seats": [
+        {
+          "username": "dayan",
+          "name": "Dayan",
+          "here": true,
+          "state": "working",
+          "seconds_in_state": 2538,
+          "focus_seconds": 11538,
+          "todos": {
+            "current": "Problem set 3",
+            "done": 1,
+            "total": 4
+          },
+          "app": "Code"
+        },
+        {
+          "username": "sam",
+          "name": "Sam",
+          "here": true,
+          "state": "phone",
+          "seconds_in_state": 365,
+          "focus_seconds": 6480,
+          "todos": {
+            "current": "Read chapter 7",
+            "done": 1,
+            "total": 4
+          },
+          "app": "Chrome"
+        },
+        {
+          "username": "alex",
+          "name": "Alex",
+          "here": true,
+          "state": "away",
+          "seconds_in_state": 760,
+          "focus_seconds": 7500,
+          "todos": {
+            "current": "Flashcards, unit 4",
+            "done": 3,
+            "total": 5
+          }
+        }
+      ]
+    }
+  },
+  "routes": {
+    "/api/me": {
+      "user": {
+        "id": 1,
+        "username": "dayan",
+        "display_name": "Dayan",
+        "role": "owner"
+      }
+    }
+  },
+  "streamEnds": true
+}

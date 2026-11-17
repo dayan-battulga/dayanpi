@@ -100,7 +100,32 @@
         ]
       },
       "gesture": null,
-      "spoken": null
+      "spoken": null,
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": false,
+        "sites": false,
+        "video": false
+      }
+    },
+    "room": {
+      "seats": [
+        {
+          "username": "dayan",
+          "name": "Dayan",
+          "here": true,
+          "state": "phone",
+          "seconds_in_state": 192,
+          "focus_seconds": 11538,
+          "todos": {
+            "current": "Problem set 3",
+            "done": 1,
+            "total": 4
+          }
+        }
+      ]
     }
   },
   "routes": {

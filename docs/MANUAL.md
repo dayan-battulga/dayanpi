@@ -26,17 +26,18 @@ Always use the **`main`** branch on both machines.
 
 | Path | Purpose |
 | --- | --- |
-| `/` | Dashboard |
+| `/` | The room: everyone's seat, built from what each person shares (see [What the room sees](#what-the-room-sees-sharing)) |
 | `/login` | The sign-in page |
 | `/join/<code>` | Make an account from an invite link |
-| `/settings` | Profile (your name and password), Camera (where your desk's checks come from), Voice and bedtime (your bedtime, where your peace sign speaks), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
+| `/settings` | Profile (your name and password), Sharing (what the room sees of you), Camera (where your desk's checks come from), Voice and bedtime (your bedtime, where your peace sign speaks), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
 | `/track` | The tracker: this browser's camera feeds your own desk (Chrome, see [A friend's camera](#a-friends-camera-the-tracker)) |
 | `/track/test` | The camera test: is this laptop fast enough for the tracker (nothing goes to the Pi) |
 | `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
 | `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens |
 | `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
 | `/api/stats` | One JSON snapshot (owner only) |
-| `/api/stream` | Live SSE feed (members only get the focus part) |
+| `/api/stream` | Live SSE feed: your own desk's `focus` and everyone's seat as `room` (members don't get the Pi's numbers) |
+| `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video"}` as true/false; answers with all your switches and your seat as the room now sees it |
 | `/api/health` | Health check (open, no sign-in) |
 | `/video` | MJPEG camera (owner only; with the camera lock on, only from your own Tailscale devices; 404 otherwise) |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise; same lock as `/video`) |
@@ -318,6 +319,16 @@ Everyone's peace sign speaks to them: their own to-dos and their own bedtime. Yo
 4. From then on, a peace sign in front of the tracker plays on the page she has open: `/track` (already allowed, because she clicked Allow camera) or `/me` (click anywhere on it once). If a browser still won't, the pill at the top has a small play button.
 
 It needs the Pi's voice on (`DAYANPI_VOICE=piper`, [voice.md](voice.md)). With it off, the pill shows the words and nothing plays, and Settings says so.
+
+### What the room sees (sharing)
+
+Everyone picks what the room sees of them in Settings → **Sharing**, and the Pi sticks to it: a switched-off part never leaves the Pi for anyone else, not on the page and not through the API. Your own desk still shows you everything.
+
+- **Status** (working, on the phone, away, and for how long) always shows.
+- **Focus time**, **To-do list** and **History** start on.
+- **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. Video doesn't do anything until step 7.
+
+The preview next to the switches is your seat exactly as the others get it. The switches live in each person's folder as `data/users/<name>/sharing.json`, so a restart keeps them. More in [focus-tracker.md](focus-tracker.md#the-room-and-sharing-study-room-step-6-part-1).
 
 ### Using the API from a terminal
 

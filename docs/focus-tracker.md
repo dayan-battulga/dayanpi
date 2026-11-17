@@ -202,19 +202,20 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 
 | Page | Who | What's on it |
 | --- | --- | --- |
-| **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. `/` takes you here until the room exists. |
+| **Room** (`/`) | everyone | Everyone's seat, and how long the people here have focused today together. Where you land after signing in. See [The room and sharing](#the-room-and-sharing-study-room-step-6-part-1). |
+| **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. |
 | **Pi** (`/pi`) | you | **Cameras**: one feed at a time (the **Side** / **Front** button switches, and only the one showing streams), hidden behind a veil until you press **Peek**, with the boxes over it and the latest readings under it. Off your own Tailscale devices they're locked. Then **The Pi**: temperature, CPU, memory and uptime, rolling to each new number. An amber **Undervoltage** warning shows up there while the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
-| **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
+| **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Sharing (what the room sees of you), Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
 
 The frame around them:
 
-- **The top bar:** the wordmark, the Desk / Pi tabs (the white pill slides over to the one you pick), the **⌘K** button (see below), the sun/moon button for the theme, and a round button with your initial that opens Settings and Sign out. It gets a teal ring while you're in Settings.
-- **On a phone** (under 640 px wide) the tabs move into a frosted dock at the bottom: Desk, a **+** that jumps straight to the new to-do box (from any page), and Settings. The Pi page isn't in the dock yet, so on a phone open `/pi` yourself.
-- **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages dim until it's back. The old Live badge is gone: no chip means it's live.
+- **The top bar:** the wordmark, the Room / Desk / Pi tabs (the white pill slides over to the one you pick), on the Room a little face for everyone who's here, ringed in their state color, the **⌘K** button (see below), the sun/moon button for the theme, and a round button with your initial that opens Settings and Sign out. It gets a teal ring while you're in Settings.
+- **On a phone** (under 640 px wide) the tabs move into a frosted dock at the bottom: Room, Desk, a **+** that jumps straight to the new to-do box (from any page), and Settings. The Pi page isn't in the dock yet, so on a phone open `/pi` yourself.
+- **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages (and the Room's seats) dim until it's back. The old Live badge is gone: no chip means it's live.
 - **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
 - **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign other than peace fires (peace has its own pill, see [Hand signs](#hand-signs)), and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
-- **Only the Desk downloads up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
+- **Only the Room and the Desk download up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
 
 ### ⌘K and the keyboard
 
@@ -223,6 +224,7 @@ Press **⌘K** (or **Ctrl+K** on Windows and Linux) anywhere, even while you're 
 | Command | Key | Who |
 | --- | --- | --- |
 | Add a to-do (puts the cursor in the new to-do box on the Desk, from any page) | **N** | you |
+| Go to Room | **G** then **R** | everyone |
 | Go to Desk | **G** then **D** | everyone |
 | Go to Pi | **G** then **P** | you |
 | Go to Settings | **G** then **S** | everyone |
@@ -230,6 +232,27 @@ Press **⌘K** (or **Ctrl+K** on Windows and Linux) anywhere, even while you're 
 | Pause Mac tracking, or Resume when it's paused (same as the button on the Mac line) | | you |
 
 The single keys only work when you're not typing in a box, so typing "n" into a to-do never jumps anywhere. For the **G** ones, press the second key within a second. A phone has no ⌘K button (it has the dock instead), but a keyboard plugged into it still opens the box.
+
+## The room and sharing (study room step 6, part 1)
+
+`/` is the room now: a seat for each account (up to 4, two by two, two columns of smaller ones on a phone), yours first and called **You**, and an open seat for each free spot. On your open seats you get **Invite**, which opens Settings → Room and invites; a member's open seats are just empty, since only you can invite. When nobody else has an account yet it says **Just you for now** instead.
+
+Each seat has:
+
+- **The lamp**, a glow in their state color: teal and slowly breathing while they work, orange and quicker on the phone, none when they're away or offline.
+- **Their initial** in the middle. Video comes in step 7, so for now every seat shows the initial.
+- **Their name and a live timer** for how long they've been in that state. That's their status, and it always shows.
+- And only what they share: **today's total** (the chip at the top left), **the current to-do** under the name (with "paused" while they aren't working on it) and **the app** after it (or "github.com in Chrome" when they share sites too; a phone's seat leaves the app off), and **the to-dos-done bar** along the bottom.
+
+**Who's here:** anyone with the site open (the page keeps the live stream open while its tab is showing) or whose camera checked them, in the last 2 minutes. That means your desk is always here while the Pi's camera runs, away or not. Someone who isn't here gets an **offline** seat: no lamp, no timer. Up top it says how many are here and how long the people here have focused today together ("7h 05m / 3 here · focused together today"), counting only the people who share their focus time. With just you, it's your own time and "focused today".
+
+### What each person shares
+
+Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** and **History** (your past days) start on; **Apps**, **Sites** and **Video** start off, and Sites only counts while Apps is on. Next to the switches is **What the room sees**: your seat exactly as everyone else gets it, straight from the Pi, so it changes the moment you flip something. History and Video have nothing to show yet: someone's desk page and the video come later in step 6 and in step 7, and they'll read these switches then. Your own desk always shows you everything.
+
+### How it's enforced (for changing it)
+
+The Pi decides, not the page. Each desk keeps its switches in `data/users/<name>/sharing.json` (`dayanpi/focus/sharing.py`), and `build_seat()` in there is the one function that turns a desk into what anyone else sees: a part that's switched off is never in what it returns. Once a second the Pi builds every seat with it (`app.build_room`) and puts that in every stream event as `"room"`; `POST /api/sharing` answers with your seat built the same way, which is what the preview shows. No route hands out anyone else's desk. Anything new that shows another person's data has to go through `build_seat()`.
 
 ## With both cameras
 

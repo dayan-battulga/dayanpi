@@ -28,6 +28,8 @@ from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
 from dayanpi.focus.desks import Desks  # noqa: E402
+from dayanpi.focus.sharing import DEFAULT_SHARING  # noqa: E402
+from dayanpi.focus.tracker import format_day  # noqa: E402
 from dayanpi.paths import MODELS_DIR  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
@@ -65,6 +67,7 @@ def fresh_desks(monkeypatch, tmp_path):
     monkeypatch.setattr(app, "coach_writer", None)
     monkeypatch.setattr(app, "latest_focus", {})
     monkeypatch.setattr(app, "latest_snapshot", None)
+    monkeypatch.setattr(app, "latest_room", None)
 
 
 def desk_of(user):
@@ -596,9 +599,84 @@ def test_the_stream_sends_each_viewer_their_own_desk_and_the_pi_only_to_the_owne
         [member_event] = read_events(response, 1)
     with httpx.stream("GET", real_server + "/api/stream", headers=session_header(owner), timeout=3) as response:
         [owner_event] = read_events(response, 1)
-    assert member_event == {"focus": {**theirs, "camera_access": "owner_only"}}
-    assert owner_event == {**snapshot, "focus": {**mine, "camera_access": "open"}}
+    assert member_event == {"focus": {**theirs, "camera_access": "owner_only"}, "room": None}
+    assert owner_event == {**snapshot, "focus": {**mine, "camera_access": "open"}, "room": None}
     assert "camera_access" not in app.latest_focus[owner.username], "each viewer's copy, never the shared status"
+
+
+def make_room(monkeypatch, now: float) -> dict:
+    """What snapshot_producer makes each second, from every open desk, for the streams to send."""
+    statuses = {desk.username: app.build_desk_status(desk, now) for desk in app.desks.list()}
+    room = app.build_room(statuses, now)
+    monkeypatch.setattr(app, "latest_snapshot", {"fake": True})
+    monkeypatch.setattr(app, "latest_focus", statuses)
+    monkeypatch.setattr(app, "latest_room", room)
+    return room
+
+
+def read_member_views(real_server, member, now: float) -> list[str]:
+    """Everything a member can read: a stream event and every route they may GET."""
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(member), timeout=3) as response:
+        views = [json.dumps(read_events(response, 1)[0])]
+    client = let_in(stranger(), member)
+    paths = [path for (method, _), (path, _, _, member_status, _) in ACCESS.items() if method == "GET" and member_status == 200]
+    paths += [f"/api/days/{format_day(now)}", f"/api/days?month={format_day(now)[:7]}", "/api/apps?range=week"]
+    views += [client.get(path).text for path in paths if not path.startswith(("/api/stream", "/video", "/api/models"))]
+    return views
+
+
+def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
+    owner, member = find_owner(), add_member()
+    desk = desk_of(owner)
+    desk_of(member)
+    now = time.time()
+    plan = desk.todos.add("secret plan", now)
+    desk.todos.change(plan["id"], now, current=True)
+    desk.tracker.record_app("SecretApp", now, site="secret.example")
+    desk.sharing.set({"focus": False, "todos": False, "sites": True})  # sites without apps counts for nothing
+    room = make_room(monkeypatch, now)
+    seen = "\n".join(read_member_views(real_server, member, now))
+    for secret in ("secret plan", "SecretApp", "secret.example"):
+        assert secret not in seen
+    [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
+    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state"}
+
+    desk.sharing.set({"focus": True, "todos": True, "apps": True})
+    make_room(monkeypatch, now)
+    seen = "\n".join(read_member_views(real_server, member, now))
+    for secret in ("secret plan", "SecretApp", "secret.example", "focus_seconds"):
+        assert secret in seen, "switched on, it does reach the room"
+
+
+def test_an_open_stream_puts_you_in_the_room(real_server, monkeypatch):
+    member = add_member()
+    desk_of(member)
+    now = time.time()
+    room = make_room(monkeypatch, now)
+    assert [(seat["username"], seat["here"], seat["state"]) for seat in room["seats"]] == [("bo", False, "offline")]
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(member), timeout=3) as response:
+        [event] = read_events(response, 1)
+    assert event["room"] == room
+    assert time.time() - desk_of(member).seen_at < 5
+    [seat] = make_room(monkeypatch, time.time())["seats"]
+    assert (seat["here"], seat["state"]) == (True, "unknown")
+
+
+def test_the_sharing_route_saves_your_switches_and_your_seat_is_what_the_room_gets(monkeypatch):
+    owner, member = find_owner(), add_member()
+    desk_of(owner)
+    client = let_in(stranger(), member)
+    reply = client.post("/api/sharing", json={"apps": True, "todos": False})
+    assert reply.status_code == 200
+    assert reply.json()["sharing"] == DEFAULT_SHARING | {"apps": True, "todos": False}
+    assert client.get("/api/focus").json()["sharing"] == reply.json()["sharing"]
+    room = make_room(monkeypatch, time.time())
+    assert [seat["username"] for seat in room["seats"]] == [owner.username, member.username]
+    without_timer = lambda seat: {key: value for key, value in seat.items() if key != "seconds_in_state"}  # noqa: E731
+    assert without_timer(reply.json()["seat"]) == without_timer(room["seats"][1]), "Settings' preview is what the room gets"
+    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "focus_seconds", "app"}
+    for bad in ({"status": False}, {"apps": "yes"}):
+        assert client.post("/api/sharing", json=bad).status_code == 422
 
 
 @pytest.mark.parametrize("ending", ["account removed", "signed out"])
@@ -1186,7 +1264,8 @@ ACCESS = {
     ("POST", "/api/track/pause"): ("/api/track/pause", {}, 401, 200, 200),  # no startup here, so my desk is on a browser too
     ("POST", "/api/track/source"): ("/api/track/source", {"source": "webcam"}, 401, 422, 422),
     ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
-    ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),  # the voice is off in the tests, so nothing plays
+    ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
+    ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),  # the voice is off in the tests, so nothing plays
     ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
     ("GET", "/video"): ("/video", None, 401, 404, 200),

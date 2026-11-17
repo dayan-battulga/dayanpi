@@ -86,6 +86,36 @@ export interface FocusStatus {
   spoken?: Spoken | null;
   bedtime?: string; // "HH:MM", the desk's own (Settings → Voice and bedtime)
   voice_output?: "pi" | "computer"; // where the peace sign speaks
+  sharing?: Sharing; // what the room sees of this desk (Settings → Share with the room)
+}
+
+// Settings → Share with the room. Status (the state and its timer) always shows, so it isn't a switch.
+export interface Sharing {
+  focus: boolean;
+  todos: boolean;
+  history: boolean;
+  apps: boolean;
+  sites: boolean;
+  video: boolean;
+}
+
+export type SeatState = FocusState | "offline";
+
+// One person as the room sees them, built on the Pi (focus/sharing.py). A part they don't share is missing.
+export interface Seat {
+  username: string;
+  name: string;
+  here: boolean;
+  state: SeatState;
+  seconds_in_state: number | null; // null while offline
+  focus_seconds?: number;
+  todos?: { current: string | null; done: number; total: number };
+  app?: string | null;
+  site?: string | null;
+}
+
+export interface Room {
+  seats: Seat[]; // oldest account first; lib/account's ROOM_SIZE is the most there can be
 }
 
 export interface Throttle {
@@ -105,9 +135,10 @@ export interface PiStats {
   rates: { cpu_percent: number; core_percents?: number[]; rx_kbps: number; tx_kbps: number } | null;
 }
 
-// The owner's stream carries the Pi's numbers; a member's carries only "focus".
+// The owner's stream carries the Pi's numbers; a member's carries only "focus" and "room".
 export interface Snapshot extends Partial<PiStats> {
   focus?: FocusStatus;
+  room?: Room | null; // null for the first second after the Pi starts
 }
 
 export interface User {

@@ -12,6 +12,7 @@ import { useMe } from "@/hooks/useMe";
 import { PHONE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { orderSeats, summarizeRoom } from "@/lib/room";
 import type { Connection, Snapshot, User } from "@/lib/types";
 
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
@@ -52,6 +53,7 @@ export function Frame() {
   useGestureToast(snapshot?.focus?.gesture);
   const peaceVoice = usePeaceVoice(snapshot?.focus?.spoken);
   const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking };
+  const room = summarizeRoom(orderSeats(snapshot?.room?.seats ?? [], user?.username));
   // Before the new page is drawn, so it starts at its top instead of wherever the last one was scrolled to.
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -59,7 +61,14 @@ export function Frame() {
 
   return (
     <div className="frame" data-connection={connection}>
-      <Header connection={connection} user={user} phone={phone} onOpenPalette={() => setPaletteOpen(true)} />
+      <Header
+        connection={connection}
+        user={user}
+        phone={phone}
+        here={pathname === "/" ? room.here : null}
+        hereLabel={room.hereLabel}
+        onOpenPalette={() => setPaletteOpen(true)}
+      />
       {/* Suspense outside the keyed page, so a lazy page keeps the old one up while it loads instead of a blank. */}
       <Suspense fallback={null}>
         <ViewTransition key={pathname} enter="page" exit="page" default="none">

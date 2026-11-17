@@ -29,6 +29,7 @@ from dayanpi.focus.browser_camera import BrowserCheck
 from dayanpi.focus.camera_source import SOURCES
 from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
+from dayanpi.focus.sharing import build_seat, is_here
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
 from dayanpi.focus.todos import TEXT_MAX
@@ -73,7 +74,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -87,6 +88,7 @@ stream = create_stream()
 side_stream = create_side_stream()
 latest_snapshot: dict | None = None  # the Pi's numbers, which only the owner gets
 latest_focus: dict[str, dict] = {}  # every desk's focus status by username, made once a second
+latest_room: dict | None = None  # everyone's seat as the room sees it (build_room), made once a second
 desks = Desks(find_data_dir())
 owner_desk: Desk | None = None  # the desk the Pi's cameras and the voice can feed; opened at startup
 worker: FocusWorker | None = None
@@ -192,6 +194,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         "spoken": describe_spoken(desk, now),
         "bedtime": format_bedtime(find_bedtime(desk)),
         "voice_output": find_voice_output(desk),
+        "sharing": desk.sharing.read(),
         # Why the Pi's voice can't run is about the Pi, so it's mine to see.
         "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem if desk is owner_desk else None},
     }
@@ -200,6 +203,24 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         # The tracker takes /track's readings whenever they come, and its hand signs are the desk's own.
         status |= {"enabled": True, "gesture": stamp_age(desk.browser.last_gesture, now)}
     return status
+
+
+def seat_desk(desk: Desk, name: str, status: dict, now: float) -> dict:
+    """One desk's seat, through sharing.build_seat: what anyone else may see of it."""
+    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now))
+    return seat
+
+
+def build_room(statuses: dict[str, dict], now: float) -> dict:
+    """Everyone's seat, oldest account first, the same for every viewer (their own seat too, so it matches Settings'
+    preview). An account whose desk has no status yet (it joined this second) gets its seat next time."""
+    seats = [
+        seat_desk(desks.open(user.username, now), user.display_name, statuses[user.username], now)
+        for user in auth_routes.accounts.list_users()
+        if user.username in statuses
+    ]
+    room = {"seats": seats}
+    return room
 
 
 def find_desk(request: Request) -> Desk:
@@ -237,14 +258,14 @@ def shape_focus(focus: dict, access: str) -> dict:
 
 def shape_snapshot(request: Request) -> dict | None:
     """One viewer's copy of the latest snapshot: their own desk's focus, plus the Pi's numbers for the owner.
-    None until the first one's made (or the first second after someone joins)."""
+    None until the first one's made (or the first second after someone joins). Everyone gets the room."""
     viewer = auth_routes.read_viewer(request)
     snapshot = latest_snapshot
     focus = latest_focus.get(viewer.user.username)
     shaped = None
     if snapshot is not None and focus is not None:
-        mine = shape_focus(focus, find_camera_access(request))
-        shaped = {**snapshot, "focus": mine} if viewer.user.role == "owner" else {"focus": mine}
+        mine = {"focus": shape_focus(focus, find_camera_access(request)), "room": latest_room}
+        shaped = {**snapshot, **mine} if viewer.user.role == "owner" else mine
     return shaped
 
 
@@ -338,13 +359,14 @@ def tick_browser_desks(now: float) -> None:
 async def snapshot_producer() -> None:
     """One owner of the sampler, the browser desks' ticks, and every desk's status once a second; SSE clients only
     read what it made."""
-    global latest_snapshot, latest_focus
+    global latest_snapshot, latest_focus, latest_room
     while True:
         try:
             snapshot = collector.snapshot(sampler)
             now = time.time()
             await asyncio.to_thread(tick_browser_desks, now)
             latest_focus = {desk.username: build_desk_status(desk, now) for desk in desks.list()}
+            latest_room = build_room(latest_focus, now)
             latest_snapshot = snapshot
         except Exception:
             logger.exception("snapshot producer failed")
@@ -615,6 +637,8 @@ async def event_stream(request: Request) -> AsyncIterator[bytes]:
             if auth_routes.accounts.find_session(token, time.time()) is None:
                 break
 
+            # An open stream is the site open, which counts as here in the room.
+            find_desk(request).seen_at = time.time()
             shaped = shape_snapshot(request)
             if shaped is not None:
                 yield f"data: {json.dumps(shaped)}\n\n".encode("utf-8")
@@ -829,6 +853,29 @@ def set_camera_source(request: Request, change: TrackSource):
     if desk.camera_source.set(change.source):
         logger.info("%s's desk now takes its checks from the %s", desk.username, "Pi's cameras" if change.source == "pi" else "browser")
     return {"source": find_camera_source(desk)}
+
+
+class SharingChange(BaseModel):
+    """Settings → Share with the room: the switches to change. Status is always on, so it isn't one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    focus: StrictBool | None = None
+    todos: StrictBool | None = None
+    history: StrictBool | None = None
+    apps: StrictBool | None = None
+    sites: StrictBool | None = None
+    video: StrictBool | None = None
+
+
+@app.post("/api/sharing")
+def set_sharing(request: Request, change: SharingChange):
+    """Your own desk's switches. The reply has your seat exactly as the room now gets it, for Settings' preview."""
+    desk = find_desk(request)
+    sharing = desk.sharing.set(change.model_dump(exclude_none=True))
+    now = time.time()
+    seat = seat_desk(desk, auth_routes.read_viewer(request).user.display_name, build_desk_status(desk, now), now)
+    return {"sharing": sharing, "seat": seat}
 
 
 class VoiceChange(BaseModel):
