@@ -77,13 +77,11 @@ it("draws today's cards on /me from one stream", async () => {
   FakeEventSource.latest?.send(makeSnapshot());
 
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Focused");
-  expect(document.getElementById("focus-state")).toHaveTextContent("Working");
-  expect(document.getElementById("focus-timer")).toHaveTextContent("2:05");
-  expect(document.getElementById("focus-working")).toHaveTextContent("1h 05m");
-  expect(document.getElementById("focus-pickups")).toHaveTextContent("3");
+  expect(screen.getByRole("timer")).toHaveAccessibleName("02:05");
+  expect(document.querySelector("#focus-stats .sr-only")).toHaveTextContent("1h 05m focused, 5m on your phone, 3 pickups");
   expect(screen.getByText("finish the report")).toBeInTheDocument();
   expect(screen.getByText("12m")).toBeInTheDocument();
-  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+  expect(document.getElementById("mac-line")).toHaveTextContent("On the Mac ·Code");
   expect(screen.queryByRole("region", { name: "Camera" })).toBeNull();
   expect(document.getElementById("pi")).toBeNull();
 
@@ -156,8 +154,8 @@ it("shows a member the desk without the owner's controls, and no Pi tab", async 
   expect(screen.getByText("finish the report")).toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
   expect(screen.queryByRole("checkbox", { name: "Done: finish the report" })).toBeNull();
-  expect(screen.queryByRole("switch", { name: "Mac tracking" })).toBeNull();
-  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+  expect(screen.queryByRole("button", { name: "Pause Mac tracking" })).toBeNull();
+  expect(document.getElementById("mac-line")).toHaveTextContent("On the Mac ·Code");
   expect(screen.getByRole("link", { name: "Desk" })).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Pi" })).toBeNull();
 });
@@ -263,55 +261,6 @@ it("shows the flip button only with a side camera, and only one feed at a time",
   expect(front).not.toBeVisible();
   expect(side).toBeVisible();
   expect(screen.getByRole("button", { name: "Show the front camera" })).toBeInTheDocument();
-});
-
-it("puts what's in front on the Mac at the top, the site big when it's a browser", () => {
-  renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: "Google Chrome", site: "youtube.com" })));
-  const card = screen.getByRole("region", { name: "On the Mac" });
-  expect(document.getElementById("mac")).toHaveTextContent(/^youtube\.com$/);
-  expect(card).toHaveTextContent("in Google Chrome");
-  expect(card.compareDocumentPosition(document.getElementById("focus-card")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: null })));
-  expect(document.getElementById("mac")).toHaveTextContent("Not reporting");
-});
-
-it("pauses the Mac tracker from its switch, flipping right away", async () => {
-  const user = userEvent.setup();
-  const sent = servePi(OWNER, { "POST /api/mac/tracking": answer({ enabled: false }) });
-  renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: true })));
-  const toggle = await screen.findByRole("switch", { name: "Mac tracking" });
-  expect(toggle).toHaveAttribute("aria-checked", "true");
-
-  await user.click(toggle);
-
-  expect(sent.filter((request) => request.path === "/api/mac/tracking").map((request) => request.body)).toEqual([{ enabled: false }]);
-  expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
-  expect(document.getElementById("mac")).toHaveTextContent("Paused");
-});
-
-it("puts the switch back when the Pi doesn't take it", async () => {
-  const user = userEvent.setup();
-  servePi(OWNER, {
-    "POST /api/mac/tracking": () => {
-      throw new TypeError("Failed to fetch");
-    },
-  });
-  renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: true })));
-  await user.click(await screen.findByRole("switch", { name: "Mac tracking" }));
-  await waitFor(() => expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "true"));
-  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
-  expect(await screen.findByText("Couldn't pause Mac tracking")).toBeInTheDocument();
-});
-
-it("says Paused when the Pi says the switch is off", async () => {
-  renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: false })));
-  expect(await screen.findByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
-  expect(document.getElementById("mac")).toHaveTextContent("Paused");
 });
 
 it.each([
@@ -453,7 +402,7 @@ it("gives a member only the commands that are theirs", async () => {
   expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Go to Desk", "Go to Settings", "Switch theme"]);
 });
 
-it("pauses Mac tracking from ⌘K, and the card's switch follows", async () => {
+it("pauses Mac tracking from ⌘K, and the Mac line follows", async () => {
   const user = userEvent.setup();
   const sent = servePi(OWNER, { "POST /api/mac/tracking": answer({ enabled: false }) });
   renderApp();
@@ -464,7 +413,8 @@ it("pauses Mac tracking from ⌘K, and the card's switch follows", async () => {
   await user.click(await screen.findByRole("option", { name: "Pause Mac tracking" }));
 
   await waitFor(() => expect(sent.filter((request) => request.path === "/api/mac/tracking").map((request) => request.body)).toEqual([{ enabled: false }]));
-  expect(await screen.findByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
+  expect(await screen.findByRole("button", { name: "Resume Mac tracking" })).toBeInTheDocument();
+  expect(document.getElementById("mac-line")).toHaveTextContent("Mac tracking paused");
   await user.keyboard("{Control>}k{/Control}");
   expect(await screen.findByRole("option", { name: "Resume Mac tracking" })).toBeInTheDocument();
 });

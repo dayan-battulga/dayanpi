@@ -2,9 +2,8 @@ import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { AppsCard } from "@/components/apps/AppsCard";
 import { CalendarCard } from "@/components/calendar/CalendarCard";
-import { FocusCard } from "@/components/focus/FocusCard";
+import { FocusNow } from "@/components/focus/FocusNow";
 import { useFrame } from "@/components/frame/Frame";
-import { MacCard } from "@/components/mac/MacCard";
 import { TodoCard } from "@/components/todo/TodoCard";
 import { useFocusSegments } from "@/hooks/useFocusSegments";
 import { mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
@@ -29,8 +28,7 @@ export function DeskPage() {
 
   return (
     <div className="live">
-      <MacCard focus={focus} macTracking={macTracking} readOnly={readOnly} />
-      <FocusCard focus={focus} segments={segments} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} />
+      <FocusNow focus={focus} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} macTracking={macTracking} readOnly={readOnly} />
       <AppsCard now={now} />
       <div className="row">
         <TodoCard todos={focus?.todos} known={known} now={now} readOnly={readOnly} />

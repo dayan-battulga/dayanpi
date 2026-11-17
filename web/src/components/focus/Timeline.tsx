@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { layoutTimeline } from "@/lib/timeline";
+import { describeStartHour, layoutTimeline } from "@/lib/timeline";
 import type { Segment } from "@/lib/types";
 
 const SEGMENT_STAGGER_MS = 60;
@@ -18,9 +18,10 @@ export function Timeline({ known, loaded, now, midnight }: TimelineProps) {
   if (loaded && firstPieces.current == null) {
     firstPieces.current = new Set(layout.pieces.map((piece) => `${piece.state}@${piece.start}`));
   }
+  const start = describeStartHour(layout.startHour);
   return (
     <div className="timeline-wrap">
-      <div id="focus-timeline" className="timeline" role="img" aria-label="Today's timeline">
+      <div id="focus-timeline" className="timeline" role="img" aria-label={`Today, ${start} to midnight`}>
         {loaded &&
           layout.pieces.map((piece, index) => {
             const key = `${piece.state}@${piece.start}`;
@@ -33,7 +34,8 @@ export function Timeline({ known, loaded, now, midnight }: TimelineProps) {
                 title={piece.title}
                 style={{
                   left: `${piece.left}%`,
-                  width: `${piece.width}%`,
+                  // 1px under the next one: two edges on the same fractional pixel let the track through as a hairline.
+                  width: `calc(${piece.width}% + 1px)`,
                   animationDelay: grows ? `${200 + index * SEGMENT_STAGGER_MS}ms` : undefined,
                 }}
               />
@@ -41,12 +43,9 @@ export function Timeline({ known, loaded, now, midnight }: TimelineProps) {
           })}
         {loaded && <div className="now-cursor glide" style={{ left: `${layout.cursorLeft}%` }} />}
       </div>
-      <div id="focus-hours" className="timeline-hours mono" aria-hidden="true">
-        {layout.hours.map(({ hour, left }) => (
-          <span key={hour} style={{ left: `${left}%` }}>
-            {hour}
-          </span>
-        ))}
+      <div className="timeline-ends" aria-hidden="true">
+        <span>{start}</span>
+        <span>midnight</span>
       </div>
     </div>
   );

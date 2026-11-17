@@ -274,7 +274,7 @@ Up to 4 accounts in all: you (the owner) plus 3 members.
 
 A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
 
-**What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the On the Mac card) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
+**What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the Mac line) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
 
 **What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
 
@@ -491,7 +491,7 @@ The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `
 
 - **Top bar:** the Desk / Pi tabs, the theme button, and your initial at the top right, with a menu for Settings and Sign out.
 - **Members** get the Desk and Settings but no Pi tab, and `/pi` sends them back to the Desk (see [Inviting someone](#inviting-someone)).
-- **Desk:** the On the Mac card: what's in front on the Mac (the site for a browser, the app otherwise), in big letters for anyone to see, with a switch that pauses Mac tracking. Then the Focus card (state, a live timer, today's timeline from 6 am to midnight, and today's numbers: focus, phone, pickups, time since your last pickup, best streak), the apps, the to-do list (see [To-do list](focus-tracker.md#to-do-list)) with today's last few changes, and the calendar (see [Calendar](focus-tracker.md#calendar)).
+- **Desk:** at the top, with no card around it, your state in big letters, a live timer, today's timeline from 6 am to midnight, and one line of totals (focus, phone, pickups) with the Mac line at its right: what's in front on the Mac (the site for a browser, the app otherwise), plus a small Pause/Resume for you (see [Steps 2 to 4](focus-tracker.md#steps-2-to-4-the-tracker-runs-inside-the-site)). Then the apps, the to-do list (see [To-do list](focus-tracker.md#to-do-list)) with today's last few changes, and the calendar (see [Calendar](focus-tracker.md#calendar)).
 - **Pi:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the Pi itself: a one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power and voice.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.

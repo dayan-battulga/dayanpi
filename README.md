@@ -10,7 +10,7 @@ Want the step-by-step commands? Setup and running are in **[docs/MANUAL.md](docs
 
 - **Keeping an eye on the Pi.** Temperature (as a gauge), CPU (with a live bar per core), memory and disk, updated live every second, plus a status bar with network speed, uptime, power and the voice. If the Pi gets undervolted or throttled, the power entry turns red and an Undervoltage pill shows up at the top of the Pi page.
 - **Seeing the desk.** Live camera feeds right on the page.
-- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The Focus card shows a live timer, a timeline of the day from 6 am to midnight, and today's focus and phone time, pickups, time since the last pickup and best streak. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**, and then it shows boxes around whatever the detector counted (you or a phone). Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
+- **Tracking focus.** The webcam watches my desk and works out whether I'm focused, on my phone, or away. The top of the desk page says it in big letters, with a live timer, a timeline of the day from 6 am to midnight, and today's focus time, phone time and pickups. Next to the camera, "What the Pi sees" shows the detector's live numbers. The camera itself stays hidden until you press **Peek**, and then it shows boxes around whatever the detector counted (you or a phone). Every change gets logged on the Pi. It all runs on the Pi, with no video saved.
 - **Light and dark.** The page follows your device's light or dark setting. The sun/moon button flips it, and your browser remembers the choice.
 
 It's a personal project: it's built for me, plus up to three friends with their own invite-only login. For now everything on it is still my data (they can look, not change), and the camera only ever shows to me, on my own devices.
@@ -56,7 +56,7 @@ The step-by-step versions live in the manual, with a check after each step:
 ## Using it day to day
 
 - **Making changes:** edit on the Mac, push `main`, then on the Pi run `git pull` and `sudo systemctl restart dayanpi`.
-- **Looking around:** open the site, sign in, and watch the Focus card and the stats. Press **Peek** to see the camera.
+- **Looking around:** open the site, sign in, and watch the state and the totals at the top. Press **Peek** to see the camera.
 - **When something's off:** check `journalctl -u dayanpi -n 50 --no-pager` on the Pi, then the Troubleshooting table in the manual.
 
 ---

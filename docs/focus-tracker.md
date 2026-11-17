@@ -102,7 +102,7 @@ The palm model gives 2016 possible palms (a box plus 7 points on the palm, then 
 
 ## Steps 2 to 4: the tracker runs inside the site
 
-Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the Focus card says "The detector isn't running on the Pi".
+Once the models are in `models/`, the site runs the detector by itself, about once a second, on the same camera frames the video feed uses. There's nothing to start. If the model files are missing it just logs a warning and the desk page says "The detector isn't running on the Pi" in a gray line under the totals.
 
 **The states**
 
@@ -119,7 +119,16 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on your desk page (`/me`) shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6) and today's totals.
+**The top of your desk page** (`/me`) has no card around it, just:
+
+- **The state, in big letters:** Focused, On your phone, Away (or Waiting while it works it out). When it changes, the old word blurs out and the new one blurs in.
+- **The timer** next to it, in the state's color (teal, orange, violet): how long you've been in this state, like `42:18`, or `1:05:09` past an hour. The digits roll as they change, and it starts over at `00:00` when the state does.
+- **Today's timeline** from 6 am to midnight (teal = focused, orange = phone, light violet = away). It starts earlier if you were up before 6, or if you open it before 6. The piece you're in right now is in the state's color with a slow shine on it, and the black line is now.
+- **One line of totals:** "3h 12m focused · 24m on your phone · 2 pickups". The numbers roll when they change.
+- **The Mac line** at the right of the totals (see [the Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site) below): "On the Mac · Code", "On the Mac · youtube.com in Google Chrome", "Mac tracking paused" or "The Mac isn't reporting". You get a small **Pause** or **Resume** next to it; members just see the line.
+- **A quiet gray line** under the totals only when something's wrong: the detector isn't running, the camera isn't sending frames (so time isn't counted), or the voice can't speak (and why).
+
+Your best streak is still counted and still on each day's page, it's just not on the Desk any more.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
@@ -163,9 +172,9 @@ What it records, and what it never does:
 
 Logs from before sites existed just have no `site`, and everything still reads them fine.
 
-**The on/off switch.** The On the Mac card has a **Tracking** switch. Off pauses Mac tracking:
+**The on/off switch.** The **Pause** button on the Mac line at the top of your desk (or ⌘K's "Pause Mac tracking") pauses Mac tracking, and **Resume** turns it back on:
 
-- **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the card says **Paused**.
+- **On the Pi, right away:** reports from the helper are dropped (no log line, no current app), the current app and site are cleared, and the line says **Mac tracking paused**.
 - **On the Mac, within 10 seconds:** the helper stops looking at the front app and the browser entirely, and only asks the Pi every 10 seconds whether it's back on. Flip it on and it sends the app in front straight away.
 - **It sticks.** The setting is kept in `data/mac_tracking.json` on the Pi (or in `DAYANPI_DATA_DIR`), so restarts keep it. It's on until you first switch it off.
 - **In the log** every flip writes a `mac_tracking` line with `"enabled": true` or `false`, and while it's off, each new day starts with one too. The day page doesn't count paused time toward any site, and says how long tracking was paused. Logs from before the switch count as on.
@@ -181,7 +190,7 @@ sudo systemctl restart dayanpi
 journalctl -u dayanpi -n 20 --no-pager     # look for "focus tracker running"
 ```
 
-Then open the site: the Focus card should flip to **focused** within a couple of seconds of you sitting down.
+Then open the site: the big word at the top should flip to **Focused** within a couple of seconds of you sitting down.
 
 ## The pages
 
@@ -189,7 +198,7 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 
 | Page | Who | What's on it |
 | --- | --- | --- |
-| **Desk** (`/me`) | everyone | Your day: On the Mac, the Focus card, apps, to-dos and the calendar. `/` takes you here until the room exists. |
+| **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then apps, to-dos and the calendar. `/` takes you here until the room exists. |
 | **Pi** (`/pi`) | you | The camera card and the Pi's own numbers (temp, CPU, memory, disk, power, voice). The red **Undervoltage** warning shows up here when the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
 | **Settings** (`/settings`) | everyone | Your name, password and Mac tokens, plus invites and accounts for you. |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
@@ -214,7 +223,7 @@ Press **⌘K** (or **Ctrl+K** on Windows and Linux) anywhere, even while you're 
 | Go to Pi | **G** then **P** | you |
 | Go to Settings | **G** then **S** | everyone |
 | Switch theme | **T** | everyone |
-| Pause Mac tracking, or Resume when it's paused (same as the switch on the Mac card) | | you |
+| Pause Mac tracking, or Resume when it's paused (same as the button on the Mac line) | | you |
 
 The single keys only work when you're not typing in a box, so typing "n" into a to-do never jumps anywhere. For the **G** ones, press the second key within a second. A phone has no ⌘K button (it has the dock instead), but a keyboard plugged into it still opens the box.
 
@@ -268,7 +277,7 @@ grep '"todo"' data/focus_log/$(date +%F).jsonl
 
 ## Apps card
 
-A bar chart of how long each Mac app was in front, right under the Focus card. App names run down the left with the longest on top, and the time runs along the bottom in minutes (or hours once the longest bar passes 2 h). The **Today / This week** buttons pick the range (This week is the last 7 days including today), and the page remembers your pick. It refreshes every minute while the page is open. With nothing to show (or the Mac helper isn't running) it just says "Nothing from the Mac yet today".
+A bar chart of how long each Mac app was in front, right under the top of the desk. App names run down the left with the longest on top, and the time runs along the bottom in minutes (or hours once the longest bar passes 2 h). The **Today / This week** buttons pick the range (This week is the last 7 days including today), and the page remembers your pick. It refreshes every minute while the page is open. With nothing to show (or the Mac helper isn't running) it just says "Nothing from the Mac yet today".
 
 A browser's bar has two pieces, YouTube and Other sites, so you can see how much of the browser was YouTube. Every other app is one solid bar. Hover or tap a bar for the exact time of each piece; each bar's total sits at its right end. Long app names get cut off with "..." on the chart, and the tooltip has the full name.
 

@@ -2,10 +2,6 @@
 // offset: 0 makes a lone keyframe the starting point; the motion settles on the element's own style.
 const MOTIONS = {
   tick: { duration: 450, keyframes: [{ offset: 0, opacity: 0.35, transform: "translateY(0.15em)" }] },
-  roll: { duration: 550, keyframes: [{ offset: 0, opacity: 0, transform: "translateY(0.5em)", filter: "blur(3px)" }] },
-  swap: { duration: 700, keyframes: [{ offset: 0, opacity: 0, transform: "translateY(0.3em)", filter: "blur(4px)" }] },
-  slide: { duration: 600, keyframes: [{ offset: 0, opacity: 0, transform: "translateX(8%)", filter: "blur(4px)" }] },
-  rip: { duration: 1000, keyframes: [{ opacity: 0.6, transform: "scale(0.6)" }, { opacity: 0, transform: "scale(1.8)" }] },
 };
 const MOTION_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 

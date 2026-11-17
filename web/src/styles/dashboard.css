@@ -565,7 +565,7 @@ ol {
   transition: opacity 0.2s ease-in;
 }
 
-/* ---------- focus card ---------- */
+/* ---------- the top of the Desk ---------- */
 
 .focus,
 .camera {
@@ -587,107 +587,59 @@ ol {
   --state: var(--away);
 }
 
+/* The top of the Desk (components/focus/FocusNow.tsx): on the page, no card, with Desk.dc.html's exact values. */
 .focus {
-  padding: clamp(24px, 4vw, 44px);
+  margin: 56px 0;
 }
 
-.focus-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.focus-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.state-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-}
-
-.state-chip {
-  border-color: color-mix(in srgb, var(--state) 26%, transparent);
-  background: color-mix(in srgb, var(--state) 10%, transparent);
-  color: var(--state);
-  transition:
-    color 0.7s var(--ease),
-    background-color 0.7s var(--ease),
-    border-color 0.7s var(--ease);
-}
-
-.state-dot {
-  --pulse: var(--state);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--state);
-  transition: background-color 0.7s var(--ease);
-  animation: breathe 2.4s ease-in-out infinite;
-}
-
-.focus-headline {
+.focus-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px 32px;
-  margin-top: 28px;
+  gap: 8px 32px;
 }
 
-#focus-label {
-  font-size: clamp(52px, 7vw, 88px);
+.focus-word {
+  font-size: clamp(64px, 9vw, 120px);
   font-weight: 600;
-  letter-spacing: -0.05em;
-  line-height: 0.95;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+}
+
+/* The swap's blur and rise need a box of their own. */
+.focus-word > span {
+  display: inline-block;
+}
+
+/* NumberFlow pads itself 0.25em above and below for the fade on its rolling digits; this keeps that out of the
+   layout, so a rolling number takes the same room plain text would (the timer row would be 40 px taller). */
+number-flow-react {
+  margin-block: -0.25em;
 }
 
 .focus-timer {
   color: var(--state);
-  font-size: clamp(44px, 5.6vw, 72px);
+  font-family: var(--font-mono);
+  font-size: clamp(44px, 6vw, 80px);
   font-weight: 500;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   line-height: 1;
   transition: color 0.7s var(--ease);
 }
 
-.digit {
-  display: inline-block;
-}
-
-.digit-sep {
-  display: inline-block;
-  color: var(--muted);
-}
-
-.focus-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px 24px;
-  margin-top: 18px;
-  font-size: 15px;
-}
-
 .timeline-wrap {
-  margin-top: 40px;
+  margin-top: 52px;
 }
 
+/* The track and the away color are mixed opaque (the mockup's 7% and 55% over the page), so a segment can overlap the
+   next by a pixel without tinting it. */
 .timeline {
+  --track: color-mix(in srgb, var(--ink) 7%, var(--bg));
   position: relative;
-  height: 32px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  height: 10px;
+  border-radius: 999px;
+  background: var(--track);
 }
 
 .segment {
@@ -706,26 +658,30 @@ ol {
 }
 
 .segment.is-away {
-  background: var(--away);
+  background: color-mix(in srgb, var(--away) 55%, var(--track));
+}
+
+.segment.is-first {
+  border-radius: 999px 0 0 999px;
 }
 
 .segment.is-live {
   overflow: hidden;
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 999px 999px 0;
   background: var(--state);
   transition: background-color 0.7s var(--ease);
+}
+
+.segment.is-first.is-live {
+  border-radius: 999px;
 }
 
 .segment.is-live::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 35%), transparent);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 45%), transparent);
   animation: shine 2.6s var(--ease) infinite;
-}
-
-.segment.is-first {
-  border-radius: 7px 0 0 7px;
 }
 
 .segment.grow {
@@ -734,9 +690,9 @@ ol {
 
 .now-cursor {
   position: absolute;
-  top: -8px;
-  bottom: -8px;
+  top: -7px;
   width: 2px;
+  height: 24px;
   margin-left: -1px;
   border-radius: 2px;
   background: var(--ink);
@@ -746,55 +702,73 @@ ol {
   animation: glide 1.6s var(--ease) 0.3s both;
 }
 
-.timeline-hours {
-  position: relative;
-  height: 16px;
-  margin-top: 10px;
+.timeline-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.timeline-hours span {
-  position: absolute;
-  transform: translateX(-50%);
-}
-
-.timeline-hours span:first-child {
-  transform: none;
-}
-
-.timeline-hours span:last-child {
-  transform: translateX(-100%);
+.focus-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 32px;
+  min-height: 44px;
+  margin-top: 14px;
 }
 
 .focus-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 18px;
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 15px;
 }
 
-.focus-stats dd {
-  margin-top: 10px;
-  font-size: 26px;
-  font-weight: 500;
-  letter-spacing: -0.035em;
+.focus-stat {
+  color: var(--ink);
 }
 
-.pickups {
-  position: relative;
-  display: inline-block;
+.mac-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 15px;
 }
 
-.ripple {
-  position: absolute;
-  inset: -8px -14px;
-  border: 2px solid var(--phone);
-  border-radius: 999px;
-  opacity: 0;
-  pointer-events: none;
+.mac-line-quiet {
+  white-space: nowrap;
+}
+
+.mac-line-main {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mac-line-button {
+  flex: none;
+  min-height: 44px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 500 13px var(--font-ui);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.focus-note {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 /* ---------- camera ---------- */

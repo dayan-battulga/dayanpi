@@ -3,15 +3,15 @@ import type { FocusState, FocusStatus, Segment } from "@/lib/types";
 
 export const DAY_SECONDS = 86400;
 export const DAY_START_HOUR = 6;
-export const HOUR_LABEL_STEP = 3;
 export const TODAY_LIST_LENGTH = 5;
 export const MIN_SEGMENT_SHARE = 0.4; // % of the bar, so a one-minute pickup still shows
 export const MERGE_GAP_S = 60;
 
+// chip: the short name in a segment's tooltip. label: the Desk's big state word.
 export const STATE_COPY: Record<FocusState, { chip: string; label: string }> = {
   working: { chip: "Working", label: "Focused" },
-  phone: { chip: "On phone", label: "Phone up" },
-  away: { chip: "Away", label: "Stepped away" },
+  phone: { chip: "On phone", label: "On your phone" },
+  away: { chip: "Away", label: "Away" },
   unknown: { chip: "Unknown", label: "Waiting" },
 };
 
@@ -26,7 +26,6 @@ export interface TimelinePiece {
 
 export interface TimelineLayout {
   startHour: number;
-  hours: { hour: number; left: number }[];
   pieces: TimelinePiece[];
   cursorLeft: number;
 }
@@ -67,20 +66,15 @@ export function mergeKnownSegments(segments: Segment[], midnight: number): Segme
 
 export function layoutTimeline(known: Segment[], now: number, midnight: number): TimelineLayout {
   const firstHour = known.length > 0 ? Math.floor((known[0].start - midnight) / 3600) : DAY_START_HOUR;
-  const startHour = Math.max(0, Math.min(DAY_START_HOUR, firstHour));
+  // Starts earlier when the day did, or when it's still before 6 am, so the now marker never falls off the left end.
+  const nowHour = Math.floor((now - midnight) / 3600);
+  const startHour = Math.max(0, Math.min(DAY_START_HOUR, firstHour, nowHour));
   const windowStart = midnight + startHour * 3600;
   const windowSpan = DAY_SECONDS - startHour * 3600;
   const shareOf = (seconds: number) => (seconds / windowSpan) * 100;
 
-  const labelled = [startHour];
-  for (let hour = Math.ceil((startHour + 1) / HOUR_LABEL_STEP) * HOUR_LABEL_STEP; hour < 24; hour += HOUR_LABEL_STEP) {
-    labelled.push(hour);
-  }
-  labelled.push(24);
-
   const layout: TimelineLayout = {
     startHour,
-    hours: labelled.map((hour) => ({ hour, left: ((hour - startHour) / (24 - startHour)) * 100 })),
     pieces: known.map((segment) => {
       const end = segment.end ?? now;
       return {
@@ -131,31 +125,21 @@ export function buildTodayItems(known: Segment[]): TodayItem[] {
   return recent;
 }
 
-export function describePhoneFree(focus: FocusStatus, segments: Segment[], now: number): string {
-  const phoneEnds = segments.filter((segment) => segment.state === "phone" && segment.end != null).map((segment) => segment.end as number);
-  let text = "--";
-  if (focus.state === "phone") {
-    text = "on it now";
-  } else if (phoneEnds.length > 0) {
-    text = formatDuration(now - Math.max(...phoneEnds));
-  } else if (focus.today.first_seen != null) {
-    text = "all day";
-  }
-  return text;
+// The timeline's left end: "6 am", or earlier on a day that started before it.
+export function describeStartHour(hour: number): string {
+  return `${hour % 12 || 12} ${hour < 12 ? "am" : "pm"}`;
 }
 
-export function describeCaption(focus: FocusStatus): string {
-  let caption = "Working out what you're up to";
+// What's wrong that the Desk should mention under its stats, quietly; "" when nothing is.
+export function describeProblems(focus: FocusStatus): string {
+  const problems: string[] = [];
   if (!focus.enabled) {
-    caption = "The detector isn't running on the Pi";
+    problems.push("The detector isn't running on the Pi");
   } else if (!focus.camera_ok) {
-    caption = "No camera frames · time isn't counted";
-  } else if (focus.state === "working") {
-    caption = `Current streak · since ${formatTimeOfDay(focus.since)}`;
-  } else if (focus.state === "phone") {
-    caption = "Counting toward today's phone time";
-  } else if (focus.state === "away") {
-    caption = `Away since ${formatTimeOfDay(focus.since)}`;
+    problems.push("No camera frames, so time isn't counted");
   }
-  return caption;
+  if (focus.voice?.problem) {
+    problems.push(`The voice is off: ${focus.voice.problem}`);
+  }
+  return problems.join(" · ");
 }

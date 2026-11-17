@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTodayItems, describePhoneFree, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
+import { buildTodayItems, describeProblems, describeStartHour, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
 import type { FocusStatus, Segment } from "@/lib/types";
 
 const MIDNIGHT = new Date(2026, 10, 15).getTime() / 1000;
@@ -31,7 +31,7 @@ describe("layoutTimeline", () => {
     const now = at(15);
     const layout = layoutTimeline([{ state: "working", start: at(9), end: null }], now, MIDNIGHT);
     expect(layout.startHour).toBe(6);
-    expect(layout.hours.map((entry) => entry.hour)).toEqual([6, 9, 12, 15, 18, 21, 24]);
+    expect(describeStartHour(layout.startHour)).toBe("6 am");
     expect(layout.pieces[0].left).toBeCloseTo((3 / 18) * 100);
     expect(layout.pieces[0].width).toBeCloseTo((6 / 18) * 100);
     expect(layout.pieces[0].live).toBe(true);
@@ -45,8 +45,16 @@ describe("layoutTimeline", () => {
     ];
     const layout = layoutTimeline(known, at(6), MIDNIGHT);
     expect(layout.startHour).toBe(4);
-    expect(layout.hours[0]).toEqual({ hour: 4, left: 0 });
+    expect(describeStartHour(layout.startHour)).toBe("4 am");
+    expect(describeStartHour(0)).toBe("12 am");
+    expect(layout.pieces[0].left).toBeCloseTo(((4.5 - 4) / 20) * 100);
     expect(layout.pieces[1].width).toBe(0.4);
+  });
+
+  it("starts at the current hour before 6 am with nothing yet, so the now marker stays on the track", () => {
+    const layout = layoutTimeline([], at(2, 30), MIDNIGHT);
+    expect(layout.startHour).toBe(2);
+    expect(layout.cursorLeft).toBeCloseTo((0.5 / 22) * 100);
   });
 });
 
@@ -65,12 +73,14 @@ describe("buildTodayItems", () => {
   });
 });
 
-describe("describePhoneFree", () => {
-  const focus = { state: "working", today: { first_seen: at(9) } } as FocusStatus;
-  it("counts from the last pickup, or says all day without one", () => {
-    expect(describePhoneFree(focus, [{ state: "phone", start: at(10), end: at(10, 5) }], at(11, 5))).toBe("1h 00m");
-    expect(describePhoneFree(focus, [], at(11))).toBe("all day");
-    expect(describePhoneFree({ ...focus, state: "phone" }, [], at(11))).toBe("on it now");
+describe("describeProblems", () => {
+  const fine = { enabled: true, camera_ok: true, voice: { enabled: true, backend: "piper", problem: null } } as FocusStatus;
+  it("says nothing when all is well, and joins what's wrong into one line", () => {
+    expect(describeProblems(fine)).toBe("");
+    expect(describeProblems({ ...fine, camera_ok: false })).toBe("No camera frames, so time isn't counted");
+    expect(describeProblems({ ...fine, enabled: false, camera_ok: false, voice: { enabled: true, backend: "piper", problem: "aplay isn't installed" } })).toBe(
+      "The detector isn't running on the Pi · The voice is off: aplay isn't installed",
+    );
   });
 });
 

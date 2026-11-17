@@ -16,8 +16,8 @@ describe("formatDuration", () => {
 
 describe("formatClock", () => {
   it.each([
-    [0, "0:00"],
-    [65.9, "1:05"],
+    [0, "00:00"],
+    [65.9, "01:05"],
     [3600 + 2 * 60 + 5, "1:02:05"],
   ])("%s seconds is %s", (seconds, text) => {
     expect(formatClock(seconds)).toBe(text);
