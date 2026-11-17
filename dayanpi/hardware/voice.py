@@ -12,9 +12,15 @@ Settings come from the environment (/etc/dayanpi.env on the Pi):
 - DAYANPI_AUDIO_DEVICE: the ALSA device aplay plays on
 
 If the chosen voice can't run, it logs one error and stays off. The app carries on.
+
+A phrase can also become a clip instead (render): Piper makes the same audio, it's wrapped into a WAV
+in memory, and someone's own page plays it ("This computer" in Settings → Voice and bedtime). ClipShelf
+keeps each person's latest clip for CLIP_KEEP_S at most and hands it out once. Clips never touch the disk
+and are never logged.
 """
 
 import importlib.metadata
+import io
 import json
 import logging
 import os
@@ -23,6 +29,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import wave
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -39,6 +46,7 @@ BACKENDS = (OFF, PIPER)
 QUEUE_SIZE = 3
 STEP_TIMEOUT_S = 20.0
 STOP_JOIN_TIMEOUT_S = 1.0
+CLIP_KEEP_S = 60.0  # a clip nobody fetched in this long is gone
 
 PLAYER_PROGRAM = "aplay"
 PIPER_PACKAGE = "piper-tts"
@@ -57,6 +65,15 @@ class VoiceSettings:
     backend: str
     piper_model: Path | None
     audio_device: str | None
+
+
+ClipSink = Callable[[bytes], None]
+
+
+@dataclass
+class Clip:
+    wav: bytes
+    made_at: float
 
 
 @dataclass
@@ -199,6 +216,53 @@ def run_speech_job(job: SpeechJob, run: Callable[..., subprocess.CompletedProces
     run_step(PLAYER_PROGRAM, job.player_command, audio, STEP_TIMEOUT_S, run)
 
 
+def wrap_wav(pcm: bytes, sample_rate: int) -> bytes:
+    """Piper's raw 16-bit mono audio as a WAV file, in memory."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as clip:
+        clip.setnchannels(1)
+        clip.setsampwidth(2)
+        clip.setframerate(sample_rate)
+        clip.writeframes(pcm)
+    wav = buffer.getvalue()
+    return wav
+
+
+def synthesize_clip(job: SpeechJob, sample_rate: int, run: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> bytes:
+    """The same Piper step as run_speech_job, wrapped into a WAV instead of played: nothing is written to disk."""
+    audio = run_step(PIPER, job.synth_command, job.text_input, STEP_TIMEOUT_S, run)
+    wav = wrap_wav(audio, sample_rate)
+    return wav
+
+
+class ClipShelf:
+    """Each person's latest clip, by username, for CLIP_KEEP_S at most. take() hands it out once."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._clips: dict[str, Clip] = {}
+
+    def put(self, owner: str, wav: bytes, now: float) -> None:
+        with self._lock:
+            self._clips[owner] = Clip(wav, now)
+
+    def drop(self, owner: str) -> None:
+        with self._lock:
+            self._clips.pop(owner, None)
+
+    def has(self, owner: str, now: float) -> bool:
+        with self._lock:
+            clip = self._clips.get(owner)
+            fresh = clip is not None and now - clip.made_at < CLIP_KEEP_S
+        return fresh
+
+    def take(self, owner: str, now: float) -> bytes | None:
+        with self._lock:
+            clip = self._clips.pop(owner, None)
+        wav = clip.wav if clip is not None and now - clip.made_at < CLIP_KEEP_S else None
+        return wav
+
+
 def discard_queued(phrases: queue.Queue) -> None:
     try:
         while True:
@@ -221,9 +285,11 @@ class VoiceAnnouncer:
         runner: Callable[[SpeechJob], None] = run_speech_job,
         find_program: Callable[[str], str | None] = shutil.which,
         piper_installed: Callable[[], bool] = is_piper_installed,
+        synthesizer: Callable[[SpeechJob, int], bytes] = synthesize_clip,
     ) -> None:
         self._settings = read_settings() if settings is None else settings
         self._runner = runner
+        self._synthesizer = synthesizer
         self.problem = find_problem(self._settings, find_program, piper_installed)
         if self.problem is not None:
             logger.error("voice %r can't run, so it stays off: %s", self._settings.backend, self.problem)
@@ -233,7 +299,8 @@ class VoiceAnnouncer:
             read_sample_rate(self._settings.piper_model) if self.backend == PIPER else PIPER_DEFAULT_SAMPLE_RATE
         )
         self._lock = threading.Lock()
-        self._phrases: queue.Queue[str | None] | None = None
+        # (phrase, None) plays on the speaker; (phrase, sink) hands its WAV to sink instead.
+        self._phrases: queue.Queue[tuple[str, ClipSink | None] | None] | None = None
         self._thread: threading.Thread | None = None
         self._saying: Counter[str] = Counter()  # phrases queued or playing, until aplay finishes them
 
@@ -279,21 +346,33 @@ class VoiceAnnouncer:
         if phrase and not self.enabled:
             logger.info("voice off, would say: %r", phrase)
         elif phrase:
-            queued = self._enqueue(phrase)
+            queued = self._enqueue(phrase, None)
         return queued
 
-    def _enqueue(self, phrase: str) -> bool:
+    def render(self, text: str, sink: ClipSink) -> bool:
+        """Queues a phrase to become a WAV clip, which goes to sink on the voice thread; nothing plays here.
+
+        Behind whatever the speaker is saying, so the Pi only ever runs one Piper. False, and no clip, when the
+        voice is off, the text is blank, or the queue is full. The text isn't logged: it's someone's to-dos.
+        """
+        phrase = clean_text(text)
+        queued = bool(phrase) and self.enabled and self._enqueue(phrase, sink)
+        return queued
+
+    def _enqueue(self, phrase: str, sink: ClipSink | None) -> bool:
         queued = False
+        shown = repr(phrase) if sink is None else "a clip"
         with self._lock:
             if self._phrases is None:
-                logger.warning("voice isn't running, dropped %r", phrase)
+                logger.warning("voice isn't running, dropped %s", shown)
             else:
                 try:
-                    self._phrases.put_nowait(phrase)
-                    self._saying[phrase] += 1
+                    self._phrases.put_nowait((phrase, sink))
+                    if sink is None:
+                        self._saying[phrase] += 1
                     queued = True
                 except queue.Full:
-                    logger.info("voice is busy, dropped %r", phrase)
+                    logger.info("voice is busy, dropped %s", shown)
         return queued
 
     def is_saying(self, text: str) -> bool:
@@ -303,9 +382,13 @@ class VoiceAnnouncer:
         return saying
 
     def _speak_queued(self, phrases: queue.Queue) -> None:
-        while (phrase := phrases.get()) is not None:
-            self._speak(phrase)
-            self._finish(phrases, phrase)
+        while (item := phrases.get()) is not None:
+            phrase, sink = item
+            if sink is None:
+                self._speak(phrase)
+                self._finish(phrases, phrase)
+            else:
+                self._render(phrase, sink)
 
     def _finish(self, phrases: queue.Queue, phrase: str) -> None:
         with self._lock:
@@ -314,6 +397,14 @@ class VoiceAnnouncer:
                 self._saying[phrase] -= 1
                 if self._saying[phrase] <= 0:
                     del self._saying[phrase]
+
+    def _render(self, phrase: str, sink: ClipSink) -> None:
+        try:
+            sink(self._synthesizer(build_piper_job(phrase, self._settings.piper_model, self._sample_rate, None), self._sample_rate))
+        except SpeechError as error:
+            logger.error("voice couldn't make a clip: %s", error)
+        except Exception:
+            logger.exception("voice broke while making a clip, carrying on")
 
     def _speak(self, phrase: str) -> None:
         try:

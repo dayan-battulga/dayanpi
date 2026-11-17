@@ -1,23 +1,24 @@
 """What the peace sign says: a short, encouraging rundown of the time, the time left before bed and the to-dos.
 
-The facts (collect_facts) are the clock, the minutes to bedtime (DAYANPI_BEDTIME, default
-00:00), the first SPOKEN_MAX open to-dos and how many more, and what got done today with
-the time each took. From 5 a.m. on it counts toward tonight's bedtime; between bedtime and
-5 a.m. it's past bedtime.
+Everyone has their own TodoCoach, over their own to-dos and their own bedtime. The facts
+(collect_facts) are the clock, the minutes to bedtime, the first SPOKEN_MAX open to-dos and how
+many more, and what got done today with the time each took. From 5 a.m. on it counts toward
+tonight's bedtime; between bedtime and 5 a.m. it's past bedtime.
 
 Two ways to say them:
 - describe_todos(): a fixed template, always there.
-- An LLM in Ollama (hardware/llm.py, when DAYANPI_LLM_MODEL is set). It's slow on the Pi,
-  so TodoCoach writes the message ahead in the background: when the to-do facts change,
-  and every REWRITE_S. The sign speaks a draft only if it was written for the current
-  facts less than MAX_AGE_S ago and passed clean_message(); otherwise the template.
+- An LLM in Ollama (hardware/llm.py, when DAYANPI_LLM_MODEL is set). It's slow on the Pi, so
+  each coach's message is written ahead: when its to-do facts change, and every REWRITE_S. One
+  CoachWriter thread writes every coach's drafts, one after another, so the Pi never runs two at
+  once. The sign speaks a draft only if it was written for the current facts less than MAX_AGE_S
+  ago and passed clean_message(); otherwise the template.
 """
 
 import logging
 import os
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -91,12 +92,28 @@ class SpokenMessage:
     source: str  # "llm" or "template", for the gesture's log line
 
 
+BEDTIME_PATTERN = r"([01]?\d|2[0-3]):([0-5]\d)"
+
+
+def parse_bedtime(value: str) -> int | None:
+    """"HH:MM" as minutes after midnight, or None when it isn't one."""
+    found = re.fullmatch(BEDTIME_PATTERN, value.strip())
+    minutes = int(found.group(1)) * 60 + int(found.group(2)) if found else None
+    return minutes
+
+
+def format_bedtime(minutes: int) -> str:
+    text = f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return text
+
+
 def read_bedtime(environ: Mapping[str, str] = os.environ) -> int:
-    """DAYANPI_BEDTIME as minutes after midnight. Unset or not HH:MM means 00:00 (a bad value warns)."""
+    """DAYANPI_BEDTIME as minutes after midnight: the owner's bedtime until they pick one in Settings. Unset or not
+    HH:MM means 00:00 (a bad value warns)."""
     value = environ.get(BEDTIME_ENV, "").strip()
-    found = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", value)
-    bedtime = int(found.group(1)) * 60 + int(found.group(2)) if found else DEFAULT_BEDTIME
-    if value and not found:
+    parsed = parse_bedtime(value)
+    bedtime = DEFAULT_BEDTIME if parsed is None else parsed
+    if value and parsed is None:
         logger.warning("%s=%r isn't HH:MM, using 00:00", BEDTIME_ENV, value)
     return bedtime
 
@@ -207,18 +224,13 @@ def clean_message(reply: str | None, prompt: str) -> str | None:
     return cleaned
 
 
-class TodoCoach(LoopThread):
-    """Picks what the peace sign says. With an LLM, start() it to keep a draft written ahead."""
+class TodoCoach:
+    """Picks what one person's peace sign says. With an LLM, a CoachWriter keeps a draft written ahead.
 
-    def __init__(
-        self,
-        todos: TodoList,
-        bedtime: int,
-        llm: OllamaClient | None,
-        clock=time.time,
-        interval_s: float = WATCH_INTERVAL_S,
-    ) -> None:
-        super().__init__(name="todo-coach", interval_s=interval_s)
+    bedtime is asked each time (minutes after midnight), so a change in Settings counts at once.
+    """
+
+    def __init__(self, todos: TodoList, bedtime: Callable[[], int], llm: OllamaClient | None, clock=time.time) -> None:
         self._todos = todos
         self._bedtime = bedtime
         self._clock = clock
@@ -226,7 +238,7 @@ class TodoCoach(LoopThread):
         self.draft: Draft | None = None  # swapped in whole by the writer thread
 
     def collect(self, now: float) -> TodoFacts:
-        facts = collect_facts(self._todos.snapshot(now), now, self._bedtime)
+        facts = collect_facts(self._todos.snapshot(now), now, self._bedtime())
         return facts
 
     def pick(self, now: float) -> SpokenMessage:
@@ -237,10 +249,11 @@ class TodoCoach(LoopThread):
         return message
 
     def tick(self) -> None:
+        """Writes a new draft when one is due. Only the CoachWriter's thread calls it."""
         now = self._clock()
         facts = self.collect(now)
         draft = self.draft
-        if draft is None or draft.key != facts.key or now - draft.written_at >= REWRITE_S:
+        if self.llm is not None and (draft is None or draft.key != facts.key or now - draft.written_at >= REWRITE_S):
             self.draft = self.write_draft(facts, now)
 
     def write_draft(self, facts: TodoFacts, now: float) -> Draft:
@@ -256,3 +269,20 @@ class TodoCoach(LoopThread):
             logger.info("peace sign: LLM messages from %s are ready", self.llm.model)
         draft = Draft(key=facts.key, text=text, written_at=now)
         return draft
+
+
+class CoachWriter(LoopThread):
+    """The one LLM queue: every coach's drafts, written one after another on this thread, so however many people
+    there are, the Pi only ever runs the model once at a time."""
+
+    def __init__(self, coaches: Callable[[], list[TodoCoach]], interval_s: float = WATCH_INTERVAL_S) -> None:
+        super().__init__(name="coach-writer", interval_s=interval_s)
+        self._coaches = coaches
+
+    def tick(self) -> None:
+        for coach in self._coaches():
+            try:
+                coach.tick()
+            except Exception:
+                logger.exception("peace sign: a draft failed, the others carry on")
+

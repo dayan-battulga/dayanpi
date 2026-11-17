@@ -10,6 +10,7 @@ import pytest
 from dayanpi.focus.coach import (
     MAX_AGE_S,
     REWRITE_S,
+    CoachWriter,
     TodoCoach,
     build_prompt,
     build_system_prompt,
@@ -175,13 +176,20 @@ class FakeOllama:
         self.mode = "ok"
         self.reply = GOOD
         self.requests: list[dict] = []
+        self.in_flight = 0
+        self.most_at_once = 0  # the most requests it was answering at the same time
+        self.lock = threading.Lock()
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:
                 fake.requests.append({"path": self.path, "body": json.loads(self.rfile.read(int(self.headers["Content-Length"])))})
-                if fake.mode == "slow":
-                    time.sleep(1.0)
+                with fake.lock:
+                    fake.in_flight += 1
+                    fake.most_at_once = max(fake.most_at_once, fake.in_flight)
+                time.sleep(1.0 if fake.mode == "slow" else 0.05)
+                with fake.lock:
+                    fake.in_flight -= 1
                 status, body = (404, {"error": "model 'nope' not found"}) if fake.mode == "missing" else (200, {"response": fake.reply, "done": True})
                 payload = json.dumps(body).encode()
                 self.send_response(status)
@@ -219,7 +227,7 @@ def make_coach(tmp_path, port: int | None, clock: list[float], timeout_s: float 
     (tmp_path / "todos.json").write_text(json.dumps({"current": None, "items": items}))
     todos = TodoList(tmp_path / "todos.json")
     llm = None if port is None else OllamaClient("llama3.2:1b", port=port, timeout_s=timeout_s)
-    coach = TodoCoach(todos, 0, llm, clock=lambda: clock[0])
+    coach = TodoCoach(todos, lambda: 0, llm, clock=lambda: clock[0])
     return coach
 
 
@@ -295,3 +303,48 @@ def test_no_model_set_means_the_template(tmp_path):
     assert read_llm_model({}) is None
     assert read_llm_model({"DAYANPI_LLM_MODEL": "  "}) is None
     assert read_llm_model({"DAYANPI_LLM_MODEL": " llama3.2:1b "}) == "llama3.2:1b"
+
+
+def make_desk_coach(folder, port: int, clock: list[float], open_texts: list[str], bedtime: list[int]) -> TodoCoach:
+    """One person's coach over their own to-dos and their own bedtime (a list, so a test can change it)."""
+    folder.mkdir()
+    todos = TodoList(folder / "todos.json")
+    for text in open_texts:
+        todos.add(text, clock[0])
+    coach = TodoCoach(todos, lambda: bedtime[0], OllamaClient("llama3.2:1b", port=port), clock=lambda: clock[0])
+    return coach
+
+
+def test_one_writer_writes_everyones_drafts_one_at_a_time(tmp_path, ollama):
+    clock = [at(18)]
+    people = {"dayan": ["finish the report"], "sam": ["read chapter 3"], "alex": ["call mom"], "bo": ["do laundry"]}
+    coaches = [make_desk_coach(tmp_path / name, ollama.port, clock, texts, [0]) for name, texts in people.items()]
+    writer = CoachWriter(lambda: coaches)
+    ollama.reply = "It's 6 p.m., about 6 hours until bed. One thing left. You've got this."
+    writer.tick()
+    prompts = [request["body"]["prompt"] for request in ollama.requests]
+    assert ollama.most_at_once == 1, "four people, still one model run at a time"
+    assert [coach.pick(clock[0]).source for coach in coaches] == ["llm"] * 4
+    assert [prompt.split("\n")[2] for prompt in prompts] == [f"Open to-dos (1): {texts[0]}" for texts in people.values()]
+    writer.tick()
+    assert len(ollama.requests) == 4, "nothing changed, nothing due"
+
+
+def test_a_coach_counts_to_its_own_bedtime_as_soon_as_it_changes(tmp_path):
+    clock = [at(21)]
+    bedtime = [22 * 60]
+    todos = TodoList(tmp_path / "todos.json")
+    coach = TodoCoach(todos, lambda: bedtime[0], None, clock=lambda: clock[0])
+    before = coach.pick(clock[0]).text
+    bedtime[0] = 23 * 60 + 30
+    after = coach.pick(clock[0]).text
+    assert before.startswith("It's 9 p.m., about 1 hour until bed.")
+    assert after.startswith("It's 9 p.m., about 2 hours 30 minutes until bed.")
+
+
+def test_a_writer_without_a_model_writes_nothing(tmp_path):
+    clock = [at(18)]
+    coach = TodoCoach(TodoList(tmp_path / "todos.json"), lambda: 0, None, clock=lambda: clock[0])
+    CoachWriter(lambda: [coach]).tick()
+    assert coach.draft is None and coach.pick(clock[0]).source == "template"
+

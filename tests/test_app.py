@@ -61,7 +61,8 @@ def fresh_desks(monkeypatch, tmp_path):
     """Every test's own data folder for the desks (tmp_path/users), and no owner's desk until a startup or use_owner_desk()."""
     monkeypatch.setattr(app, "desks", Desks(tmp_path))
     monkeypatch.setattr(app, "owner_desk", None)
-    monkeypatch.setattr(app, "coach", None)
+    monkeypatch.setattr(app, "llm", None)
+    monkeypatch.setattr(app, "coach_writer", None)
     monkeypatch.setattr(app, "latest_focus", {})
     monkeypatch.setattr(app, "latest_snapshot", None)
 
@@ -253,13 +254,11 @@ def test_every_hand_sign_does_something():
 
 
 def test_peace_speaks_the_coachs_message_and_logs_which_kind(monkeypatch, tmp_path):
-    from dayanpi.focus.coach import TodoCoach
     from dayanpi.focus.tracker import format_day
 
     said = []
     desk = use_owner_desk(monkeypatch)
     log, todos = desk.log, desk.todos
-    monkeypatch.setattr(app, "coach", TodoCoach(todos, 0, None))
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     now = time.time()
     todos.add("finish the report", now)
@@ -319,12 +318,10 @@ def test_the_status_says_what_the_peace_sign_is_saying_until_aplay_finishes(monk
 
 
 def test_the_spoken_text_is_never_logged(monkeypatch, caplog):
-    from dayanpi.focus.coach import TodoCoach
     from dayanpi.focus.tracker import format_day
 
     desk = use_owner_desk(monkeypatch)
     log = desk.log
-    monkeypatch.setattr(app, "coach", TodoCoach(desk.todos, 0, None))
     monkeypatch.setattr(app.voice, "say", lambda text: True)
     now = time.time()
     with caplog.at_level(logging.INFO):
@@ -336,8 +333,8 @@ def test_the_spoken_text_is_never_logged(monkeypatch, caplog):
 
 def test_the_coach_only_writes_ahead_with_a_model_set():
     with TestClient(app.app):
-        assert app.coach.llm is None, "DAYANPI_LLM_MODEL isn't set in the tests"
-        assert not app.coach.running
+        assert app.llm is None, "DAYANPI_LLM_MODEL isn't set in the tests"
+        assert app.coach_writer is None
 
 
 def test_focus_status_carries_the_last_gesture_and_its_age(monkeypatch):
@@ -1188,6 +1185,9 @@ ACCESS = {
     ("POST", "/api/track/reading"): ("/api/track/reading", {"person": 2, "phone": 0, "elapsed_ms": 1}, 401, 422, 422),
     ("POST", "/api/track/pause"): ("/api/track/pause", {}, 401, 200, 200),  # no startup here, so my desk is on a browser too
     ("POST", "/api/track/source"): ("/api/track/source", {"source": "webcam"}, 401, 422, 422),
+    ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
+    ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),  # the voice is off in the tests, so nothing plays
+    ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
     ("GET", "/video"): ("/video", None, 401, 404, 200),
     ("GET", "/video/side"): ("/video/side", None, 401, 404, 200),
@@ -1530,11 +1530,9 @@ def test_members_change_their_own_desk_but_the_owners_things_stay_403():
 
 
 def test_the_cameras_and_the_peace_sign_only_touch_my_desk(monkeypatch):
-    from dayanpi.focus.coach import TodoCoach
     from dayanpi.focus.tracker import FocusUpdate, format_day
 
     mine, theirs = use_owner_desk(monkeypatch), desk_of(add_member())
-    monkeypatch.setattr(app, "coach", TodoCoach(mine.todos, 0, None))
     monkeypatch.setattr(app.voice, "say", lambda text: True)
     now = time.time()
     for desk in (mine, theirs):
@@ -1564,7 +1562,8 @@ def test_a_members_desk_waits_for_a_browsers_camera_and_gets_none_of_mine():
         app.owner_desk.last_spoken = {"text": "my peace sign", "at": time.time()}
         status = member.get("/api/focus").json()
     camera_parts = {key: status[key] for key in ("enabled", "side_camera", "overlay", "side_overlay", "gesture", "spoken", "voice", "camera_access")}
-    assert camera_parts == {**app.NO_CAMERA, "enabled": True, "spoken": None, "camera_access": "owner_only"}
+    voice = {"enabled": app.voice.enabled, "backend": app.voice.backend, "problem": None}
+    assert camera_parts == {**app.NO_CAMERA, "enabled": True, "spoken": None, "voice": voice, "camera_access": "owner_only"}
     assert (status["camera_source"], status["camera_paused"]) == ("browser", False)
     assert (status["state"], status["camera_ok"], status["last_check"]) == ("unknown", False, None)
 
@@ -1591,7 +1590,7 @@ def test_a_browser_reading_feeds_the_senders_own_desk_about_once_a_second():
         signed_out = stranger().post("/api/track/reading", json=SEEN)
         member_desk = app.desks.open("bo", time.time())
     assert [reply.status_code for reply in replies] == [200, 200, 429], "two close together, then one a second"
-    assert replies[1].json() == {"state": "working", "seconds_in_state": 0.0, "paused": False}
+    assert replies[1].json() == {"state": "working", "seconds_in_state": 0.0, "paused": False, "spoken": None}
     assert replies[2].json() == {"detail": "one reading a second"}
     assert (theirs["state"], theirs["camera_ok"], theirs["last_check"]["person"], theirs["last_check"]["elapsed_ms"]) == ("working", True, 0.91, 140.5)
     assert (mine["state"], mine["last_check"]) == ("unknown", None)
@@ -1662,7 +1661,7 @@ def test_pause_says_paused_until_the_next_reading():
         status = member.get("/api/focus").json()
         time.sleep(1.05)
         resumed = member.post("/api/track/reading", json=SEEN).json()
-    assert paused == {"state": "unknown", "seconds_in_state": 0.0, "paused": True}
+    assert paused == {"state": "unknown", "seconds_in_state": 0.0, "paused": True, "spoken": None}
     assert (status["camera_paused"], status["camera_ok"]) == (True, False)
     assert resumed["paused"] is False
 
@@ -1699,6 +1698,146 @@ def test_a_peace_sign_from_the_browser_is_on_their_desk_and_their_pill_only(monk
     assert status["gesture"]["name"] == "peace"
     assert "read chapter 3" in status["spoken"]["text"] and status["spoken"]["speaking"] is False
     assert (mine["gesture"], mine["spoken"], said) == (None, None, [])
+
+
+def make_clip_voice(tmp_path):
+    """A working Piper voice whose clips are made at once: "RIFF" and the phrase, so a test can tell them apart."""
+    from dayanpi.hardware.voice import VoiceAnnouncer, VoiceSettings
+
+    model = tmp_path / "voice.onnx"
+    model.write_bytes(b"not a real model")
+    model.with_name("voice.onnx.json").write_text('{"audio": {"sample_rate": 22050}}')
+    speaker = VoiceAnnouncer(
+        VoiceSettings(backend="piper", piper_model=model, audio_device=None),
+        runner=lambda job: None,
+        find_program=lambda name: f"/usr/bin/{name}",
+        piper_installed=lambda: True,
+        synthesizer=lambda job, rate: b"RIFF" + job.text_input,
+    )
+    return speaker
+
+
+def wait_for_clip(username):
+    deadline = time.monotonic() + 5
+    while not app.clips.has(username, time.time()) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return app.clips.has(username, time.time())
+
+
+def test_bedtime_is_per_person_kept_in_their_folder_and_mine_starts_from_the_env(monkeypatch):
+    monkeypatch.setenv("DAYANPI_BEDTIME", "22:30")
+    with open_client() as client, open_client("member") as member:
+        before = (client.get("/api/focus").json()["bedtime"], member.get("/api/focus").json()["bedtime"])
+        changed = member.post("/api/voice", json={"bedtime": "23:15"})
+        after = (client.get("/api/focus").json()["bedtime"], member.get("/api/focus").json()["bedtime"])
+        theirs = app.desks.open("bo", time.time())
+        coach_text = app.find_coach(theirs).pick(time.time()).text
+        extra = member.post("/api/voice", json={"bedtime": "23:15", "volume": 11})
+    assert before == ("22:30", "00:00")
+    assert (changed.status_code, changed.json()) == (200, {"bedtime": "23:15", "output": "computer"})
+    assert after == ("22:30", "23:15")
+    assert json.loads((theirs.folder / "voice.json").read_text()) == {"bedtime": "23:15", "output": None}
+    assert "until bed" in coach_text or "past your bedtime" in coach_text
+    assert app.find_bedtime(theirs) == 23 * 60 + 15
+    assert extra.status_code == 422
+
+
+def test_each_persons_peace_sign_speaks_their_own_todos(monkeypatch):
+    from dayanpi.focus.tracker import format_day
+
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    mine, theirs = use_owner_desk(monkeypatch), desk_of(add_member())
+    now = time.time()
+    mine.todos.add("my report", now)
+    theirs.todos.add("their essay", now)
+    app.handle_gesture(theirs, "peace", now)
+    app.handle_gesture(mine, "peace", now + 1)
+    assert "their essay" in theirs.last_spoken["text"] and "my report" not in theirs.last_spoken["text"]
+    assert "my report" in mine.last_spoken["text"] and "their essay" not in mine.last_spoken["text"]
+    assert said == [mine.last_spoken["text"]], "only mine goes to the Pi's speaker"
+    lines = [line for line in theirs.log.read_day(format_day(now)) if line["event"] == "gesture"]
+    assert [(line["name"], line["spoken"]) for line in lines] == [("peace", "template")]
+
+
+def test_only_my_desk_can_pick_the_pi_speaker():
+    with open_client() as client, open_client("member") as member:
+        mine_before = client.get("/api/focus").json()["voice_output"]
+        refused = member.post("/api/voice", json={"output": "pi"})
+        theirs = member.post("/api/voice", json={"output": "computer"}).json()
+        mine_computer = client.post("/api/voice", json={"output": "computer"}).json()
+        mine_back = client.post("/api/voice", json={"output": "pi"}).json()
+    assert mine_before == "pi"
+    assert (refused.status_code, refused.json()) == (403, {"detail": "only the owner's desk has the Pi's speaker"})
+    assert theirs["output"] == "computer"
+    assert (mine_computer["output"], mine_back["output"]) == ("computer", "pi")
+
+
+def test_a_clip_waits_in_memory_for_its_own_person_once_and_never_touches_the_disk(monkeypatch, tmp_path, caplog):
+    (tmp_path / "voice").mkdir()
+    monkeypatch.setattr(app, "voice", make_clip_voice(tmp_path / "voice"))
+    with caplog.at_level(logging.INFO), open_client() as client, open_client("member") as member:
+        tested = member.post("/api/voice/test", json={}).json()
+        ready = wait_for_clip("bo")
+        status = member.get("/api/focus").json()["spoken"]
+        not_mine = client.get("/api/voice/clip")
+        signed_out = stranger().get("/api/voice/clip")
+        clip = member.get("/api/voice/clip")
+        again = member.get("/api/voice/clip")
+        after = member.get("/api/focus").json()["spoken"]
+        app.clips.put("bo", b"RIFF old", time.time() - 61)
+        stale = member.get("/api/voice/clip")
+    assert tested == {"output": "computer", "voice": True} and ready
+    assert (status["text"], status["clip"], status["speaking"]) == (app.TEST_LINE, True, False)
+    assert (not_mine.status_code, signed_out.status_code) == (404, 401), "my clip shelf is empty, and strangers get nothing"
+    assert (clip.status_code, clip.headers["content-type"], clip.headers["cache-control"]) == (200, "audio/wav", "no-store")
+    assert clip.content == b"RIFF" + (app.TEST_LINE + "\n").encode()
+    assert (again.status_code, after["clip"], stale.status_code) == (404, False, 404), "once, and only for a minute"
+    assert [path for path in tmp_path.rglob("*") if path.is_file() and path.read_bytes().startswith(b"RIFF")] == []
+    assert app.TEST_LINE not in caplog.text
+
+
+def test_a_newer_message_never_gets_an_older_ones_clip(monkeypatch, tmp_path):
+    (tmp_path / "voice").mkdir()
+    speaker = make_clip_voice(tmp_path / "voice")
+    first_done = threading.Event()
+
+    def slow_first(job, rate):
+        if b"first" in job.text_input:
+            first_done.wait(timeout=5)  # still making the first clip when the second message comes
+        return b"RIFF" + job.text_input
+
+    speaker._synthesizer = slow_first
+    monkeypatch.setattr(app, "voice", speaker)
+    theirs = desk_of(add_member())
+    speaker.start()
+    try:
+        app.speak_to(theirs, "first", time.time())
+        app.speak_to(theirs, "second", time.time() + 1)
+        first_done.set()
+        assert wait_for_clip("bo")
+        time.sleep(0.1)
+    finally:
+        speaker.stop()
+    assert app.clips.take("bo", time.time()) == b"RIFFsecond\n"
+
+
+def test_with_the_voice_off_the_pill_gets_the_words_and_no_clip():
+    with open_client("member") as member:
+        tested = member.post("/api/voice/test", json={}).json()
+        spoken = member.get("/api/focus").json()["spoken"]
+        clip = member.get("/api/voice/clip")
+    assert tested == {"output": "computer", "voice": False}
+    assert (spoken["text"], spoken["clip"], spoken["speaking"]) == (app.TEST_LINE, False, False)
+    assert clip.status_code == 404
+
+
+def test_the_test_line_goes_to_the_pi_speaker_when_i_have_it(monkeypatch):
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    with open_client() as client:
+        tested = client.post("/api/voice/test", json={}).json()
+    assert (tested["output"], said) == ("pi", [app.TEST_LINE])
 
 
 def test_day_pages_are_written_for_every_desk():

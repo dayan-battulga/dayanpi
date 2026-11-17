@@ -1,6 +1,6 @@
 import type { FrameReading } from "@/lib/vision/detector";
 import type { Pace, PaceReason } from "@/lib/trackPace";
-import type { FocusState } from "@/lib/types";
+import type { FocusState, Spoken } from "@/lib/types";
 
 // The tracker at /track: what its page and its worker say to each other, and what the page shows from it.
 
@@ -14,11 +14,12 @@ export interface TrackBox {
   height: number;
 }
 
-// The Pi's answer to a reading, in its own clock.
+// The Pi's answer to a reading, in its own clock, with the peace sign's last message, so this page can play its clip.
 export interface Tracked {
   state: FocusState;
   seconds_in_state: number;
   paused: boolean;
+  spoken?: Spoken | null;
 }
 
 export type TrackerRequest = { type: "start"; frames: ReadableStream<VideoFrame>; lowBattery: boolean } | { type: "battery"; low: boolean };

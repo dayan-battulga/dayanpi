@@ -48,6 +48,14 @@ export interface CheckSummary {
   elapsed_ms: number;
 }
 
+export interface Spoken {
+  text: string;
+  at: number;
+  age_s: number;
+  speaking: boolean;
+  clip?: boolean;
+}
+
 export interface FocusStatus {
   state: FocusState;
   since: number;
@@ -74,7 +82,10 @@ export interface FocusStatus {
   voice: { enabled: boolean; backend: string; problem: string | null } | null;
   todos?: Todos;
   gesture?: { name: string; age_s: number } | null; // the last hand sign that fired
-  spoken?: { text: string; at: number; age_s: number; speaking: boolean } | null; // what the peace sign said last, and whether the voice still is
+  // What the peace sign said last; speaking: the Pi's speaker is still saying it; clip: a clip waits for this page to play.
+  spoken?: Spoken | null;
+  bedtime?: string; // "HH:MM", the desk's own (Settings → Voice and bedtime)
+  voice_output?: "pi" | "computer"; // where the peace sign speaks
 }
 
 export interface Throttle {

@@ -158,7 +158,7 @@ Check the log first: `journalctl -u dayanpi -n 50 --no-pager | grep -i voice`
 
 ## What the peace sign says
 
-Hold up a peace sign (see [Hand signs](focus-tracker.md#hand-signs)) and the speaker gives you a quick rundown: the time, how long until bed, what's left on your to-do list and what you already finished today.
+Hold up a peace sign (see [Hand signs](focus-tracker.md#hand-signs)) and you get a quick rundown: the time, how long until bed, what's left on your to-do list and what you already finished today. Everyone in the room gets their own: their own to-dos, their own bedtime, and it speaks wherever they picked (below).
 
 Out of the box it's a fixed sentence (the template):
 
@@ -166,19 +166,36 @@ Out of the box it's a fixed sentence (the template):
 
 Past bedtime (from bedtime until 5 a.m.) it says it's past your bedtime and to wrap up instead of counting hours. It reads the first 5 to-dos of each list and says how many more.
 
+### Where it speaks: the Pi's speaker or this computer
+
+Settings → **Voice and bedtime** → *The peace sign speaks through*:
+
+- **The Pi's speaker**: aplay, like the rest of this page. Only your desk can pick it (it's in your room), and it's yours until you pick This computer.
+- **This computer**: the person's own page plays it. The Pi makes the audio with Piper, with the same voice and settings, but wraps it into a WAV in memory instead of playing it, and keeps it until their page fetches it with `GET /api/voice/clip` (signed in, their own clip only). It's handed out once and gone, or gone after a minute if nobody fetched it. Clips are never written to disk or logged. Every member's peace sign speaks this way.
+
+**Browsers only play sound after a click on the page.** Any click counts, and it lasts as long as the tab is open: the tracker's **Allow camera** on `/track`, or any click anywhere on `/me`. If a browser still says no, the pill shows the words with a small play button, which plays it (it stays up to a minute for that).
+
+**Test the voice** in the same section says a short line ("This is how your peace sign sounds.") through whichever one is picked, pill and all. Clicking it also counts as the click the browser wants.
+
 ### What the page shows while it talks
 
-Every page you have open shows the same words in a frosted pill just under the top bar, with little green sound bars moving next to them. It rises in when the sign fires, stays while the speaker is still saying it, and fades away once it's done (it waits for aplay to finish, so a long message keeps it up). With the voice off, or if the speaker couldn't say it, it stays 6 seconds. With Reduce motion on, it just fades in and out and the bars stand still.
+Every page you have open shows the same words in a frosted pill just under the top bar, with little green sound bars moving next to them. It rises in when the sign fires, stays while it's being said, and fades away once it's done: on the Pi's speaker that's until aplay finishes; on this computer it goes by the page's own audio, its `playing` and `ended` events. With the voice off, or if nothing could say it, it stays 6 seconds. With Reduce motion on, it just fades in and out and the bars stand still. `/track` shows the pill too and plays the clip there, so a friend with only the tracker open still hears it.
 
-The words come through the live stream as `focus.spoken`: `{"text", "at", "age_s", "speaking"}`, where `speaking` is true from the moment the phrase is queued until aplay has played it (or it failed). The text is never written to the journal or the focus log; the log only says which kind you heard.
+The words come through the live stream as `focus.spoken`: `{"text", "at", "age_s", "speaking", "clip"}`. `speaking` is true from the moment the Pi's speaker queues the phrase until aplay has played it (or it failed); `clip` is true while a clip for this message waits for the page. The text is never written to the journal or the focus log; the log only says which kind you heard.
 
 ### Your bedtime
 
-`DAYANPI_BEDTIME` in `/etc/dayanpi.env`, as `HH:MM` on a 24-hour clock. The default is `00:00` (midnight). A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away. Something that isn't `HH:MM` logs a warning and falls back to midnight.
+Settings → **Voice and bedtime** → **Bedtime**, everyone their own, kept in their desk's folder (`data/users/<username>/voice.json`). It counts for the next peace sign right away.
+
+Until you pick one, yours comes from `DAYANPI_BEDTIME` in `/etc/dayanpi.env`, as `HH:MM` on a 24-hour clock (default `00:00`, midnight), and everyone else's is midnight. A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away. A `DAYANPI_BEDTIME` that isn't `HH:MM` logs a warning and falls back to midnight.
+
+### With the voice off
+
+`DAYANPI_VOICE=off` (or Piper missing) still works: nobody's speaker or computer plays anything, no clips are made, and the pill shows the words for 6 seconds. Settings → Voice and bedtime says so under Test the voice.
 
 ### A friendlier message from a small LLM
 
-With a small model running in [Ollama](https://ollama.com) on the Pi, the peace sign says something more natural instead, written fresh for you, like:
+With a small model running in [Ollama](https://ollama.com) on the Pi, the peace sign says something more natural instead, written fresh for each person, like:
 
 > It's 6 p.m., so you've got about 6 hours before bed. Three things left: the report, emails and laundry. You already knocked out the reading in 40 minutes, so you can definitely finish these.
 
@@ -206,11 +223,12 @@ With a small model running in [Ollama](https://ollama.com) on the Pi, the peace 
    journalctl -u dayanpi -n 50 --no-pager | grep "peace sign"
    ```
 
-   You want `peace sign: writing messages ahead with llama3.2:1b through Ollama`, then a few seconds later `peace sign: LLM messages from llama3.2:1b are ready`.
+   You want `peace sign: writing everyone's messages ahead with llama3.2:1b through Ollama, one at a time`, then a few seconds later `peace sign: LLM messages from llama3.2:1b are ready`.
 
 How it works, so the speaker can answer right away even though the model is slow:
 
-- **Written ahead.** The message gets written in the background every 4 minutes and whenever your to-do list changes, so one is always waiting. The peace sign just speaks it.
+- **Written ahead.** Each person's message gets written in the background every 4 minutes and whenever their to-do list changes, so one is always waiting. The peace sign just speaks it.
+- **One at a time.** Everyone's messages go through one queue: a single background thread writes them one after another, so even with 4 people the Pi never runs the model twice at once. With 4 people, a fresh message for everyone takes about 4 times as long; the template covers anyone whose message isn't ready.
 - **Never stale.** It only speaks a message written for your current to-do list in the last 5 minutes. Right after you change the list, the template covers the few seconds until the new message is ready.
 - **Only the facts.** The model gets the time, the time to bed and the two to-do lists, and is told not to add, drop or rename anything or change any number. Before a message is used, the app checks it: no lists, emojis or markdown, at most 4 sentences, and no number that isn't in the facts. Anything that fails, plus Ollama being off, slow (over 60 s) or erroring, means the template speaks instead. The journal says why.
 - **Easy on the Pi.** The model gets 2 of the 4 cores, so the focus checks keep running, and stays loaded between messages: the app asks Ollama to keep it loaded for 15 minutes and asks again every 4, so it doesn't reload each time.

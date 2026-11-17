@@ -49,6 +49,8 @@
       "mac_tracking": true,
       "camera_source": "pi",
       "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi",
       "camera_ok": true,
       "last_check": {
         "person": 0.93,
@@ -104,7 +106,8 @@
         "text": "3 things left, almost 5 hours before bed. You’ve got this.",
         "at": 1794877937.2,
         "age_s": 0.8,
-        "speaking": true
+        "speaking": true,
+        "clip": false
       }
     }
   },

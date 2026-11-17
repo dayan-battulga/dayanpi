@@ -27,13 +27,14 @@ from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.browser_camera import BrowserCheck
 from dayanpi.focus.camera_source import SOURCES
+from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
-from dayanpi.focus.coach import TodoCoach, collect_facts, describe_todos, read_bedtime
+from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
 from dayanpi.focus.todos import TEXT_MAX
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
-from dayanpi.hardware.voice import VoiceAnnouncer
+from dayanpi.hardware.voice import ClipShelf, VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
 from dayanpi.vision import detector, hands
 from dayanpi.vision.gestures import HAND_SIGNS
@@ -72,7 +73,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -90,8 +91,12 @@ desks = Desks(find_data_dir())
 owner_desk: Desk | None = None  # the desk the Pi's cameras and the voice can feed; opened at startup
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
+clips = ClipShelf()  # each person's latest peace-sign clip for "This computer"; memory only
 LLM_MODEL = read_llm_model()
-coach: TodoCoach | None = None  # it reads the owner's to-dos, so it's made at startup
+llm: OllamaClient | None = None  # made at startup when DAYANPI_LLM_MODEL is set; every desk's coach shares it
+coach_writer: CoachWriter | None = None  # the one thread that writes every desk's drafts
+_coach_lock = threading.Lock()
+TEST_LINE = "This is how your peace sign sounds."
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
@@ -121,7 +126,7 @@ def stamp_age(event: dict | None, now: float) -> dict | None:
 
 
 # A desk the Pi's cameras and voice don't reach: everyone's but the owner's.
-NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None, "voice": None}
+NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None}
 
 
 def build_camera_status(now: float) -> dict:
@@ -133,7 +138,6 @@ def build_camera_status(now: float) -> dict:
         "overlay": stamp_age(None if running is None else running.last_overlay, now),
         "side_overlay": stamp_age(None if running is None else running.last_side_overlay, now),
         "gesture": stamp_age(None if running is None else running.last_gesture, now),
-        "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem},
     }
     return camera
 
@@ -144,16 +148,52 @@ def find_camera_source(desk: Desk) -> str:
     return source
 
 
+def find_bedtime(desk: Desk) -> int:
+    """Minutes after midnight: what the desk picked, or mine from DAYANPI_BEDTIME and everyone else's 00:00."""
+    picked = desk.voice.bedtime
+    bedtime = picked if picked is not None else read_bedtime() if desk is owner_desk else DEFAULT_BEDTIME
+    return bedtime
+
+
+def find_voice_output(desk: Desk) -> str:
+    """"pi" or "computer". Only my desk can have the Pi's speaker, which is in my room, and has it until I pick my computer."""
+    output = "pi" if desk is owner_desk and desk.voice.output != "computer" else "computer"
+    return output
+
+
+def find_coach(desk: Desk) -> TodoCoach:
+    """Each desk's own coach, made the first time it's needed: its own to-dos and bedtime, the one LLM."""
+    with _coach_lock:
+        if desk.coach is None:
+            desk.coach = TodoCoach(desk.todos, lambda: find_bedtime(desk), llm)
+        coach = desk.coach
+    return coach
+
+
+def describe_spoken(desk: Desk, now: float) -> dict | None:
+    """The peace sign's last message for the pill: on the Pi's speaker, whether it's still saying it; for this
+    computer, whether a clip is waiting for the page to fetch and play."""
+    spoken = desk.last_spoken
+    on_pi = find_voice_output(desk) == "pi"
+    described = None
+    if spoken is not None:
+        described = {**stamp_age(spoken, now), "speaking": on_pi and voice.is_saying(spoken["text"]), "clip": not on_pi and clips.has(desk.username, now)}
+    return described
+
+
 def build_desk_status(desk: Desk, now: float) -> dict:
     """One desk's focus status, for the API and the stats stream."""
     source = find_camera_source(desk)
-    spoken = desk.last_spoken
     status = desk.tracker.status(now) | {
         "todos": desk.todos.snapshot(now),
         "mac_tracking": desk.mac_tracking.enabled,
         "camera_source": source,
         "camera_paused": source == "browser" and desk.browser.paused,
-        "spoken": None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])},
+        "spoken": describe_spoken(desk, now),
+        "bedtime": format_bedtime(find_bedtime(desk)),
+        "voice_output": find_voice_output(desk),
+        # Why the Pi's voice can't run is about the Pi, so it's mine to see.
+        "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem if desk is owner_desk else None},
     }
     status |= build_camera_status(now) if desk is owner_desk else NO_CAMERA
     if source == "browser":
@@ -218,21 +258,32 @@ def handle_focus_update(desk: Desk, update: FocusUpdate, now: float) -> None:
     desk.todos.track(update.state == "working", now)
 
 
-def say_todos(desk: Desk, now: float) -> dict:
-    """Mine: the coach's message, out loud, and which kind it was for the gesture's log line. Anyone else's: the
-    template over their own to-dos, on their page only (saying it out loud comes later). The text goes to the page
-    (desk.last_spoken), which shows it while the voice says it; it's never logged."""
-    details = {}
-    if desk is owner_desk:
-        message = coach.pick(now)
-        logger.info("peace sign: speaking the %s message", message.source)
-        voice.say(message.text)
-        text = message.text
-        details = {"spoken": message.source}
+def speak_to(desk: Desk, text: str, now: float) -> None:
+    """Says text where the desk's peace sign speaks, and puts it on its pill (desk.last_spoken, never logged).
+
+    The Pi's speaker says it with aplay. For this computer, Piper makes a clip that waits in memory for the
+    desk's own page (GET /api/voice/clip); a clip for an older message never replaces a newer one's.
+    """
+    at = round(now, 3)
+    desk.last_spoken = {"text": text, "at": at}
+    if find_voice_output(desk) == "pi":
+        voice.say(text)
     else:
-        text = describe_todos(collect_facts(desk.todos.snapshot(now), now, read_bedtime()))
-    desk.last_spoken = {"text": text, "at": round(now, 3)}
-    return details
+        clips.drop(desk.username)
+
+        def keep_clip(wav: bytes) -> None:
+            if desk.last_spoken is not None and desk.last_spoken["at"] == at:
+                clips.put(desk.username, wav, time.time())
+
+        voice.render(text, keep_clip)
+
+
+def say_todos(desk: Desk, now: float) -> dict:
+    """The desk's own coach's message, where its peace sign speaks; which kind it was goes on the gesture's log line."""
+    message = find_coach(desk).pick(now)
+    logger.info("peace sign on %s's desk: the %s message, through %s", desk.username, message.source, find_voice_output(desk))
+    speak_to(desk, message.text, now)
+    return {"spoken": message.source}
 
 
 # What each hand sign does when it fires. Its finger rule lives in vision/gestures.py (HAND_SIGNS).
@@ -354,7 +405,7 @@ def open_desks(now: float) -> Desk:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global worker, owner_desk, coach
+    global worker, owner_desk, llm, coach_writer
     if not AUTH_USER or not AUTH_PASSWORD:
         raise RuntimeError(
             "DAYANPI_USER and DAYANPI_PASSWORD must be set "
@@ -368,15 +419,16 @@ async def lifespan(app: FastAPI):
         logger.warning("camera not locked to Tailscale, don't turn on Funnel")
     sampler.sample()
     owner_desk = open_desks(time.time())
-    coach = TodoCoach(owner_desk.todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
+    llm = None if LLM_MODEL is None else OllamaClient(LLM_MODEL)
     stream.start()
     if side_stream is not None:
         side_stream.start()
     voice.start()
     worker = start_focus_worker(owner_desk)
-    if coach.llm is not None:
-        coach.start()
-        logger.info("peace sign: writing messages ahead with %s through Ollama", coach.llm.model)
+    if llm is not None:
+        coach_writer = CoachWriter(lambda: [find_coach(desk) for desk in desks.list()])
+        coach_writer.start()
+        logger.info("peace sign: writing everyone's messages ahead with %s through Ollama, one at a time", llm.model)
     else:
         logger.info("peace sign: template messages (DAYANPI_LLM_MODEL isn't set)")
     producer = asyncio.create_task(snapshot_producer(), name="snapshot-producer")
@@ -389,7 +441,9 @@ async def lifespan(app: FastAPI):
     if worker is not None:
         worker.stop()
         worker = None
-    coach.stop()
+    if coach_writer is not None:
+        coach_writer.stop()
+        coach_writer = None
     for desk in desks.list():
         desk.todos.save(time.time())
     voice.stop()
@@ -736,7 +790,7 @@ def require_browser_source(desk: Desk) -> None:
 def describe_tracking(desk: Desk, now: float) -> dict:
     """What /track shows under the preview, from the Pi's own clock."""
     focus = desk.tracker.status(now)
-    described = {"state": focus["state"], "seconds_in_state": focus["seconds_in_state"], "paused": desk.browser.paused}
+    described = {"state": focus["state"], "seconds_in_state": focus["seconds_in_state"], "paused": desk.browser.paused, "spoken": describe_spoken(desk, now)}
     return described
 
 
@@ -775,6 +829,41 @@ def set_camera_source(request: Request, change: TrackSource):
     if desk.camera_source.set(change.source):
         logger.info("%s's desk now takes its checks from the %s", desk.username, "Pi's cameras" if change.source == "pi" else "browser")
     return {"source": find_camera_source(desk)}
+
+
+class VoiceChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bedtime: Annotated[str, StringConstraints(pattern=rf"^{BEDTIME_PATTERN}$")] | None = None  # "HH:MM"
+    output: Literal[OUTPUTS] | None = None
+
+
+@app.post("/api/voice")
+def set_voice(request: Request, change: VoiceChange):
+    """Settings → Voice and bedtime, for your own desk. Only my desk can have the Pi's speaker."""
+    desk = find_desk(request)
+    if change.output == "pi" and auth_routes.read_viewer(request).user.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the owner's desk has the Pi's speaker")
+    desk.voice.set(bedtime=None if change.bedtime is None else parse_bedtime(change.bedtime), output=change.output)
+    return {"bedtime": format_bedtime(find_bedtime(desk)), "output": find_voice_output(desk)}
+
+
+@app.post("/api/voice/test")
+def test_voice(request: Request):
+    """Settings' Test the voice: a short line wherever your peace sign speaks, with its pill."""
+    desk = find_desk(request)
+    speak_to(desk, TEST_LINE, time.time())
+    return {"output": find_voice_output(desk), "voice": voice.enabled}
+
+
+@app.get("/api/voice/clip")
+def voice_clip(request: Request):
+    """Your own latest peace-sign clip as a WAV, once: it leaves the Pi's memory when it's fetched, or a minute after
+    it was made, whichever comes first."""
+    wav = clips.take(auth_routes.read_viewer(request).user.username, time.time())
+    if wav is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no clip")
+    return Response(wav, media_type="audio/wav", headers={"Cache-Control": "no-store"})
 
 
 class SlotResponse(StreamingResponse):

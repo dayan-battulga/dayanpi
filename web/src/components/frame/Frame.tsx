@@ -6,6 +6,7 @@ import { Header } from "@/components/header/Header";
 import { Toaster } from "@/components/ui/toaster";
 import { useCommands, useShortcuts } from "@/hooks/useCommands";
 import { useGestureToast } from "@/hooks/useGestureToast";
+import { usePeaceVoice } from "@/hooks/usePeaceVoice";
 import { type MacTracking, useMacTracking } from "@/hooks/useMacTracking";
 import { useMe } from "@/hooks/useMe";
 import { PHONE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
@@ -49,6 +50,7 @@ export function Frame() {
   const togglePalette = useCallback(() => setPalette((current) => ({ open: !current.open, used: true })), []);
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
+  const peaceVoice = usePeaceVoice(snapshot?.focus?.spoken);
   const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking };
   // Before the new page is drawn, so it starts at its top instead of wherever the last one was scrolled to.
   useLayoutEffect(() => {
@@ -66,7 +68,7 @@ export function Frame() {
           </main>
         </ViewTransition>
       </Suspense>
-      <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} />
+      <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} voice={peaceVoice} />
       {phone && <Dock />}
       {palette.used && (
         <Suspense fallback={null}>

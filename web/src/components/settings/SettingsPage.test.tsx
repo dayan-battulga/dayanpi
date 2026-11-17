@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
@@ -58,7 +58,7 @@ it("starts on Profile, and the list picks a section, marked, rising in fresh", a
   serveSettings(OWNER);
   const user = renderSettings();
   expect(await screen.findByRole("region", { name: "Profile" })).toBeInTheDocument();
-  expect(sectionNames()).toEqual(["Profile", "Camera", "Mac helper", "Room and invites"]);
+  expect(sectionNames()).toEqual(["Profile", "Camera", "Voice and bedtime", "Mac helper", "Room and invites"]);
   expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByLabelText("Name")).toHaveValue("Dayan");
   const before = document.querySelector(".settings-section");
@@ -86,7 +86,7 @@ it("shows a member only their own things, and never asks for the owner's lists",
   const sent = serveSettings(MEMBER);
   const user = renderSettings();
   await screen.findByRole("region", { name: "Profile" });
-  expect(sectionNames()).toEqual(["Profile", "Camera", "Mac helper"]);
+  expect(sectionNames()).toEqual(["Profile", "Camera", "Voice and bedtime", "Mac helper"]);
   const mac = await openSection(user, "Mac helper");
   expect(await mac.findByText("MacBook")).toBeInTheDocument();
   expect(mac.getByRole("switch", { name: "Track apps and sites" })).toBeInTheDocument(); // their own desk's
@@ -142,6 +142,43 @@ it("puts the pick back and says so when the Pi refuses it", async () => {
   await user.click(camera.getByRole("radio", { name: "This desk’s Pi cameras" }));
   expect(await camera.findByRole("alert")).toHaveTextContent("only the owner's desk has the Pi's cameras");
   expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+});
+
+it("saves your own bedtime and where the peace sign speaks, and tests the voice there", async () => {
+  const sent = serveSettings(MEMBER, [], {
+    "POST /api/voice": answer({ bedtime: "23:15", output: "computer" }),
+    "POST /api/voice/test": answer({ output: "computer", voice: true }),
+  });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ bedtime: "00:00", voice_output: "computer", voice: { enabled: true, backend: "piper", problem: null } })));
+  const voice = await openSection(user, "Voice and bedtime");
+  const bedtime = voice.getByLabelText("Bedtime");
+  expect(bedtime).toHaveValue("00:00");
+  expect(voice.getByRole("radio", { name: "The Pi’s speaker" })).toBeDisabled();
+  expect(voice.getByRole("radio", { name: "This computer" })).toBeChecked();
+
+  fireEvent.change(bedtime, { target: { value: "23:15" } });
+  await user.click(voice.getByRole("button", { name: "Test the voice" }));
+
+  expect(bedtime).toHaveValue("23:15");
+  await waitFor(() =>
+    expect(sent.filter((request) => request.path.startsWith("/api/voice")).map((request) => [request.path, request.body])).toEqual([
+      ["/api/voice", { bedtime: "23:15" }],
+      ["/api/voice/test", {}],
+    ]),
+  );
+});
+
+it("lets the owner move the peace sign from the Pi's speaker to this computer, and says when the voice is off", async () => {
+  const sent = serveSettings(OWNER, undefined, { "POST /api/voice": answer({ bedtime: "22:30", output: "computer" }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ bedtime: "22:30", voice_output: "pi", voice: { enabled: false, backend: "off", problem: null } })));
+  const voice = await openSection(user, "Voice and bedtime");
+  expect(voice.getByRole("radio", { name: "The Pi’s speaker" })).toBeChecked();
+  expect(voice.getByText("The Pi's voice is off, so the peace sign shows its words and says nothing.")).toBeInTheDocument();
+  await user.click(voice.getByRole("radio", { name: "This computer" }));
+  expect(voice.getByRole("radio", { name: "This computer" })).toBeChecked();
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/voice").map((request) => request.body)).toEqual([{ output: "computer" }]));
 });
 
 it("shows a new token's secret once, and revokes a token with a JSON DELETE", async () => {

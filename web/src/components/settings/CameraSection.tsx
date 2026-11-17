@@ -37,10 +37,10 @@ export function CameraSection({ focus, owner, now }: { focus: FocusStatus | unde
       <h2 id="settings-camera" className="settings-title">
         Camera
       </h2>
-      <fieldset className="camera-sources">
-        <legend className="camera-legend">Track focus with</legend>
+      <fieldset className="setting-choices">
+        <legend className="setting-legend">Track focus with</legend>
         {SOURCES.map((entry) => (
-          <label key={entry.value} className="camera-source" data-disabled={entry.value === "pi" && !owner ? "" : undefined}>
+          <label key={entry.value} className="setting-choice" data-disabled={entry.value === "pi" && !owner ? "" : undefined}>
             <input
               type="radio"
               name="camera-source"

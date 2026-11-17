@@ -398,3 +398,55 @@ def test_runner_turns_failures_into_speech_errors(outcomes, expected, call_count
         voice.run_speech_job(voice.build_piper_job("Phone down.", FAKE_MODEL, 22050, None), run=run)
     assert str(caught.value) == expected
     assert len(run.calls) == call_count
+
+
+def test_a_clip_is_pipers_audio_as_a_wav_in_memory_with_no_file_anywhere(tmp_path, monkeypatch):
+    import io
+    import wave
+
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def fake_run(command, **options):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=b"\x01\x00" * 800, stderr=b"")
+
+    job = voice.build_piper_job("Phone down.", FAKE_MODEL, 16000, None)
+    wav = voice.synthesize_clip(job, 16000, run=fake_run)
+    with wave.open(io.BytesIO(wav)) as clip:
+        shape = (clip.getnchannels(), clip.getsampwidth(), clip.getframerate(), clip.getnframes())
+    assert shape == (1, 2, 16000, 800)
+    assert calls == [job.synth_command] and "--output-raw" in calls[0], "Piper only, never aplay or an output file"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_render_makes_the_clip_on_the_voice_thread_behind_what_the_speaker_says(make_voice, tmp_path):
+    rig = make_voice()
+    made = []
+    rendered = threading.Event()
+    rig.announcer._synthesizer = lambda job, rate: made.append((decode_phrase(job), rate)) or b"RIFFclip"
+    rig.announcer.start()
+    rig.announcer.say("Phone down.")
+    assert rig.announcer.render("It's 9 p.m.", lambda wav: rendered.set() if wav == b"RIFFclip" else None)
+    assert rendered.wait(WAIT_S)
+    assert rig.runner.list_phrases() == ["Phone down."], "only the speaker's phrase went to aplay"
+    assert made == [("It's 9 p.m.", 16000)]
+    assert not rig.announcer.is_saying("It's 9 p.m."), "a clip isn't the speaker's to say"
+
+
+def test_render_does_nothing_with_the_voice_off(make_voice):
+    rig = make_voice(backend=voice.OFF)
+    rig.announcer.start()
+    assert rig.announcer.render("It's 9 p.m.", lambda wav: pytest.fail("no clip with the voice off")) is False
+
+
+def test_the_clip_shelf_hands_out_your_own_clip_once_and_only_for_a_minute():
+    shelf = voice.ClipShelf()
+    shelf.put("sam", b"sam's", 1000.0)
+    shelf.put("bo", b"bo's", 1000.0)
+    assert shelf.has("sam", 1000.0 + voice.CLIP_KEEP_S - 1)
+    assert shelf.take("sam", 1010.0) == b"sam's"
+    assert shelf.take("sam", 1011.0) is None, "gone once it's fetched"
+    assert not shelf.has("bo", 1000.0 + voice.CLIP_KEEP_S)
+    assert shelf.take("bo", 1000.0 + voice.CLIP_KEEP_S) is None, "gone after a minute"
+

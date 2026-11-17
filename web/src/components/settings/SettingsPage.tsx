@@ -4,12 +4,14 @@ import { CameraSection } from "@/components/settings/CameraSection";
 import { MacHelperSection } from "@/components/settings/MacHelperSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { RoomSection } from "@/components/settings/RoomSection";
+import { VoiceSection } from "@/components/settings/VoiceSection";
 import { signOut } from "@/lib/account";
 
-// The sections that work today. Sharing, and Voice and bedtime, come with the study room.
+// The sections that work today, in the mockup's order. Sharing comes with the study room.
 const SECTIONS = [
   { id: "profile", name: "Profile", ownerOnly: false },
   { id: "camera", name: "Camera", ownerOnly: false },
+  { id: "voice", name: "Voice and bedtime", ownerOnly: false },
   { id: "mac", name: "Mac helper", ownerOnly: false },
   { id: "room", name: "Room and invites", ownerOnly: true },
 ] as const;
@@ -46,6 +48,7 @@ export function SettingsPage() {
           <div key={section} className="settings-section rise">
             {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
             {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} />}
+            {section === "voice" && <VoiceSection focus={snapshot?.focus} owner={owner} now={now} />}
             {section === "mac" && <MacHelperSection macTracking={macTracking} />}
             {section === "room" && owner && <RoomSection />}
           </div>

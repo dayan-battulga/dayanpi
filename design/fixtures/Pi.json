@@ -129,7 +129,9 @@
       "spoken": null,
       "camera_access": "open",
       "camera_source": "pi",
-      "camera_paused": false
+      "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi"
     }
   },
   "routes": {

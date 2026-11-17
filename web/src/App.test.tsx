@@ -291,6 +291,93 @@ it("keeps the pill 6 s with the voice off, and none for an old message on load",
   await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
 });
 
+// The page's own audio, as usePeaceVoice sees it: play() works, or refuses once like a blocked autoplay, and the test
+// fires the element's playing and ended events.
+class FakeAudio {
+  static latest: FakeAudio | null = null;
+  static refuseFirst = false;
+  src = "";
+  plays = 0;
+  onplaying: (() => void) | null = null;
+  onended: (() => void) | null = null;
+  onpause: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor() {
+    FakeAudio.latest = this;
+  }
+
+  play() {
+    this.plays += 1;
+    return FakeAudio.refuseFirst && this.plays === 1 ? Promise.reject(new DOMException("no click yet", "NotAllowedError")) : Promise.resolve();
+  }
+
+  pause() {}
+
+  fire(event: "playing" | "ended") {
+    act(() => (event === "playing" ? this.onplaying?.() : this.onended?.()));
+  }
+}
+
+function sendClip(age_s: number, clip: boolean) {
+  const at = 1_794_877_938;
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ voice: VOICE_ON, voice_output: "computer", spoken: { text: SAYING, at, age_s, speaking: false, clip } })));
+}
+
+function hearOnThisComputer(refuseFirst = false) {
+  const sent = servePi(OWNER, { "GET /api/voice/clip": answer("RIFF clip") });
+  FakeAudio.latest = null;
+  FakeAudio.refuseFirst = refuseFirst;
+  vi.stubGlobal("Audio", FakeAudio);
+  Object.defineProperty(URL, "createObjectURL", { value: () => "blob:clip", configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: () => {}, configurable: true });
+  return sent;
+}
+
+it("plays this computer's clip once and keeps the pill up while the audio plays, going by its own events", async () => {
+  const sent = hearOnThisComputer();
+  renderApp();
+  sendClip(0.4, true);
+  expect(await screen.findByText(SAYING)).toBeInTheDocument();
+  await waitFor(() => expect(FakeAudio.latest?.src).toBe("blob:clip"));
+  expect(FakeAudio.latest?.plays).toBe(1);
+  sendClip(1.4, true); // the next snapshot, before the Pi saw the fetch: no second fetch
+  expect(sent.filter((request) => request.path === "/api/voice/clip")).toHaveLength(1);
+
+  FakeAudio.latest!.fire("playing");
+  sendClip(9, false); // a long message, still playing past 6 s
+  expect(screen.getByText(SAYING)).toBeInTheDocument();
+  FakeAudio.latest!.fire("ended");
+  await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
+});
+
+it("shows a play button when the browser won't play the clip without a click, and plays it on that click", async () => {
+  hearOnThisComputer(true);
+  renderApp();
+  sendClip(0.4, true);
+  const play = await screen.findByRole("button", { name: "Play the message" });
+  sendClip(30, false); // waits for the click long after the usual 6 s
+  expect(screen.getByText(SAYING)).toBeInTheDocument();
+
+  await userEvent.setup().click(play);
+  expect(FakeAudio.latest?.plays).toBe(2);
+  FakeAudio.latest!.fire("playing");
+  expect(screen.queryByRole("button", { name: "Play the message" })).toBeNull();
+  FakeAudio.latest!.fire("ended");
+  await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
+});
+
+it("with the voice off there's no clip, so nothing plays and the pill shows the words for 6 s", async () => {
+  const sent = hearOnThisComputer();
+  renderApp();
+  sendClip(0.5, false);
+  expect(await screen.findByText(SAYING)).toBeInTheDocument();
+  sendClip(6.5, false);
+  await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
+  expect(sent.filter((request) => request.path === "/api/voice/clip")).toHaveLength(0);
+  expect(FakeAudio.latest).toBeNull();
+});
+
 it("only fades the pill in with reduced motion", async () => {
   const pillStyle = async () => ((await screen.findByText(SAYING)).closest(".peace-pill") as HTMLElement).style;
   const { unmount } = render(

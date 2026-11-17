@@ -1,8 +1,10 @@
 import { Video, VideoOff, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { PeacePill } from "@/components/frame/PeacePill";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { measureMemory, openCamera, type CameraProblem } from "@/components/track/checkRuns";
 import { useNow } from "@/hooks/useNow";
+import { usePeaceVoice } from "@/hooks/usePeaceVoice";
 import { formatClock } from "@/lib/format";
 import { fetchJson, request, sendToLogin } from "@/lib/http";
 import { STATE_COPY } from "@/lib/timeline";
@@ -74,6 +76,8 @@ export function TrackPage() {
   const worker = useRef<Worker | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const now = useNow();
+  // Allow camera is a click on this page, so the browser lets it play the peace sign's clip later.
+  const peaceVoice = usePeaceVoice(tracked?.tracked.spoken);
 
   const stopTracking = () => {
     worker.current?.terminate();
@@ -144,7 +148,7 @@ export function TrackPage() {
     let current = true;
     fetchJson<FocusStatus>("/api/focus").then((focus) => {
       if (current && focus !== null) {
-        keepTracked({ state: focus.state, seconds_in_state: focus.seconds_in_state, paused: focus.camera_paused ?? false });
+        keepTracked({ state: focus.state, seconds_in_state: focus.seconds_in_state, paused: focus.camera_paused ?? false, spoken: focus.spoken });
         if (focus.camera_source === "pi") {
           setProblem(PROBLEMS.refused);
         }
@@ -249,6 +253,7 @@ export function TrackPage() {
           </div>
         )}
       </main>
+      <PeacePill spoken={tracked?.tracked.spoken} receivedAt={tracked?.at ?? now} now={now} voice={peaceVoice} />
     </div>
   );
 }

@@ -1556,20 +1556,20 @@ number-flow-react {
   min-height: 64px;
 }
 
-/* Settings → Camera: where the desk's checks come from. */
-.camera-sources {
+/* Settings → Camera and Voice and bedtime: a legend over radio rows. */
+.setting-choices {
   margin-top: 24px;
   padding: 0;
   border: 0;
 }
 
-.camera-legend {
+.setting-legend {
   padding: 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.camera-source {
+.setting-choice {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1579,20 +1579,41 @@ number-flow-react {
   cursor: pointer;
 }
 
-.camera-source:first-of-type {
+.setting-choice:first-of-type {
   margin-top: 8px;
 }
 
-.camera-source[data-disabled] {
+.setting-choice[data-disabled] {
   color: var(--muted);
   cursor: default;
 }
 
-.camera-source input {
+.setting-choice input {
   width: 18px;
   height: 18px;
   margin: 0;
   accent-color: var(--work);
+}
+
+/* Voice and bedtime's time field: Settings.dc.html's 180 px box in Geist Mono. */
+.bedtime-label {
+  display: block;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bedtime-input {
+  display: block;
+  width: 180px;
+  height: 48px;
+  margin-top: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 15px var(--font-mono);
 }
 
 .settings-hint a,
@@ -2074,6 +2095,28 @@ button.todo-pill:active,
 
 .peace-text {
   font-size: 14px;
+}
+
+/* The clip the browser wouldn't play without a click: a small ink button where the bars go, with a 44 px hit area. */
+.peace-play {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.peace-play::after {
+  position: absolute;
+  inset: -8px;
+  content: "";
 }
 
 /* ---------- Apps (components/apps/AppsCard.tsx): Desk's, next to the to-dos ---------- */

@@ -29,7 +29,7 @@ Always use the **`main`** branch on both machines.
 | `/` | Dashboard |
 | `/login` | The sign-in page |
 | `/join/<code>` | Make an account from an invite link |
-| `/settings` | Profile (your name and password), Camera (where your desk's checks come from), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
+| `/settings` | Profile (your name and password), Camera (where your desk's checks come from), Voice and bedtime (your bedtime, where your peace sign speaks), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
 | `/track` | The tracker: this browser's camera feeds your own desk (Chrome, see [A friend's camera](#a-friends-camera-the-tracker)) |
 | `/track/test` | The camera test: is this laptop fast enough for the tracker (nothing goes to the Pi) |
 | `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
@@ -51,6 +51,9 @@ Always use the **`main`** branch on both machines.
 | `/api/track/pause` | The tracker's Pause (POST `{}`): your desk says paused until the next reading |
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
+| `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
+| `/api/voice/test` | Test the voice (POST `{}`): a short line wherever your peace sign speaks |
+| `/api/voice/clip` | Your own latest peace-sign clip as a WAV, once (gone after it's fetched or a minute), for This computer |
 | `/docs` | Disabled (404 on purpose) |
 
 ### How you open it
@@ -304,6 +307,17 @@ What to send them:
 6. Long sessions: plug the laptop in. On a low battery it checks every 2 s instead of every second, and says so under the preview.
 
 If it says **Camera is blocked**: click the camera icon at the right end of Chrome's address bar, choose Allow, reload. **The camera is busy**: quit Zoom, FaceTime, Photo Booth or whatever else has it. Your own desk can use it too: Settings → Camera → This browser's camera (and back to the Pi's cameras when you're home).
+
+### Her peace sign's voice
+
+Everyone's peace sign speaks to them: their own to-dos and their own bedtime. Yours speaks on the Pi's speaker like before; a member's plays on their own computer, since the speaker's in your room. What to send her:
+
+1. Settings → **Voice and bedtime**. Set **Bedtime** (it saves as soon as she picks a time; until then it's midnight).
+2. *The peace sign speaks through* is already **This computer** (the Pi's speaker is greyed out: it's yours).
+3. Press **Test the voice**. She should hear "This is how your peace sign sounds." and see it in the pill at the top.
+4. From then on, a peace sign in front of the tracker plays on the page she has open: `/track` (already allowed, because she clicked Allow camera) or `/me` (click anywhere on it once). If a browser still won't, the pill at the top has a small play button.
+
+It needs the Pi's voice on (`DAYANPI_VOICE=piper`, [voice.md](voice.md)). With it off, the pill shows the words and nothing plays, and Settings says so.
 
 ### Using the API from a terminal
 

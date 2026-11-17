@@ -49,6 +49,8 @@
       "mac_tracking": true,
       "camera_source": "pi",
       "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi",
       "camera_ok": true,
       "last_check": {
         "person": 0.93,
