@@ -31,17 +31,3 @@ export function formatDate(epochSeconds: number): string {
   const text = `${day} · ${formatTimeOfDay(epochSeconds)}`;
   return text;
 }
-
-export function formatUptime(seconds: number): string {
-  const total = Math.floor(seconds);
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const text = `${days}d ${hours}h ${minutes}m`;
-  return text;
-}
-
-export function formatBits(kbps: number): string {
-  const text = kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mb/s` : `${Math.round(kbps)} kb/s`;
-  return text;
-}

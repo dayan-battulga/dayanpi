@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatBits, formatClock, formatDuration, formatUptime } from "@/lib/format";
+import { formatClock, formatDuration } from "@/lib/format";
+import { readUptime } from "@/lib/pi";
 
 describe("formatDuration", () => {
   it.each([
@@ -24,8 +25,7 @@ describe("formatClock", () => {
   });
 });
 
-it("formats uptime and network speed", () => {
-  expect(formatUptime(2 * 86400 + 3 * 3600 + 4 * 60 + 59)).toBe("2d 3h 4m");
-  expect(formatBits(999.6)).toBe("1000 kb/s");
-  expect(formatBits(1250)).toBe("1.3 Mb/s");
+it("splits uptime into days and hours, or hours and minutes under a day", () => {
+  expect(readUptime(6 * 86400 + 4 * 3600 + 59 * 60)).toEqual({ first: 6, firstUnit: "d", second: 4, secondUnit: "h" });
+  expect(readUptime(4 * 3600 + 12 * 60 + 59)).toEqual({ first: 4, firstUnit: "h", second: 12, secondUnit: "m" });
 });

@@ -108,7 +108,7 @@ Then start the app again:
 sudo systemctl start dayanpi
 ```
 
-Open the site. The camera card should show the new, wider view. If it doesn't, run `journalctl -u dayanpi -n 50 --no-pager` and look for camera warnings.
+Open the site's Pi page and press Peek. The front camera should show the new, wider view. If it doesn't, run `journalctl -u dayanpi -n 50 --no-pager` and look for camera warnings.
 
 ## 6. Compare it to the webcam with the detector check
 
@@ -169,14 +169,14 @@ INFO dayanpi.hardware.camera: side camera: USB webcam at /dev/v4l/by-id/usb-...-
 - **Arducam camera?** Official cameras get detected on their own, but an Arducam one needs a line in `config.txt`, like `dtoverlay=imx708,cam0` for the `CAM/DISP 0` connector.
 - **The feeds.** `/video` is the front camera and `/video/side` is the side one. Each allows 2 viewers at a time, so a side feed left open somewhere can't lock you out of the front. With any other `DAYANPI_CAMERA` setting, `/video/side` is a 404. Both feeds are also a 404 when the [camera lock](MANUAL.md#camera-lock) says no: for a member always, and with `DAYANPI_TAILSCALE_LOGIN` set, for anything that isn't you on one of your own Tailscale devices (Funnel, a different login, plain `localhost:8000` on the Pi).
 - **The detector runs on both.** Every check scans a new frame from each camera, and the tracker gets one combined reading. Faces and hand signs only use the front camera. [With both cameras](focus-tracker.md#with-both-cameras) in the focus tracker guide has what that means day to day and how to tell which camera caught a phone.
-- **The dashboard.** The Camera card shows one feed at a time, labeled Front or Side, with its own boxes, and the flip button next to Peek switches between them. See [The dashboard](MANUAL.md#the-dashboard).
+- **The dashboard.** The Pi page shows the Front and Side cameras side by side (stacked on a phone), each with its own boxes, both hidden until you press Peek, which opens both feeds. See [The dashboard](MANUAL.md#the-dashboard).
 - **Webcam unplugged at startup?** The app tries `/dev/video0` until the webcam shows up. With the Pi camera connected that's the Pi camera's own hardware, so the Pi camera can fail to start in the meantime. Plug the webcam in and it should sort itself out. If it doesn't, restart the service.
 - **The detector check.** `dayanpi.focus.check` doesn't read `/etc/dayanpi.env`, so put `DAYANPI_CAMERA=usb` or `DAYANPI_CAMERA=picamera` in front of it to pick which camera it checks, like in step 6.
 
 ## What's different about the Pi camera
 
 - **Wider view.** The Wide sees about 102° across and 67° top to bottom, and the app keeps all of it: it reads the whole sensor and asks for a 768x432 picture, which is 16:9 like the sensor. A 4:3 picture like 640x480 would make the camera trim the sides, down to roughly 85° across. Left to its default, Picamera2 would only read the middle of the sensor (roughly 79° by 48°).
-- **16:9 all the way through.** 768x432 is about as many pixels as 640x480, so it costs the Pi about the same. The detector shrinks it to 640x360 and pads the top and bottom to fit its 640x480 input, then maps the boxes back. The dashboard's Camera card takes the shape of each feed, so the boxes still land on the right spot. One catch: the full-frame pass sees you about 25% smaller than with the old 4:3 picture, since the same input now covers a wider view. If `person` drops a lot in the sample lines, that's why. The zoomed phone pass crops the 768x432 frame itself, so it only has about 10% less detail to work with.
+- **16:9 all the way through.** 768x432 is about as many pixels as 640x480, so it costs the Pi about the same. The detector shrinks it to 640x360 and pads the top and bottom to fit its 640x480 input, then maps the boxes back. The Pi page fits each whole picture inside its tile in the camera's own shape, so the boxes still land on the right spot. One catch: the full-frame pass sees you about 25% smaller than with the old 4:3 picture, since the same input now covers a wider view. If `person` drops a lot in the sample lines, that's why. The zoomed phone pass crops the 768x432 frame itself, so it only has about 10% less detail to work with.
 - **Autofocus** runs the whole time, so it stays sharp whether you lean in or sit back. It can focus as close as about 5 cm.
 - **15 frames a second.** The webcam hands over ready-made JPEGs, but the Pi camera's frames get turned into JPEGs on the Pi, so it runs a bit slower to leave CPU for the detector.
 - **Picture upside down?** One line in `/etc/dayanpi.env` fixes it. See [Upside-down picture](#upside-down-picture).
@@ -225,4 +225,4 @@ These live at the top of `dayanpi/hardware/camera.py`. Change them on the Mac, p
 | Webcam stopped working after adding the Pi camera | `ls /dev/v4l/by-id/` should list it. Nothing there? Check the USB cable. Two webcams? Set `DAYANPI_USB_DEVICE` (step 4) |
 | `/video/side` gives a 404 | `DAYANPI_CAMERA=both` isn't in `/etc/dayanpi.env`, or the service hasn't restarted since you added it. `/video` a 404 too? That's the [camera lock](MANUAL.md#camera-lock): the feeds only answer you, never a member, and with `DAYANPI_TAILSCALE_LOGIN` set only on one of your own Tailscale devices, so not over Funnel or from `localhost` on the Pi |
 | `/video/side` never shows a picture | `journalctl -u dayanpi -n 50 --no-pager \| grep -i camera`. If it says `can't open Pi camera 0`, run the check in step 3 |
-| Camera card keeps saying reconnecting | Something else has the camera (an `rpicam-hello` or the detector check still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |
+| The picture stays dark while peeking | Something else has the camera (an `rpicam-hello` or the detector check still running?). `journalctl -u dayanpi -n 50 --no-pager` shows why |

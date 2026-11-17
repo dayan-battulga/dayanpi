@@ -46,9 +46,17 @@ function renderApp(path = "/me") {
 // /pi is a lazy page, and it waits for /api/me to say you're the owner.
 async function openPi() {
   renderApp("/pi");
-  const camera = await screen.findByRole("region", { name: "Camera" });
-  return camera;
+  const cameras = await screen.findByRole("region", { name: "Cameras" });
+  return cameras;
 }
+
+// The stats' plain copies (the rolling digits are hidden from screen readers): name and value.
+function readPiStats() {
+  const stats = Array.from(document.querySelectorAll(".pi-stat"), (stat) => [stat.querySelector("dt")?.textContent, stat.querySelector("dd .sr-only")?.textContent]);
+  return stats;
+}
+
+const feedSources = () => Array.from(document.querySelectorAll(".cameras img"), (image) => image.getAttribute("src"));
 
 // A phone-sized window: only the phone query matches.
 function usePhone() {
@@ -83,33 +91,52 @@ it("draws today's cards on /me from one stream", async () => {
   expect(screen.getByText("finish the report")).toBeInTheDocument();
   expect(screen.getByText("12m")).toBeInTheDocument();
   expect(document.getElementById("mac-line")).toHaveTextContent("On the Mac ·Code");
-  expect(screen.queryByRole("region", { name: "Camera" })).toBeNull();
-  expect(document.getElementById("pi")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Cameras" })).toBeNull();
+  expect(document.querySelector(".pi-stats")).toBeNull();
 
   await waitFor(() => expect(document.querySelector(".segment.is-working.is-live")).not.toBeNull());
   expect(screen.queryByText("Sat down to work")).toBeNull(); // the Today list is gone: the timeline shows the same
 });
 
-it("puts the camera and the Pi's numbers on /pi", async () => {
-  const camera = await openPi();
+it("puts the cameras, hidden, and the Pi's numbers on /pi", async () => {
+  const cameras = await openPi();
   FakeEventSource.latest?.send(makeSnapshot());
 
-  expect(camera.querySelector(".reading[data-key=person] .reading-value")).toHaveTextContent("0.92");
-  expect(document.getElementById("check-ms")).toHaveTextContent("~186 ms each");
-  expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
-  expect(document.getElementById("pi-summary")).toHaveTextContent("Running smooth");
-  expect(document.getElementById("temp")).toHaveTextContent("48.2");
-  expect(document.getElementById("cpu-cores")?.children).toHaveLength(4);
-  expect(document.getElementById("net")).toHaveTextContent("↓ 120 kb/s · ↑ 1.5 Mb/s");
-  expect(screen.queryByRole("region", { name: "On the Mac" })).toBeNull();
+  expect(within(cameras).getByRole("heading", { level: 1 })).toHaveTextContent("Cameras");
+  expect(within(cameras).getByText("Hidden while you work")).toBeVisible();
+  expect(within(cameras).getByRole("button", { name: "Peek" })).toHaveAttribute("aria-pressed", "false");
+  expect(cameras.querySelectorAll("figure")).toHaveLength(1); // no side camera
+  expect(feedSources()).toEqual([expect.stringMatching(/^data:/)]); // nothing opened while hidden
+  expect(cameras.querySelector(".cam-note")).toHaveTextContent("The readings keep updating while the picture is hidden.");
+  expect(readPiStats()).toEqual([
+    ["Temperature", "48°C"],
+    ["CPU", "23%"],
+    ["Memory of 8 GB", "2.9 GB"],
+    ["Up for", "3d 1h"],
+  ]);
+  expect(document.querySelectorAll(".pi-value number-flow-react")).toHaveLength(5); // they roll
+  expect(document.querySelector(".pi-foot")).toHaveTextContent("YOLO26n · one check a second · one camera");
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("warns about undervoltage on the Pi page", async () => {
+it("turns the temperature bar warm, then hot", async () => {
+  await openPi();
+  const tones = [] as (string | null | undefined)[];
+  for (const temperature_celsius of [48.2, 72, 83]) {
+    FakeEventSource.latest?.send({ ...makeSnapshot(), temperature_celsius });
+    tones.push(document.querySelector(".pi-bar [data-tone]")?.getAttribute("data-tone"));
+  }
+  expect(tones).toEqual(["nominal", "elevated", "critical"]);
+});
+
+it("warns about undervoltage on the Pi page while it's happening", async () => {
   await openPi();
   const snapshot = makeSnapshot();
   FakeEventSource.latest?.send({ ...snapshot, throttle: { ...snapshot.throttle, is_undervoltage: true } });
   expect(screen.getByRole("alert")).toHaveTextContent("Undervoltage");
+  expect(screen.getByRole("alert")).toHaveClass("pi-alert");
+  FakeEventSource.latest?.send(snapshot);
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 it("sends / to /me until the room exists", async () => {
@@ -132,7 +159,7 @@ it("moves the pill and the page when you pick a tab", async () => {
   const user = userEvent.setup();
   renderApp();
   await user.click(await screen.findByRole("link", { name: "Pi" }));
-  expect(await screen.findByRole("region", { name: "Camera" })).toBeInTheDocument();
+  expect(await screen.findByRole("region", { name: "Cameras" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Pi" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByRole("link", { name: "Desk" })).not.toHaveAttribute("aria-current");
   expect(document.querySelectorAll(".tab-pill")).toHaveLength(1);
@@ -165,7 +192,7 @@ it("sends a member who types /pi to their desk", async () => {
   servePi(MEMBER);
   renderApp("/pi");
   await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me"));
-  expect(screen.queryByRole("region", { name: "Camera" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Cameras" })).toBeNull();
 });
 
 it("puts the pages in a dock on a phone, with a + that jumps to a new to-do", async () => {
@@ -308,44 +335,49 @@ it("drops the boxes once the overlay is more than 3 s old", async () => {
   expect(document.querySelectorAll(".box:not(.is-leaving)")).toHaveLength(0);
 });
 
-it("shows the flip button only with a side camera, and only one feed at a time", async () => {
-  await openPi();
+it("shows both cameras side by side; Peek opens both feeds with the readings, Hide closes them", async () => {
+  const user = userEvent.setup();
+  const cameras = await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true })));
-  const flip = screen.getByRole("button", { name: "Show the side camera" });
-  const [front, side] = Array.from(document.querySelectorAll(".feed-frame"));
-  expect(front).toBeVisible();
-  expect(side).not.toBeVisible();
+  expect(Array.from(cameras.querySelectorAll("figcaption"), (caption) => caption.textContent)).toEqual(["Front", "Side"]);
+  expect(within(cameras).getByText("Hidden")).toBeVisible();
 
-  act(() => flip.click());
+  await user.click(within(cameras).getByRole("button", { name: "Peek" }));
+  expect(feedSources()).toEqual([expect.stringMatching(/^\/video\?t=/), expect.stringMatching(/^\/video\/side\?t=/)]);
+  expect(within(cameras).getByRole("button", { name: "Hide" })).toHaveAttribute("aria-pressed", "true");
+  expect(cameras.querySelectorAll(".cam-tile[data-peeking]")).toHaveLength(2);
+  expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
+  expect(cameras.querySelector(".cam-note")).toHaveTextContent("person 0.92 · no phone");
+  expect(window.localStorage.getItem("dayanpi.peek")).toBe("1");
 
-  expect(front).not.toBeVisible();
-  expect(side).toBeVisible();
-  expect(screen.getByRole("button", { name: "Show the front camera" })).toBeInTheDocument();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true, last_check: { person: 0.9, phone: 0.81, elapsed_ms: 190 } })));
+  expect(cameras.querySelector(".cam-note")).toHaveTextContent("person 0.90 · phone in hand 0.81");
+
+  await user.click(within(cameras).getByRole("button", { name: "Hide" }));
+  expect(feedSources()).toEqual([expect.stringMatching(/^data:/), expect.stringMatching(/^data:/)]);
+  expect(cameras.querySelectorAll(".cam-tile[data-peeking]")).toHaveLength(0);
 });
 
-it.each([
-  ["tailscale_only", "Tailscale only", "Open the dashboard on one of your own Tailscale devices to see the camera."],
-  ["owner_only", "The camera is private", "The readings next to it still update."],
-] as const)("never opens /video when the camera is %s, and says why", async (access, title, text) => {
+it.each(["tailscale_only", "owner_only"] as const)("locks the cameras and never opens /video when the camera is %s", async (access) => {
   window.localStorage.setItem("dayanpi.peek", "1");
-  const camera = await openPi();
+  const cameras = await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_access: access, side_camera: true, overlay: null })));
-  expect(camera.querySelector(".veil")).toHaveTextContent(title);
-  expect(camera.querySelector(".veil")).toHaveTextContent(text);
-  expect(camera.querySelector("img")).toBeNull();
-  expect(camera).not.toHaveClass("is-peeking");
-  expect(document.getElementById("peek-toggle")).not.toBeVisible();
-  expect(document.getElementById("camera-flip")).not.toBeVisible();
+  expect(within(cameras).getByText("Only on your own devices")).toBeVisible();
+  expect(within(cameras).getByText("Locked")).toBeVisible();
+  expect(cameras.querySelector(".cam-note")).toHaveTextContent("This browser isn’t one of your Tailscale devices, so the cameras stay closed.");
+  expect(cameras.querySelector("img")).toBeNull();
+  expect(cameras.querySelector(".cam-tile[data-peeking]")).toBeNull();
+  expect(within(cameras).queryByRole("button", { name: /Peek|Hide/ })).toBeNull();
 });
 
 it("opens the feed as before when the camera is open, or the Pi doesn't say", async () => {
   window.localStorage.setItem("dayanpi.peek", "1");
   await openPi();
-  expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^data:/); // nothing opened before the first status
+  expect(feedSources()).toEqual([]); // nothing until the first status says whether /video will answer
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_access: "open" })));
-  expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^\/video\?t=/);
+  expect(feedSources()).toEqual([expect.stringMatching(/^\/video\?t=/)]);
   FakeEventSource.latest?.send(makeSnapshot(makeFocus()));
-  expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^\/video\?t=/);
+  expect(feedSources()).toEqual([expect.stringMatching(/^\/video\?t=/)]);
 });
 
 it("shows Reconnecting next to the wordmark and dims the live page while the stream is down", async () => {

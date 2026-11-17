@@ -199,7 +199,7 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 | Page | Who | What's on it |
 | --- | --- | --- |
 | **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. `/` takes you here until the room exists. |
-| **Pi** (`/pi`) | you | The camera card and the Pi's own numbers (temp, CPU, memory, disk, power, voice). The red **Undervoltage** warning shows up here when the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
+| **Pi** (`/pi`) | you | **Cameras**: the front and side feeds side by side, hidden behind a veil until you press **Peek** (which opens both), with the boxes over them and the latest readings under them. Off your own Tailscale devices they're locked. Then **The Pi**: temperature, CPU, memory and uptime, rolling to each new number. An amber **Undervoltage** warning shows up there while the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
 | **Settings** (`/settings`) | everyone | Your name, password and Mac tokens, plus invites and accounts for you. |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
 
@@ -343,7 +343,7 @@ It runs on two small hand models (see [Where the models come from](#where-the-mo
 - **Peek** at the camera: a hand making a sign gets a box labeled `peace` (front camera only, since that's where signs fire). A plain hand gets no box. No `peace` box while you're holding the sign means the models aren't reading it.
 - The journal says whether the models loaded: `hand models found: hand signs are on`, or `no hand models (...): hand signs are off` if a file is missing. Missing files just turn signs off; everything else keeps working.
 - Each sign that fires writes `gesture: peace` to the journal and a `gesture` line with `"name": "peace"` to the focus log.
-- The hand models add to each check. The camera card's "~N ms each" includes them, so you can see what they cost.
+- The hand models add to each check. `last_check.elapsed_ms` in `/api/focus` includes them, so you can see what they cost.
 
 ```bash
 journalctl -u dayanpi -n 50 --no-pager | grep -iE "hand|gesture|would say"

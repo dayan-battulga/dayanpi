@@ -352,7 +352,7 @@ Install the Tailscale app, sign in to the same account, and keep it connected. T
 
 ### Camera lock
 
-Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Camera card says **Tailscale only** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always.
+Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Pi page's cameras say **Only on your own devices** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always.
 
 Find your login on the Pi:
 
@@ -372,7 +372,7 @@ journalctl -u dayanpi -b --no-pager | grep -i tailscale
 
 The journal line says the camera is locked to your login. Without the variable it warns "camera not locked to Tailscale, don't turn on Funnel" instead, and the camera works for you from anywhere, like before.
 
-**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, open the Pi page, and the Camera card says **Tailscale only**.
+**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, open the Pi page, and the cameras say **Only on your own devices**.
 
 ### Funnel (the public internet)
 
@@ -435,8 +435,8 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 | --- | --- |
 | Site won't load at all | `sudo systemctl status dayanpi` and `tailscale serve status` |
 | Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
-| Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
-| Power says `now: undervoltage` (red Undervoltage pill on the Pi page) | The supply is too weak. Undervoltage can reboot the Pi |
+| The picture stays dark while peeking | Is the webcam plugged in? The page keeps trying every 2 seconds, and the camera reconnects on its own once it's there, no restart needed |
+| Amber **Undervoltage** warning on the Pi page | The supply is too weak. Undervoltage can reboot the Pi |
 
 ---
 
@@ -492,10 +492,10 @@ The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `
 - **Top bar:** the Desk / Pi tabs, the theme button, and your initial at the top right, with a menu for Settings and Sign out.
 - **Members** get the Desk and Settings but no Pi tab, and `/pi` sends them back to the Desk (see [Inviting someone](#inviting-someone)).
 - **Desk:** at the top, with no card around it, your state in big letters, a live timer, today's timeline from 6 am to midnight, and one line of totals (focus, phone, pickups) with the Mac line at its right: what's in front on the Mac (the site for a browser, the app otherwise), plus a small Pause/Resume for you (see [Steps 2 to 4](focus-tracker.md#steps-2-to-4-the-tracker-runs-inside-the-site)). Then the apps, the to-do list next to the apps (see [To-do list](focus-tracker.md#to-do-list)), and the calendar (see [Calendar](focus-tracker.md#calendar)).
-- **Pi:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the Pi itself: a one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power and voice.
-- **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
-- **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
-- **Two cameras.** With `DAYANPI_CAMERA=both`, the Camera card shows one feed at a time, front first, labeled Front or Side with its own boxes. The flip button next to Peek switches between them, and your browser remembers which one you picked. Only the feed you're looking at streams. "What the Pi sees" shows the best of the two cameras either way, since the detector keeps checking both. With one camera there's no flip button and the card looks the way it always has.
+- **Pi:** **Cameras** first, then **The Pi**: temperature, CPU, memory and how long it's been up, each with its number rolling to the new one every second (the temperature's bar turns amber past 70° and red past 80°), and an amber **Undervoltage** warning while the power supply sags.
+- **The cameras start hidden.** Each one is a tile behind a veil ("Hidden while you work"), and the page doesn't even open the video streams until you press **Peek**. Press **Hide** to close them again. Your browser remembers which one you picked.
+- **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. The whole picture fits inside its tile, so the boxes land on it. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame. Under the tiles, the latest readings: like `person 0.94 · no phone`, or `phone in hand 0.81` once a phone counts.
+- **Two cameras.** With `DAYANPI_CAMERA=both`, the Front and Side tiles sit side by side (stacked on a phone), each with its own boxes, and Peek opens both. The readings are the best of the two cameras, since the detector checks both. With one camera there's just the Front tile.
 - **Light and dark.** The page follows your device's setting. The sun/moon button at the top right flips it, and your browser remembers that too. Colors only ever mean something: teal/orange/violet for focused/phone/away, amber and red for Pi warnings.
 - **Animations** turn themselves off if your device is set to reduce motion.
 - After an update a normal reload is enough: the Pi tells the browser to check for new files every time.
@@ -514,7 +514,7 @@ The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `
 | "wrong username or password" | The first time, use the login from `/etc/dayanpi.env`; once you've changed it in Settings, use the new one. Five misses on one name means a wait (30 s, doubling up to 15 min) with the same message, so wait it out or restart the service. Lost it for good: [Forgot your password?](#forgot-your-password) |
 | Signed in on the Pi's own browser but it keeps going back to `/login` | Use https://dayoon.tail279594.ts.net/ instead. The sign-in cookie is https-only, and not every browser makes an exception for plain http on the Pi itself |
 | Dev page (`npm run dev`) signs you in, then goes straight back to `/login` | You're in Safari, which drops the https-only sign-in cookie on http://localhost. Use Chrome for the dev page |
-| Camera card says **Tailscale only** | That's the [camera lock](#camera-lock): you came in through Funnel, or your device's Tailscale login isn't exactly `DAYANPI_TAILSCALE_LOGIN`. Switch Tailscale on and check the login. If both are fine, that device isn't using Tailscale's DNS, so the site's name led it to Funnel instead: turn on **Use Tailscale DNS** in the Tailscale app, and turn off Android's Private DNS or the browser's own secure DNS for it |
+| The cameras say **Only on your own devices** | That's the [camera lock](#camera-lock): you came in through Funnel, or your device's Tailscale login isn't exactly `DAYANPI_TAILSCALE_LOGIN`. Switch Tailscale on and check the login. If both are fine, that device isn't using Tailscale's DNS, so the site's name led it to Funnel instead: turn on **Use Tailscale DNS** in the Tailscale app, and turn off Android's Private DNS or the browser's own secure DNS for it |
 | Journal says `camera not locked to Tailscale` | Set `DAYANPI_TAILSCALE_LOGIN` and restart. Until then, keep Funnel off |
 | `{"detail":"send JSON"}` (415) from curl | Every POST, PATCH and DELETE needs `-H 'Content-Type: application/json'` and a JSON body, `-d '{}'` if there's nothing to send |
 | `{"detail":"too big"}` (413) from curl | A write has to say how big it is up front (curl's `-d` does) and stay under 64 KB. Streaming a body in (`-T -`, or anything chunked) gets this every time |
