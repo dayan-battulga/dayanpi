@@ -466,6 +466,14 @@ class LoginLockout:
                     count.until = now + count.wait_s
         return allowed
 
+    def wait_left(self, username: str, now: float) -> float:
+        """Seconds until this name may try again, 0 when it may now. Right after the miss that starts a wait, it's all of it."""
+        bucket = self._find_bucket(username)
+        with self._lock:
+            count = self._counts.get(bucket)
+            left = 0.0 if count is None else max(0.0, count.until - now)
+        return left
+
     def clear(self, username: str) -> None:
         bucket = self._find_bucket(username)
         with self._lock:

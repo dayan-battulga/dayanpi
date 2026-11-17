@@ -11,6 +11,7 @@
 //   --mockup=RoomPhone       compare against a different mockup (the fixture still comes from the first name)
 //   --fixture=Desk-away      use design/fixtures/Desk-away.json instead of Desk.json
 //   --options="moment=day page&myState=away"   mockup options for this run, on top of the fixture's
+//   --fill="#name=Riley"     type into a field before the clicks (selector=text, split at the last =, repeatable)
 //   --click="text=Start"     click something on the real page before the shot (Playwright selector, repeatable)
 //   --press=Control+k        press keys on the real page before the shot (repeatable, after the clicks)
 //   --label=palette          added to the file names, so different states don't overwrite each other
@@ -185,10 +186,12 @@ function serveFixtures(fixture) {
         } else if (pathOnly.startsWith("/api/") || pathOnly.startsWith("/video")) {
           const routes = fixture.routes ?? {};
           const body = routes[`${request.method} ${url}`] ?? routes[url] ?? routes[`${request.method} ${pathOnly}`] ?? routes[pathOnly];
+          // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}.
+          const status = body?.$status ?? 200;
           if (body === undefined) {
             response.writeHead(404, { "content-type": "application/json" }).end("{}");
           } else {
-            response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
+            response.writeHead(status, { "content-type": "application/json", ...body?.$headers }).end(JSON.stringify(body?.$status === undefined ? body : body.body));
           }
         } else {
           next();
@@ -230,6 +233,10 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
   await page.waitForLoadState("load");
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(SETTLE_MS);
+  for (const fill of actions.fills) {
+    const split = fill.lastIndexOf("=");
+    await page.fill(fill.slice(0, split), fill.slice(split + 1));
+  }
   for (const selector of actions.clicks) {
     await page.click(selector);
     await page.waitForTimeout(SETTLE_MS);
@@ -309,11 +316,12 @@ async function main() {
       fixture: readFlag(flags, "fixture"),
       options: readFlag(flags, "options"),
       label: readFlag(flags, "label"),
+      fills: readFlags(flags, "fill"),
       clicks: readFlags(flags, "click"),
       presses: readFlags(flags, "press"),
     });
   } else {
-    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--click=selector] [--press=keys] [--label=name]");
+    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name]");
     process.exitCode = 1;
   }
 }

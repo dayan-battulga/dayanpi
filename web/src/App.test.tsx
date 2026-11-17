@@ -526,7 +526,7 @@ it("ignores single-key shortcuts while you're typing in a field", async () => {
 it("jumps to a new to-do with N from another page, typing nothing into it", async () => {
   const user = userEvent.setup();
   renderApp("/settings");
-  await screen.findByRole("textbox", { name: "Display name" });
+  await screen.findByRole("textbox", { name: "Name" });
 
   await user.keyboard("n");
 

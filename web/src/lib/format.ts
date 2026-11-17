@@ -26,8 +26,8 @@ export function formatClock(seconds: number): string {
   return text;
 }
 
-export function formatDate(epochSeconds: number): string {
-  const day = new Date(epochSeconds * 1000).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-  const text = `${day} · ${formatTimeOfDay(epochSeconds)}`;
+// "Nov 15": when a token or an invite was made, or someone joined.
+export function formatShortDate(epochSeconds: number): string {
+  const text = new Date(epochSeconds * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
   return text;
 }

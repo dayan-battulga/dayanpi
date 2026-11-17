@@ -29,7 +29,7 @@ Always use the **`main`** branch on both machines.
 | `/` | Dashboard |
 | `/login` | The sign-in page |
 | `/join/<code>` | Make an account from an invite link |
-| `/settings` | Your name, password, sign out and Mac helper tokens; invites and accounts for the owner |
+| `/settings` | Profile (your name and password), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
 | `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
 | `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens |
 | `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
@@ -257,10 +257,12 @@ When finished: `Ctrl+C`, then `sudo systemctl start dayanpi`.
 
 Open the site and it sends you to `/login`. Sign in with your username and password. The very first time, that's the `DAYANPI_USER` / `DAYANPI_PASSWORD` from `/etc/dayanpi.env`.
 
-- **It lasts 30 days**, and every visit pushes that back, so a device you use keeps you signed in. **Sign out** from the menu under your name at the top right (or in Settings), and that sign-in is gone on the Pi too.
-- **Wrong passwords.** Five misses in a row on one username and that name has to wait 30 s. Each miss after a wait doubles it, up to 15 minutes, and the right password clears it. The message is always "wrong username or password", even during a wait, so a stranger can't tell which names exist or which are waiting. Restarting the service clears every wait. With [the camera lock](#camera-lock) on, a sign-in from your own Tailscale devices never waits and its typos don't count, so strangers on Funnel guessing your username can't keep you out; everyone else (you over Funnel too) still waits.
-- **Changing your password:** Settings → Password. It asks for the current one (a wrong one counts as a sign-in miss, and after 5 wrong ones in a row it says **too many tries, wait a bit**: 30 seconds, doubling each time up to 15 minutes), and the new one needs at least 10 characters. It signs you out on every other device and keeps this one signed in. After that, the password in `/etc/dayanpi.env` doesn't work any more. It only comes back if `data/accounts.db` is gone (see [Forgot your password?](#forgot-your-password)).
-- **Your name:** Settings → Display name. That's what the header shows.
+- **It lasts 30 days**, and every visit pushes that back, so a device you use keeps you signed in. **Sign out** from the menu under your name at the top right (or at the bottom of the list in Settings), and that sign-in is gone on the Pi too.
+- **Wrong passwords.** A miss says **Wrong username or password.**, rings the password box in red and gives the form a little shake. Five misses in a row on one username and that name has to wait 30 s: the page says **Too many tries. Try again in 0:30** in amber, counting down, with the button dimmed until it's over. Each miss after a wait doubles it, up to 15 minutes, and the right password clears it. A name that doesn't exist waits exactly the same way, so the wait doesn't tell a stranger which names are real. (The API answers 429 with a `Retry-After` header for the wait; a miss is a 401.) Restarting the service clears every wait. With [the camera lock](#camera-lock) on, a sign-in from your own Tailscale devices never waits and its typos don't count, so strangers on Funnel guessing your username can't keep you out; everyone else (you over Funnel too) still waits.
+- **Changing your password:** Settings → Profile. Type a new one (at least 10 characters) and it asks for the current one too, then **Save**. A wrong current one counts as a sign-in miss, and after 5 wrong ones in a row it says **too many tries, wait a bit** (30 seconds, doubling each time up to 15 minutes). It signs you out on every other device and keeps this one signed in. After that, the password in `/etc/dayanpi.env` doesn't work any more. It only comes back if `data/accounts.db` is gone (see [Forgot your password?](#forgot-your-password)).
+- **Your name:** Settings → Profile → Name, then **Save**. That's what the header shows.
+
+Settings has a list of sections on the left (a row of pills at the top on a phone): **Profile**, **Mac helper** (the **Track apps and sites** switch, the same one as the Mac line's Pause/Resume, plus the helper's tokens; members get the tokens only), and for you **Room and invites**. The sections for sharing with the room, the camera, and voice and bedtime come with the study room.
 
 All of it lives in `data/accounts.db` on the Pi (or in `DAYANPI_DATA_DIR`): accounts, sign-ins, invites and Mac helper tokens. Passwords are stored scrambled (scrypt with a salt), and sign-ins, invites and tokens only as a fingerprint (sha256), so the file holds nothing you could sign in with. None of them ever show up in the journal either.
 
@@ -268,17 +270,17 @@ All of it lives in `data/accounts.db` on the Pi (or in `DAYANPI_DATA_DIR`): acco
 
 Up to 4 accounts in all: you (the owner) plus 3 members.
 
-1. Settings → Invites, and make one.
+1. Settings → Room and invites, and press **New invite**.
 2. Copy the link it shows (`https://dayoon.tail279594.ts.net/join/...`) and send it to them somewhere private, because anyone with the link can use it. You only see it this once. Lost it? Delete that invite and make a new one.
-3. They open it, pick a display name, a username and a password (at least 10 characters), and they're signed in. Usernames are 2 to 32 characters: lowercase letters, digits, dots, dashes and underscores, starting with a letter or digit (capitals just turn lowercase).
+3. They open it, pick a name, a username and a password (at least 10 characters), and they're signed in. Usernames are 2 to 32 characters: lowercase letters, digits, dots, dashes and underscores, starting with a letter or digit (capitals just turn lowercase).
 
-A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
+A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). A link that's used up or past its week shows **This invite expired** instead of the form, and a full room shows **The room is full**, both with a way back to sign in. Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
 
 **What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the Mac line) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
 
 **What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
 
-**Removing someone:** Settings → Accounts. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. The owner can't be removed.
+**Removing someone:** Settings → Room and invites, **Remove** next to their name, then **Yes, remove**. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. The owner can't be removed.
 
 ### Using the API from a terminal
 
@@ -298,7 +300,7 @@ The first command asks for your password (so it stays out of your shell history)
 
 ### Forgot your password?
 
-**A member:** remove them in Settings → Accounts and send a new invite.
+**A member:** remove them in Settings → Room and invites and send a new invite.
 
 **You, the owner:** the only way back is a fresh `accounts.db`. That deletes every account, sign-in, invite and Mac token, so everyone else needs a new invite afterwards:
 
@@ -511,7 +513,7 @@ The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `
 | `No module named ...` on start | `pip install -r requirements.txt` then `sudo systemctl restart dayanpi` |
 | Missing env / won’t start | Create `/etc/dayanpi.env` with `DAYANPI_USER` and `DAYANPI_PASSWORD` (still needed after your account exists) |
 | Connection refused on LAN IP:8000 | Expected — use Serve |
-| "wrong username or password" | The first time, use the login from `/etc/dayanpi.env`; once you've changed it in Settings, use the new one. Five misses on one name means a wait (30 s, doubling up to 15 min) with the same message, so wait it out or restart the service. Lost it for good: [Forgot your password?](#forgot-your-password) |
+| "wrong username or password" | The first time, use the login from `/etc/dayanpi.env`; once you've changed it in Settings, use the new one. Five misses on one name means a wait (30 s, doubling up to 15 min): the page counts it down, so wait it out or restart the service. Lost it for good: [Forgot your password?](#forgot-your-password) |
 | Signed in on the Pi's own browser but it keeps going back to `/login` | Use https://dayoon.tail279594.ts.net/ instead. The sign-in cookie is https-only, and not every browser makes an exception for plain http on the Pi itself |
 | Dev page (`npm run dev`) signs you in, then goes straight back to `/login` | You're in Safari, which drops the https-only sign-in cookie on http://localhost. Use Chrome for the dev page |
 | The cameras say **Only on your own devices** | That's the [camera lock](#camera-lock): you came in through Funnel, or your device's Tailscale login isn't exactly `DAYANPI_TAILSCALE_LOGIN`. Switch Tailscale on and check the login. If both are fine, that device isn't using Tailscale's DNS, so the site's name led it to Funnel instead: turn on **Use Tailscale DNS** in the Tailscale app, and turn off Android's Private DNS or the browser's own secure DNS for it |

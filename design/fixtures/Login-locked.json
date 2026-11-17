@@ -1,0 +1,17 @@
+{
+  "about": "Login.json while the sign-in's wait is on: the Pi answers 429 with 28 seconds left (the \"locked\" variant).",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {},
+  "routes": {
+    "POST /api/login": {
+      "$status": 429,
+      "$headers": {
+        "Retry-After": "28"
+      },
+      "body": {
+        "detail": "too many tries, wait a bit"
+      }
+    }
+  }
+}

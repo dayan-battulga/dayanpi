@@ -200,7 +200,7 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 | --- | --- | --- |
 | **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. `/` takes you here until the room exists. |
 | **Pi** (`/pi`) | you | **Cameras**: the front and side feeds side by side, hidden behind a veil until you press **Peek** (which opens both), with the boxes over them and the latest readings under them. Off your own Tailscale devices they're locked. Then **The Pi**: temperature, CPU, memory and uptime, rolling to each new number. An amber **Undervoltage** warning shows up there while the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
-| **Settings** (`/settings`) | everyone | Your name, password and Mac tokens, plus invites and accounts for you. |
+| **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
 
 The frame around them:

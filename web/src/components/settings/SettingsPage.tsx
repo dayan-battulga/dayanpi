@@ -1,110 +1,52 @@
-import { LogOut } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useFrame } from "@/components/frame/Frame";
-import { RoomPanels } from "@/components/settings/RoomPanels";
-import { SettingsPanel } from "@/components/settings/SettingsPanel";
-import { TokensPanel } from "@/components/settings/TokensPanel";
-import { Field } from "@/components/shared/Field";
-import { FormNote, buildErrorNote, type Note } from "@/components/shared/FormNote";
-import { Button } from "@/components/ui/button";
-import { NAME_MAX, PASSWORD_MAX, PASSWORD_MIN, signOut } from "@/lib/account";
-import { request } from "@/lib/http";
-import type { User } from "@/lib/types";
+import { MacHelperSection } from "@/components/settings/MacHelperSection";
+import { ProfileSection } from "@/components/settings/ProfileSection";
+import { RoomSection } from "@/components/settings/RoomSection";
+import { signOut } from "@/lib/account";
 
-const SAVE_CLASS = "h-11 self-start rounded-full px-5 font-semibold";
+// The sections that work today. Share with the room, Camera, and Voice and bedtime come with the study room.
+const SECTIONS = [
+  { id: "profile", name: "Profile", ownerOnly: false },
+  { id: "mac", name: "Mac helper", ownerOnly: false },
+  { id: "room", name: "Room and invites", ownerOnly: true },
+] as const;
 
-function ProfilePanel({ user, onSaved }: { user: User; onSaved: (user: User) => void }) {
-  const [name, setName] = useState(user.display_name);
-  const [note, setNote] = useState<Note | null>(null);
-  const saveName = async (event: FormEvent) => {
-    event.preventDefault();
-    const reply = await request<{ user: User }>("PATCH", "/api/me", { display_name: name.trim() });
-    const saved = reply.body?.user;
-    if (saved != null) {
-      onSaved(saved);
-      setNote({ text: "Saved.", error: false });
-    } else {
-      setNote(buildErrorNote(reply.detail));
-    }
-  };
-  const signOutButton = (
-    <button type="button" className="button button-ghost button-small" onClick={() => signOut()}>
-      <LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
-      Sign out
-    </button>
-  );
-  return (
-    <SettingsPanel title="You" detail={`Signed in as @${user.username}${user.role === "owner" ? " · owner" : ""}`} action={signOutButton}>
-      <form className="flex flex-col gap-4" onSubmit={saveName}>
-        <Field label="Display name" autoComplete="nickname" maxLength={NAME_MAX} required value={name} onChange={(event) => setName(event.target.value)} />
-        <FormNote note={note} />
-        <Button type="submit" className={SAVE_CLASS}>
-          Save name
-        </Button>
-      </form>
-    </SettingsPanel>
-  );
-}
+type SectionId = (typeof SECTIONS)[number]["id"];
 
-function PasswordPanel({ username }: { username: string }) {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [note, setNote] = useState<Note | null>(null);
-  const changePassword = async (event: FormEvent) => {
-    event.preventDefault();
-    if (next.length < PASSWORD_MIN) {
-      setNote({ text: `The new password needs at least ${PASSWORD_MIN} characters.`, error: true });
-    } else {
-      const reply = await request("POST", "/api/me/password", { current_password: current, new_password: next });
-      if (reply.ok) {
-        setCurrent("");
-        setNext("");
-        setNote({ text: "Password changed. Everywhere else you were signed in is signed out now.", error: false });
-      } else {
-        setNote(buildErrorNote(reply.detail));
-      }
-    }
-  };
-  return (
-    <SettingsPanel title="Password">
-      <form className="flex flex-col gap-4" onSubmit={changePassword}>
-        {/* For password managers, so they update the right login. */}
-        <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
-        <Field label="Current password" type="password" autoComplete="current-password" required value={current} onChange={(event) => setCurrent(event.target.value)} />
-        <Field
-          label="New password"
-          type="password"
-          autoComplete="new-password"
-          maxLength={PASSWORD_MAX}
-          required
-          hint={`At least ${PASSWORD_MIN} characters.`}
-          value={next}
-          onChange={(event) => setNext(event.target.value)}
-        />
-        <FormNote note={note} />
-        <Button type="submit" className={SAVE_CLASS}>
-          Change password
-        </Button>
-      </form>
-    </SettingsPanel>
-  );
-}
-
-// At /settings, inside the frame: the top bar's account button and the dock lead here and back.
+// At /settings, inside the frame (Settings.dc.html): the section list on the left (a row of pills on a phone) and the
+// picked section on the right, rising in each time you pick one.
 export function SettingsPage() {
-  const { user, setUser } = useFrame();
+  const { user, setUser, macTracking } = useFrame();
+  const [section, setSection] = useState<SectionId>("profile");
+  const owner = user?.role === "owner";
+  const sections = SECTIONS.filter((entry) => owner || !entry.ownerOnly);
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
-      <h1 className="sr-only">Settings</h1>
-      {user == null ? (
-        <span className="muted text-sm">Loading…</span>
-      ) : (
-        <>
-          <ProfilePanel user={user} onSaved={setUser} />
-          <PasswordPanel username={user.username} />
-          <TokensPanel />
-          {user.role === "owner" && <RoomPanels />}
-        </>
+    <div className="settings-page">
+      <h1 className="page-title rise">Settings</h1>
+      {user != null && (
+        <div className="settings-body">
+          <nav className="settings-nav rise" aria-label="Settings sections">
+            <ul className="settings-nav-list">
+              {sections.map((entry) => (
+                <li key={entry.id}>
+                  <button type="button" className="settings-nav-item" aria-current={entry.id === section ? "page" : undefined} onClick={() => setSection(entry.id)}>
+                    {entry.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="settings-signout" onClick={() => signOut()}>
+              Sign out
+            </button>
+          </nav>
+          <div key={section} className="settings-section rise">
+            {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
+            {section === "mac" && <MacHelperSection owner={owner} macTracking={macTracking} />}
+            {section === "room" && owner && <RoomSection />}
+          </div>
+        </div>
       )}
     </div>
   );

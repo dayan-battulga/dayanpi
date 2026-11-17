@@ -955,15 +955,17 @@ def test_a_removed_member_is_signed_out_everywhere():
     assert [account["username"] for account in after] == [AUTH[0].lower()]
 
 
-def test_five_wrong_passwords_lock_the_username_with_the_same_message():
+def test_five_wrong_passwords_lock_the_username_and_say_how_long():
     with open_client(None) as client:
         misses = [client.post("/api/login", json={"username": AUTH[0], "password": "wrong"}) for _ in range(5)]
         locked = client.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
-        unknown = client.post("/api/login", json={"username": "nobody", "password": "x"})
-    replies = misses + [locked, unknown]
-    assert [reply.status_code for reply in replies] == [401] * 7
-    assert {reply.text for reply in replies} == {'{"detail":"wrong username or password"}'}
+        unknown = [client.post("/api/login", json={"username": "nobody", "password": "x"}) for _ in range(5)]
+    assert [reply.status_code for reply in misses[:4]] == [401] * 4
+    assert {reply.text for reply in misses[:4]} == {'{"detail":"wrong username or password"}'}
+    # The 5th miss starts the 30 s wait, and a try during it isn't checked, right password or not.
+    assert [(reply.status_code, reply.json(), reply.headers["retry-after"]) for reply in (misses[4], locked)] == [(429, {"detail": "too many tries, wait a bit"}, "30")] * 2
     assert "set-cookie" not in locked.headers and "www-authenticate" not in locked.headers
+    assert [reply.status_code for reply in unknown] == [401] * 4 + [429], "a name that doesn't exist waits the same way"
 
 
 @pytest.mark.parametrize(
@@ -987,10 +989,10 @@ def test_a_sign_in_from_my_devices_skips_the_lockout(monkeypatch, caplog, lock, 
         typos = [mine.post("/api/login", json={"username": AUTH[0], "password": "my typo"}, headers=headers) for _ in range(3)]
         right = mine.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]}, headers=headers)
     still_locked = funnel.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
-    assert {(typo.status_code, typo.text) for typo in typos} == {(401, '{"detail":"wrong username or password"}')}
-    assert right.status_code == (200 if skips else 401)
+    assert {typo.status_code for typo in typos} == {401 if skips else 429}
+    assert right.status_code == (200 if skips else 429)
     assert (COOKIE in right.cookies) is skips
-    assert still_locked.status_code == 401, "the internet still waits either way"
+    assert still_locked.status_code == 429, "the internet still waits either way"
     assert caplog.records == [], "nothing new in the journal"
 
 
@@ -1049,7 +1051,7 @@ def test_strangers_missing_at_the_sign_in_cant_stop_a_password_change():
     here = let_in(stranger(), add_member())
     misses = [stranger().post("/api/login", json={"username": "bo", "password": "guess"}).status_code for _ in range(5)]
     changed = here.post("/api/me/password", json={"current_password": MEMBER_PASSWORD, "new_password": "a new password!"})
-    assert misses == [401] * 5
+    assert misses == [401] * 4 + [429]
     assert changed.json() == {"status": "ok"}, "the right password works while the sign-in waits"
 
 
@@ -1060,7 +1062,7 @@ def test_wrong_current_passwords_wait_on_their_own_and_count_toward_the_sign_in(
     sign_in = stranger().post("/api/login", json={"username": "bo", "password": MEMBER_PASSWORD})
     assert wrong == [400] * 5
     assert (waiting.status_code, waiting.json()) == (429, {"detail": "too many tries, wait a bit"})
-    assert sign_in.status_code == 401, "the misses started the sign-in's wait too"
+    assert sign_in.status_code == 429, "the misses started the sign-in's wait too"
 
 
 def test_a_bad_body_gets_a_422_that_never_repeats_what_was_sent(caplog):

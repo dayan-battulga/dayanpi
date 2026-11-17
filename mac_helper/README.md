@@ -26,7 +26,7 @@ The Pi checks it too: it only takes a site that's a plain host name (letters, di
 - The Tailscale app connected on the Mac, same as for opening the dashboard.
 - Your dashboard username, and a Mac helper token from the dashboard (step 2). For now only the owner's token can report; a member's token gets a 403.
 - `/usr/bin/python3`, which comes with Xcode's command line tools. Run `/usr/bin/python3 --version`. If it offers to install the tools, say yes.
-- The Pi running a version of the app with sign-in accounts (Settings has a **Mac helper tokens** section).
+- The Pi running a version of the app with sign-in accounts (Settings has a **Mac helper** section with tokens).
 
 ## 1. Copy it out of Desktop
 
@@ -40,7 +40,7 @@ For the hand tests in step 3 you can also just `cd ~/Desktop/code/projects/site-
 
 ## 2. Make a token and put it in the Keychain
 
-Sign in to the dashboard, open **Settings → Mac helper tokens** and make one. Name it after the Mac (like `MacBook`) so you can tell them apart later. It starts with `dpi_` and it's **shown only once**, so copy it before you close the page. The Pi only keeps a hash of it.
+Sign in to the dashboard, open **Settings → Mac helper**, press **New token** and give it a name. Name it after the Mac (like `MacBook`) so you can tell them apart later. It starts with `dpi_` and it's **shown only once**, so copy it before you close the page. The Pi only keeps a hash of it.
 
 Then save it in the Keychain. Swap `yourname` for your dashboard username, here and in every command below:
 
@@ -51,7 +51,7 @@ security add-generic-password -U -s dayanpi -a yourname -w
 With `-w` last and nothing after it, `security` asks for the token instead of taking it on the command line, so it never lands in your shell history. Paste it and press Enter (it asks twice). Nothing shows up while you paste; that's normal. `-U` means "overwrite it if it's already there", so the same command works for a first setup and for swapping in a new token.
 
 - Check it's there (this shows the item's details, not the token): `security find-generic-password -s dayanpi -a yourname`
-- Lost it, or think it leaked? Revoke it in **Settings → Mac helper tokens**, make a new one and run the same command again. A running helper picks up the new one by itself after its next 401.
+- Lost it, or think it leaked? Revoke it in **Settings → Mac helper**, make a new one and run the same command again. A running helper picks up the new one by itself after its next 401.
 
 ## 3. Try it by hand
 
@@ -148,7 +148,7 @@ Older versions of the helper logged in with your dashboard password. Now it uses
    cp mac_helper/dayanpi_mac_helper.py ~/dayanpi-mac-helper/
    ```
 
-3. Make a token in **Settings → Mac helper tokens** and overwrite the password with it (paste the token when asked):
+3. Make a token in **Settings → Mac helper** and overwrite the password with it (paste the token when asked):
 
    ```bash
    security add-generic-password -U -s dayanpi -a yourname -w
@@ -181,7 +181,7 @@ rm ~/Library/Logs/dayanpi-mac-helper.log
 security delete-generic-password -s dayanpi -a yourname
 ```
 
-The last line deletes the saved token too; skip it if you want to keep it. Revoke the token in **Settings → Mac helper tokens** as well, so it stops working on the Pi.
+The last line deletes the saved token too; skip it if you want to keep it. Revoke the token in **Settings → Mac helper** as well, so it stops working on the Pi.
 
 ## When something's off
 
@@ -189,7 +189,7 @@ The last line deletes the saved token too; skip it if you want to keep it. Revok
 | --- | --- |
 | `DAYANPI_USER isn't set` | By hand: put `DAYANPI_USER=yourname` in front of the command. Background: redo the `sed` line with your name |
 | `No Mac helper token in the Keychain` | Step 2. The `-a` name has to match `DAYANPI_USER` exactly |
-| `the Pi said 401` | The token is wrong or was revoked, or the Keychain still has your old password. Make a new one in Settings → Mac helper tokens and store it with the `-U` command from step 2; the helper rereads it by itself |
+| `the Pi said 401` | The token is wrong or was revoked, or the Keychain still has your old password. Make a new one in Settings → Mac helper and store it with the `-U` command from step 2; the helper rereads it by itself |
 | `the Pi said 403` | That's a member's token. Only the owner's helper can report for now |
 | `can't reach the Pi` | Is Tailscale connected? Does https://dayoon.tail279594.ts.net/ open in the browser? Is the `dayanpi` service running? |
 | `the Pi answered HTTP 404` | The Pi's code doesn't have `/api/mac/app` yet. Pull and restart the service there |

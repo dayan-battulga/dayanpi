@@ -6,6 +6,7 @@ check what's yours. The store and the lockout live here, and the middleware read
 """
 
 import asyncio
+import math
 import os
 import time
 from collections.abc import Callable
@@ -32,11 +33,13 @@ from dayanpi.auth.accounts import (
     check_sign_in,
     check_username,
     find_accounts_path,
+    normalize_username,
 )
 
 SESSION_COOKIE = "__Host-dayanpi_session"
 MAC_PREFIX = "/api/mac/"
 WRONG_LOGIN = "wrong username or password"
+TOO_MANY_TRIES = "too many tries, wait a bit"
 ROOM_FULL = "the room is full"
 # Tailscale Serve sets Tailscale-User-Login on requests from your own tailnet devices and drops any copy a
 # client sends; Funnel (the public internet) never has it. The camera lock and the sign-in both go by it.
@@ -151,6 +154,11 @@ async def log_in(body: LoginBody, request: Request, response: Response):
     now = time.time()
     mine = is_from_my_devices(request)
     user = await run_scrypt_work(check_sign_in, accounts, lockout, body.username, body.password, now, mine)
+    # A miss is the same 401 for every name. While a wait is on (from the miss that starts it) it's a 429 that says
+    # how long, which tells nothing about the name either: unknown names wait the same way.
+    wait = 0.0 if user is not None or mine else lockout.wait_left(normalize_username(body.username), now)
+    if wait > 0:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES, headers={"Retry-After": str(math.ceil(wait))})
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=WRONG_LOGIN)
     set_session_cookie(response, accounts.create_session(user.id, now))
@@ -205,7 +213,7 @@ async def change_password(change: PasswordChange, request: Request):
     username = viewer.user.username
     now = time.time()
     if not password_lockout.reserve_attempt(username, now):
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="too many tries, wait a bit")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES)
     if await run_scrypt_work(accounts.check_login, username, change.current_password) is None:
         lockout.reserve_attempt(username, now)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="wrong password")

@@ -22,10 +22,10 @@ function renderJoin() {
 }
 
 async function fillIn(user: ReturnType<typeof userEvent.setup>, password: string) {
-  await user.type(screen.getByLabelText("Display name"), "Sam");
+  await user.type(screen.getByLabelText("Name"), "Sam");
   await user.type(screen.getByLabelText("Username"), "sam");
   await user.type(screen.getByLabelText("Password"), password);
-  await user.click(screen.getByRole("button", { name: "Join" }));
+  await user.click(screen.getByRole("button", { name: "Join the room" }));
 }
 
 afterEach(() => {
@@ -37,7 +37,7 @@ it("says the 10-character minimum before you type, and checks it before sending"
   const sent = serveApi({});
   const user = renderJoin();
   const password = screen.getByLabelText("Password");
-  expect(password).toHaveAccessibleDescription("At least 10 characters.");
+  expect(password).toHaveAttribute("placeholder", "At least 10 characters");
   expect(password).toHaveAttribute("autocomplete", "new-password");
 
   await fillIn(user, "short");
@@ -55,9 +55,29 @@ it("makes the account with the code from the link, then goes to the dashboard", 
   expect(loadPage).toHaveBeenCalledWith("/");
 });
 
+it("shows your seat with the first letter of your name", async () => {
+  serveApi({});
+  const user = renderJoin();
+  expect(document.querySelector(".join-seat-avatar")).toHaveTextContent("?");
+  await user.type(screen.getByLabelText("Name"), " riley");
+  expect(document.querySelector(".join-seat-avatar")).toHaveTextContent("R");
+});
+
+it.each<[string, ApiRoute, string, string]>([
+  ["used up or past its week", answer({ detail: "this invite doesn't work any more" }, 404), "This invite expired", "Invites work once and last a week. Ask the owner for a new one."],
+  ["the room is full", answer({ detail: "the room is full" }, 403), "The room is full", "All 4 seats are taken. Ask the owner to open one up."],
+])("trades the form for why when the invite is %s, with the way back", async (_case, route, title, text) => {
+  serveApi({ "POST /api/join": route });
+  const user = renderJoin();
+  await fillIn(user, "a long password");
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(title);
+  expect(screen.getByText(text)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
+  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(loadPage).not.toHaveBeenCalled();
+});
+
 it.each<[string, ApiRoute]>([
-  ["this invite doesn't work any more", answer({ detail: "this invite doesn't work any more" }, 404)],
-  ["the room is full", answer({ detail: "the room is full" }, 403)],
   ["that username is taken", answer({ detail: "that username is taken" }, 409)],
   [
     "username: a username is 2 to 32 of a-z, 0-9, _ . - and starts with a letter or a digit",

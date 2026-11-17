@@ -1,0 +1,14 @@
+{
+  "about": "For comparing /login to design/mockups/Login.dc.html. Signing in answers like a wrong password (fill the fields and click Sign in for the \"wrong password\" variant).",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {},
+  "routes": {
+    "POST /api/login": {
+      "$status": 401,
+      "body": {
+        "detail": "wrong username or password"
+      }
+    }
+  }
+}

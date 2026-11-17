@@ -1,0 +1,14 @@
+{
+  "about": "Join.json where every seat is taken: joining answers 403 (the \"room full\" variant).",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {},
+  "routes": {
+    "POST /api/join": {
+      "$status": 403,
+      "body": {
+        "detail": "the room is full"
+      }
+    }
+  }
+}

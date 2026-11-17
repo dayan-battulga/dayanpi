@@ -34,7 +34,7 @@ A fixture is one JSON file per mockup:
 | `mockupOptions` | Options for the mockup side, like `{ "moment": "none" }` |
 | `storage` | Optional localStorage entries to set before the page loads |
 | `stream` | The one snapshot `/api/stream` sends. The stream stays open, like the Pi's |
-| `routes` | Replies by URL. A key can be `"POST /api/todos"`, `"/api/apps?range=today"` or `"/api/focus"`, and the first match wins |
+| `routes` | Replies by URL. A key can be `"POST /api/todos"`, `"/api/apps?range=today"` or `"/api/focus"`, and the first match wins. A reply that isn't a 200 is `{"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}` (`$headers` optional) |
 
 Anything not listed gets a 404, so the page shows its empty state. Fixtures follow the real API: when an API changes, its fixtures change in the same commit. `Desk.json` is the mockup's day (Monday Nov 16, 7:12 pm) in the API as it is after study room step 2 (signed in as the owner).
 

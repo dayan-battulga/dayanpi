@@ -42,7 +42,7 @@ it.each(["%2F%09%2Fevil.example%2Fphish", "%2F%0A%2Fevil.example", "%2F%0D%2Fevi
 it("sends a 401 to /login, with where you were as next", async () => {
   stubReply(401, { detail: "sign in first" });
   const reply = await request("GET", "/api/focus");
-  expect(reply).toEqual({ ok: false, status: 401, body: null, detail: "sign in first" });
+  expect(reply).toEqual({ ok: false, status: 401, body: null, detail: "sign in first", retryAfterS: null });
   expect(loadPage).toHaveBeenCalledWith("/login?next=%2Fsettings%3Ftab%3Dtokens");
 });
 
@@ -85,6 +85,12 @@ it("drops pydantic's 'Value error, ' from the Pi's own checks", async () => {
 it("says status 0 when nothing answered", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
   const reply = await request("GET", "/api/me");
-  expect(reply).toEqual({ ok: false, status: 0, body: null, detail: null });
+  expect(reply).toEqual({ ok: false, status: 0, body: null, detail: null, retryAfterS: null });
   expect(loadPage).not.toHaveBeenCalled();
+});
+
+it("reads how long a 429 says to wait", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 429, headers: new Headers({ "Retry-After": "28" }), json: async () => ({ detail: "too many tries, wait a bit" }) })));
+  const reply = await request("POST", "/api/login", {});
+  expect([reply.status, reply.detail, reply.retryAfterS]).toEqual([429, "too many tries, wait a bit", 28]);
 });

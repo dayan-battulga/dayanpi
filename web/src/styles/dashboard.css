@@ -111,52 +111,30 @@ ol {
   font-variant-numeric: tabular-nums;
 }
 
-.label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.small {
-  font-size: 12px;
-}
-
 .shell {
   max-width: var(--page-width);
   margin: 0 auto;
   padding: 0 32px 96px;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
+/* Pill buttons (Login, Join, Settings): ink for the one main thing, a line for the rest. */
 .button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  min-height: 48px;
-  padding: 0 22px;
+  min-height: 44px;
+  padding: 0 20px;
   border: 1px solid transparent;
   border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
   font: 600 14px var(--font-ui);
-  letter-spacing: -0.01em;
+  text-decoration: none;
   cursor: pointer;
   transition:
-    transform 0.25s var(--ease),
-    background-color 0.4s var(--ease),
-    color 0.4s var(--ease),
-    border-color 0.4s var(--ease);
+    transform 0.2s var(--ease),
+    opacity 0.3s var(--ease);
 }
 
 .button:active:not(:disabled) {
@@ -164,24 +142,206 @@ ol {
 }
 
 .button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
 
-.button-ghost {
-  border-color: var(--line-strong);
-  background: transparent;
-  color: var(--ink);
+.button-ink {
+  background: var(--ink);
+  color: var(--bg);
 }
 
-.button-ghost:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+.button-hot {
+  background: var(--hot);
+  color: var(--bg);
+}
+
+.button-line {
+  border-color: var(--line-strong);
+  font-weight: 500;
 }
 
 .button-small {
-  min-height: 44px;
   padding: 0 16px;
   font-size: 13px;
+}
+
+.button-block {
+  display: flex;
+  width: 100%;
+  height: 48px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* A label over a 48 px rounded box (shared/Field.tsx). */
+.field-label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field-input {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 15px var(--font-ui);
+  transition:
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+}
+
+.field-input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.field-input[aria-invalid="true"] {
+  border-color: var(--hot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hot) 16%, transparent);
+}
+
+/* What a form's last try said (shared/FormNote.tsx). The Pi's details are lowercase sentences. */
+.form-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.form-note::first-letter {
+  text-transform: uppercase;
+}
+
+.form-note[data-tone="error"] {
+  color: var(--hot);
+}
+
+.form-note[data-tone="warn"] {
+  color: var(--warm);
+}
+
+/* ---------- sign in and join (components/auth): Login.dc.html and Join.dc.html ---------- */
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background:
+    radial-gradient(900px 420px at 50% -12%, color-mix(in srgb, var(--work) 8%, transparent), transparent 65%),
+    var(--bg);
+}
+
+.auth-main {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: 24px 16px 120px;
+}
+
+.auth-card {
+  --rise-y: 12px;
+  --rise-blur: 4px;
+  width: 100%;
+  max-width: 360px;
+  animation: rise 0.8s var(--ease) both;
+}
+
+.auth-card.is-wide {
+  max-width: 380px;
+}
+
+.auth-dot {
+  --pulse: var(--work);
+  --breathe-size: 8px;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--work);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.auth-title {
+  margin-top: 24px;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.auth-card.is-wide .auth-title {
+  margin-top: 0;
+}
+
+.auth-intro {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.auth-fields {
+  display: grid;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.auth-card .button-block {
+  margin-top: 24px;
+}
+
+.auth-foot {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.join-seat {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.join-seat + .auth-fields {
+  margin-top: 24px;
+}
+
+.join-seat-avatar {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--work);
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* An invite that's used up, or a full room: the form gives way to why, and the way back. */
+.auth-gone .auth-intro {
+  margin-top: 10px;
+}
+
+.auth-gone .button-block {
+  margin-top: 28px;
 }
 
 /* ---------- the frame: top bar, tabs, dock ---------- */
@@ -755,12 +915,14 @@ number-flow-react {
 
 /* ---------- the Pi page (components/pi/PiPage.tsx): Pi.dc.html, the cameras and then the Pi ---------- */
 
-.pi-page {
+.pi-page,
+.settings-page {
   margin-top: 40px;
 }
 
 /* SPEC: Settings and Pi rise 8 px / 3 px over 0.45 s. */
-.pi-page .rise {
+.pi-page .rise,
+.settings-page .rise {
   --rise-y: 8px;
   --rise-blur: 3px;
   animation-duration: 0.45s;
@@ -1035,6 +1197,266 @@ number-flow-react {
   margin-top: 28px;
   color: var(--muted);
   font-size: 14px;
+}
+
+/* ---------- Settings (components/settings): Settings.dc.html, the list on the left and a section on the right ---------- */
+
+.settings-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 32px 64px;
+  margin-top: 36px;
+}
+
+.settings-nav {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.settings-nav-list {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-nav-item,
+.settings-signout {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 500 14px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-nav-item {
+  border-radius: 12px;
+}
+
+.settings-nav-item[aria-current] {
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+.settings-signout {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  font-weight: 400;
+}
+
+.settings-section {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+
+.settings-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.settings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-hint {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.settings-action {
+  margin-top: 20px;
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.settings-fields {
+  display: grid;
+  gap: 20px;
+  max-width: 420px;
+  margin-top: 24px;
+}
+
+.settings-rows {
+  margin-top: 16px;
+}
+
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.setting-row.is-tall {
+  min-height: 64px;
+}
+
+.setting-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.token-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  margin-top: 20px;
+}
+
+.people {
+  margin-top: 24px;
+}
+
+.person-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 60px;
+  border-bottom: 1px solid var(--line);
+}
+
+.person-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.person-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+}
+
+/* Something shown once, a token or an invite link (settings/CopyField.tsx). */
+.copy-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.copy-value {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 13px var(--font-mono);
+  text-overflow: ellipsis;
+}
+
+.copy-value:focus-visible {
+  outline: none;
+}
+
+.copy-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The mockup's switch (ui/switch.tsx): a 46 x 28 track in a 44 px button; Motion slides the thumb. */
+.switch {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 56px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.switch:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.switch:focus-visible {
+  outline: none;
+}
+
+.switch:focus-visible .switch-track {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.switch-track {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  transition: background-color 0.3s ease;
+}
+
+.switch[data-state="checked"] .switch-track {
+  background: var(--work);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
 }
 
 /* ---------- the to-do list (components/todo/TodoList.tsx): Desk's, on the page next to Apps ---------- */
@@ -1783,25 +2205,6 @@ button.todo-pill:active,
   }
 }
 
-@keyframes shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-7px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(2px);
-  }
-}
-
 @keyframes fall {
   0% {
     transform: translateY(-20px) rotate(0deg);
@@ -1883,6 +2286,25 @@ button.todo-pill:active,
 
   .shell {
     padding: 16px 16px 120px;
+  }
+
+  /* One row of pills, scrolling sideways if it ever runs out of room. Sign out is in the account menu up top. */
+  .settings-nav-list {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .settings-nav-item {
+    width: auto;
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .settings-signout {
+    display: none;
   }
 
   /* The phone's top bar is one shorter row, so the pill keeps the same 4 px under it. */

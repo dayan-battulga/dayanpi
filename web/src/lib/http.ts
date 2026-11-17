@@ -7,6 +7,7 @@ export interface Reply<T> {
   status: number; // 0 when the request never got an answer
   body: T | null; // only on a 2xx
   detail: string | null; // FastAPI's {"detail": ...} on an error, readable
+  retryAfterS: number | null; // a 429's Retry-After: how long the sign-in's wait has left
 }
 
 // These two answer 401 for a wrong password or a bad invite, not for a missing session.
@@ -50,12 +51,19 @@ function readDetail(body: unknown): string | null {
 // Every request on the page goes through here. Writes always send a JSON body ("{}" when there's
 // nothing to say), because the Pi refuses any other write; a 401 means signing in again.
 export async function request<T>(method: Method, path: string, body?: object): Promise<Reply<T>> {
-  let reply: Reply<T> = { ok: false, status: 0, body: null, detail: null };
+  let reply: Reply<T> = { ok: false, status: 0, body: null, detail: null, retryAfterS: null };
   const write = method === "GET" ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) };
   try {
     const response = await fetch(path, { method, cache: "no-store", ...write });
     const parsed: unknown = await response.json().catch(() => null);
-    reply = { ok: response.ok, status: response.status, body: response.ok ? (parsed as T) : null, detail: response.ok ? null : readDetail(parsed) };
+    const retryAfter = response.status === 429 ? Number(response.headers.get("Retry-After")) : NaN;
+    reply = {
+      ok: response.ok,
+      status: response.status,
+      body: response.ok ? (parsed as T) : null,
+      detail: response.ok ? null : readDetail(parsed),
+      retryAfterS: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    };
     if (response.status === 401 && !SIGN_IN_PATHS.has(path)) {
       sendToLogin();
     }

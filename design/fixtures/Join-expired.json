@@ -1,0 +1,14 @@
+{
+  "about": "Join.json where the invite is used up or past its week: joining answers 404 (the \"expired\" variant).",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {},
+  "routes": {
+    "POST /api/join": {
+      "$status": 404,
+      "body": {
+        "detail": "this invite doesn't work any more"
+      }
+    }
+  }
+}

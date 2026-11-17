@@ -13,8 +13,6 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@number-flow/react": "^0.6.2",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.73.0",
     "motion": "^14.14.0",
@@ -22,8 +20,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^8.5.1",
-    "sonner": "^2.0.8",
-    "tailwind-merge": "^3.7.0"
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
