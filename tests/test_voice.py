@@ -191,6 +191,23 @@ def test_say_drops_phrases_once_the_queue_is_full(make_voice):
     assert rig.announcer.say("five") is False
 
 
+def test_is_saying_lasts_from_say_until_the_phrase_is_played_or_fails(make_voice):
+    runner = FakeRunner(hold=True, failures={"two": SpeechError("aplay failed")})
+    rig = make_voice(runner=runner)
+    rig.announcer.start()
+    assert not rig.announcer.is_saying("one")
+    rig.announcer.say("one")
+    rig.announcer.say("two\n")
+    assert rig.runner.wait_for_jobs(1)
+    assert rig.announcer.is_saying("one") and rig.announcer.is_saying("two"), "two waits behind one"
+    runner.release.set()
+    deadline = time.monotonic() + WAIT_S
+    while (rig.announcer.is_saying("one") or rig.announcer.is_saying("two")) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not rig.announcer.is_saying("one") and not rig.announcer.is_saying("two")
+    assert rig.announcer._saying == {}, "finished phrases don't pile up"
+
+
 def test_say_drops_blank_text(make_voice):
     rig = make_voice()
     rig.announcer.start()

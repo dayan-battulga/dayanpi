@@ -1,5 +1,6 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MotionConfig } from "motion/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TodoList } from "@/components/todo/TodoList";
@@ -226,4 +227,46 @@ it("shows a member the list and what's current, with nothing to press", () => {
   expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
   expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   expect(screen.queryAllByRole("button")).toHaveLength(0);
+});
+
+const ONE_LEFT: Todos = { current: null, open: [{ id: "a1", text: "finish the report", seconds: 754, done_at: null }], done: [{ id: "b2", text: "reply to emails", seconds: 60, done_at: 1 }] };
+const confetti = () => document.querySelectorAll(".confetti span").length;
+
+it("throws one burst of confetti and says All done once the last open row is checked, until a new one comes in", async () => {
+  const user = renderList();
+  await user.click(screen.getByRole("checkbox", { name: "Done: finish the report" }));
+  expect(screen.queryByText("All done. Nice.")).toBeNull(); // one still open
+  await user.click(screen.getByRole("checkbox", { name: "Done: reply to emails" }));
+  expect(screen.getByText("All done. Nice.")).toBeInTheDocument();
+  expect(confetti()).toBe(16);
+
+  await user.type(screen.getByRole("textbox", { name: "New to-do" }), "one more{Enter}");
+  await waitFor(() => expect(openRows()).toHaveLength(1));
+  expect(screen.queryByText("All done. Nice.")).toBeNull();
+  expect(confetti()).toBe(0);
+});
+
+it("never says All done on load, for a list that was empty, or when the last row is deleted", async () => {
+  renderList({ todos: { current: null, open: [], done: ONE_LEFT.done } });
+  expect(screen.queryByText("All done. Nice.")).toBeNull();
+  cleanup();
+
+  holdTodos();
+  const user = renderList({ todos: ONE_LEFT });
+  await user.click(screen.getByRole("button", { name: "Delete finish the report" }));
+  expect(openRows()).toHaveLength(0);
+  expect(screen.queryByText("All done. Nice.")).toBeNull();
+  expect(confetti()).toBe(0);
+});
+
+it("says All done without the confetti with reduced motion", async () => {
+  holdTodos();
+  render(
+    <MotionConfig reducedMotion="always">
+      <TodoList todos={ONE_LEFT} state="working" now={Date.now() / 1000} readOnly={false} />
+    </MotionConfig>,
+  );
+  await userEvent.setup().click(screen.getByRole("checkbox", { name: "Done: finish the report" }));
+  expect(screen.getByText("All done. Nice.")).toBeInTheDocument();
+  expect(confetti()).toBe(0);
 });

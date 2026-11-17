@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import tempfile
 import threading
 import time
@@ -250,6 +251,65 @@ def test_peace_speaks_the_coachs_message_and_logs_which_kind(monkeypatch, tmp_pa
     assert "You have 2 things to do: finish the report and reply to emails. Done today: do laundry." in said[0]
     gestures = [line for line in log.read_day(format_day(now)) if line["event"] == "gesture"]
     assert [(line["name"], line["spoken"]) for line in gestures] == [("peace", "template")]
+
+
+class FakeAplay:
+    """subprocess.run for run_speech_job: Piper answers at once, and aplay plays until it's released."""
+
+    def __init__(self):
+        self.playing = threading.Event()
+        self.release = threading.Event()
+
+    def __call__(self, command, **options):
+        if command[0] == "aplay":
+            self.playing.set()
+            self.release.wait(timeout=5)
+        return subprocess.CompletedProcess(command, 0, stdout=b"audio", stderr=b"")
+
+
+def test_the_status_says_what_the_peace_sign_is_saying_until_aplay_finishes(monkeypatch, tmp_path):
+    from dayanpi.hardware.voice import VoiceAnnouncer, VoiceSettings, run_speech_job
+
+    model = tmp_path / "voice.onnx"
+    model.write_bytes(b"not a real model")
+    model.with_name("voice.onnx.json").write_text('{"audio": {"sample_rate": 22050}}')
+    aplay = FakeAplay()
+    speaker = VoiceAnnouncer(
+        VoiceSettings(backend="piper", piper_model=model, audio_device=None),
+        runner=lambda job: run_speech_job(job, run=aplay),
+        find_program=lambda name: f"/usr/bin/{name}",
+        piper_installed=lambda: True,
+    )
+    monkeypatch.setattr(app, "voice", speaker)
+    monkeypatch.setattr(app, "last_spoken", None)
+    with open_client() as client:
+        assert client.get("/api/focus").json()["spoken"] is None
+        app.handle_gesture("peace", time.time())
+        assert aplay.playing.wait(timeout=5)
+        playing = client.get("/api/focus").json()["spoken"]
+        aplay.release.set()
+        deadline = time.monotonic() + 5
+        while speaker.is_saying(playing["text"]) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        finished = client.get("/api/focus").json()["spoken"]
+    assert playing["text"].startswith("It's ") and playing["speaking"] is True
+    assert 0 <= playing["age_s"] < 5
+    assert (finished["text"], finished["at"], finished["speaking"]) == (playing["text"], playing["at"], False)
+
+
+def test_the_spoken_text_is_never_logged(monkeypatch, tmp_path, caplog):
+    from dayanpi.focus.tracker import FocusLog, FocusTracker, format_day
+
+    log = FocusLog(tmp_path / "focus_log")
+    monkeypatch.setattr(app, "tracker", FocusTracker(log, started_at=time.time()))
+    monkeypatch.setattr(app, "last_spoken", None)
+    monkeypatch.setattr(app.voice, "say", lambda text: True)
+    now = time.time()
+    with caplog.at_level(logging.INFO):
+        app.handle_gesture("peace", now)
+    text = app.last_spoken["text"]
+    assert text not in caplog.text
+    assert text not in json.dumps(log.read_day(format_day(now)))
 
 
 def test_the_coach_only_writes_ahead_with_a_model_set():

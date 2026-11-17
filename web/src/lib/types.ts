@@ -72,6 +72,7 @@ export interface FocusStatus {
   voice: { enabled: boolean; backend: string; problem: string | null } | null;
   todos?: Todos;
   gesture?: { name: string; age_s: number } | null; // the last hand sign that fired
+  spoken?: { text: string; at: number; age_s: number; speaking: boolean } | null; // what the peace sign said last, and whether the voice still is
 }
 
 export interface Throttle {

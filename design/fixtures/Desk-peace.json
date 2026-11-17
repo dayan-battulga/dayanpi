@@ -1,0 +1,443 @@
+{
+  "about": "Desk.json with a peace sign that just fired: the stream carries what it's saying, and the voice is still speaking. For --options=\"moment=peace sign\".",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {},
+  "stream": {
+    "temperature_celsius": 51.3,
+    "uptime_seconds": 351000,
+    "memory": {
+      "total_mb": 8000,
+      "available_mb": 5100,
+      "percent_used": 36.3
+    },
+    "disk": {
+      "percent_used": 41,
+      "free_gb": 19.8
+    },
+    "throttle": {
+      "is_undervoltage": false,
+      "is_frequency_capped": false,
+      "is_throttled": false,
+      "has_undervoltage_occured": false,
+      "has_throttling_occured": false
+    },
+    "rates": {
+      "cpu_percent": 21.5,
+      "core_percents": [
+        18,
+        25,
+        22,
+        21
+      ],
+      "rx_kbps": 96,
+      "tx_kbps": 640
+    },
+    "focus": {
+      "state": "working",
+      "since": 1794875400,
+      "seconds_in_state": 2538,
+      "today": {
+        "working_seconds": 11538,
+        "phone_seconds": 1440,
+        "pickups": 2,
+        "longest_streak_seconds": 4800,
+        "first_seen": 1794844800
+      },
+      "app": "Code",
+      "site": null,
+      "mac_tracking": true,
+      "camera_ok": true,
+      "last_check": {
+        "person": 0.93,
+        "phone": 0.02,
+        "elapsed_ms": 190
+      },
+      "enabled": true,
+      "side_camera": true,
+      "overlay": null,
+      "side_overlay": null,
+      "voice": {
+        "enabled": true,
+        "backend": "piper",
+        "problem": null
+      },
+      "todos": {
+        "current": "t1",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      },
+      "gesture": {
+        "name": "peace",
+        "at": 1794877937.2,
+        "age_s": 0.8
+      },
+      "spoken": {
+        "text": "3 things left, almost 5 hours before bed. You’ve got this.",
+        "at": 1794877937.2,
+        "age_s": 0.8,
+        "speaking": true
+      }
+    }
+  },
+  "routes": {
+    "/api/me": {
+      "user": {
+        "id": 1,
+        "username": "dayan",
+        "display_name": "Dayan",
+        "role": "owner"
+      }
+    },
+    "/api/focus": {
+      "state": "working",
+      "since": 1794875400,
+      "seconds_in_state": 2538,
+      "today": {
+        "working_seconds": 11538,
+        "phone_seconds": 1440,
+        "pickups": 2,
+        "longest_streak_seconds": 4800,
+        "first_seen": 1794844800
+      },
+      "app": "Code",
+      "site": null,
+      "mac_tracking": true,
+      "camera_ok": true,
+      "last_check": {
+        "person": 0.93,
+        "phone": 0.02,
+        "elapsed_ms": 190
+      },
+      "enabled": true,
+      "side_camera": true,
+      "overlay": null,
+      "side_overlay": null,
+      "voice": {
+        "enabled": true,
+        "backend": "piper",
+        "problem": null
+      },
+      "todos": {
+        "current": "t1",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      },
+      "gesture": {
+        "name": "peace",
+        "at": 1794877937.2,
+        "age_s": 0.8
+      },
+      "segments": [
+        {
+          "state": "working",
+          "start": 1794844800,
+          "end": 1794849600
+        },
+        {
+          "state": "phone",
+          "start": 1794849600,
+          "end": 1794850320
+        },
+        {
+          "state": "working",
+          "start": 1794850320,
+          "end": 1794853320
+        },
+        {
+          "state": "away",
+          "start": 1794853320,
+          "end": 1794859200
+        },
+        {
+          "state": "working",
+          "start": 1794859200,
+          "end": 1794860400
+        },
+        {
+          "state": "phone",
+          "start": 1794860400,
+          "end": 1794861120
+        },
+        {
+          "state": "away",
+          "start": 1794861120,
+          "end": 1794875400
+        },
+        {
+          "state": "working",
+          "start": 1794875400,
+          "end": null
+        }
+      ],
+      "spoken": {
+        "text": "3 things left, almost 5 hours before bed. You’ve got this.",
+        "at": 1794877937.2,
+        "age_s": 0.8,
+        "speaking": true
+      }
+    },
+    "/api/apps?range=today": {
+      "range": "today",
+      "apps": [
+        {
+          "app": "Code",
+          "total_seconds": 5640
+        },
+        {
+          "app": "Google Chrome",
+          "total_seconds": 3480,
+          "youtube_seconds": 660,
+          "other_sites_seconds": 2820
+        },
+        {
+          "app": "Notion",
+          "total_seconds": 1560
+        },
+        {
+          "app": "Messages",
+          "total_seconds": 360
+        }
+      ]
+    },
+    "/api/apps?range=week": {
+      "range": "week",
+      "apps": [
+        {
+          "app": "Code",
+          "total_seconds": 5640
+        },
+        {
+          "app": "Google Chrome",
+          "total_seconds": 3480,
+          "youtube_seconds": 660,
+          "other_sites_seconds": 2820
+        },
+        {
+          "app": "Notion",
+          "total_seconds": 1560
+        },
+        {
+          "app": "Messages",
+          "total_seconds": 360
+        }
+      ]
+    },
+    "/api/days?month=2026-11": {
+      "month": "2026-11",
+      "today": "2026-11-16",
+      "days": {
+        "2026-11-01": {
+          "focus_minutes": 95,
+          "phone_minutes": 11,
+          "pickups": 1,
+          "todos_done": 2
+        },
+        "2026-11-02": {
+          "focus_minutes": 180,
+          "phone_minutes": 20,
+          "pickups": 3,
+          "todos_done": 3
+        },
+        "2026-11-03": {
+          "focus_minutes": 240,
+          "phone_minutes": 27,
+          "pickups": 3,
+          "todos_done": 4
+        },
+        "2026-11-04": {
+          "focus_minutes": 130,
+          "phone_minutes": 14,
+          "pickups": 2,
+          "todos_done": 2
+        },
+        "2026-11-05": {
+          "focus_minutes": 205,
+          "phone_minutes": 23,
+          "pickups": 3,
+          "todos_done": 3
+        },
+        "2026-11-06": {
+          "focus_minutes": 60,
+          "phone_minutes": 7,
+          "pickups": 1,
+          "todos_done": 1
+        },
+        "2026-11-08": {
+          "focus_minutes": 150,
+          "phone_minutes": 17,
+          "pickups": 2,
+          "todos_done": 3
+        },
+        "2026-11-09": {
+          "focus_minutes": 260,
+          "phone_minutes": 29,
+          "pickups": 4,
+          "todos_done": 4
+        },
+        "2026-11-10": {
+          "focus_minutes": 190,
+          "phone_minutes": 21,
+          "pickups": 3,
+          "todos_done": 3
+        },
+        "2026-11-11": {
+          "focus_minutes": 225,
+          "phone_minutes": 25,
+          "pickups": 3,
+          "todos_done": 4
+        },
+        "2026-11-12": {
+          "focus_minutes": 170,
+          "phone_minutes": 19,
+          "pickups": 2,
+          "todos_done": 3
+        },
+        "2026-11-13": {
+          "focus_minutes": 45,
+          "phone_minutes": 5,
+          "pickups": 1,
+          "todos_done": 1
+        },
+        "2026-11-14": {
+          "focus_minutes": 110,
+          "phone_minutes": 12,
+          "pickups": 2,
+          "todos_done": 2
+        },
+        "2026-11-15": {
+          "focus_minutes": 250,
+          "phone_minutes": 30,
+          "pickups": 4,
+          "todos_done": 3
+        }
+      }
+    },
+    "/api/mac/tracking": {
+      "enabled": true
+    },
+    "PATCH /api/todos/t2": {
+      "todos": {
+        "current": "t2",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      }
+    },
+    "PATCH /api/todos/t1": {
+      "todos": {
+        "current": null,
+        "open": [
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          },
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": 1794877938
+          }
+        ]
+      }
+    },
+    "/api/days/2026-11-15": {
+      "day": "2026-11-15",
+      "today": false,
+      "markdown": "---\ndate: 2026-11-15\nfocus_minutes: 250\nphone_minutes: 30\naway_minutes: 125\npickups: 4\nbest_streak_minutes: 95\ntodos_done: 3\nyoutube_minutes: 8\n---\n\n# Sunday, November 15, 2026\n\n## Totals\n- Focus: 4h10\n- Phone: 30m\n- Away: 2h05\n- Pickups: 4\n- Best streak: 1h35\n- YouTube: 8m\n\n## To-dos done\n- Problem set 2 (1h40)\n- Lecture 17 notes (35m)\n- Email the TA (10m)\n\n## Apps\n- Code: 2h05\n- Google Chrome: 1h10\n- Notion: 30m\n"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MotionConfig } from "motion/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -208,20 +209,79 @@ function readToasts() {
 
 it("puts each hand sign in a toast once, though every snapshot repeats it", async () => {
   renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.6 } })));
-  expect(await screen.findByText("✌️ Peace sign: reading your to-dos")).toBeInTheDocument();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "wave", age_s: 0.6 } })));
+  expect(await screen.findByText("wave")).toBeInTheDocument();
 
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 1.6 } })));
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.3 } }))); // made again
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "wave", age_s: 1.6 } })));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "wave", age_s: 0.3 } }))); // made again
 
   await waitFor(() => expect(readToasts()).toHaveLength(2));
 });
 
 it("has no toast for a hand sign that's already old when the page opens", async () => {
   renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 30 } })));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "wave", age_s: 30 } })));
   await screen.findByRole("button", { name: "Account: Dayan" });
   expect(readToasts()).toEqual([]);
+});
+
+const SAYING = "3 things left, almost 5 hours before bed. You've got this.";
+const VOICE_ON = { enabled: true, backend: "piper", problem: null };
+
+// A peace sign that fired age_s ago, with what it's saying; the toast never shows for it.
+function sendPeace(age_s: number, speaking: boolean, voice = VOICE_ON) {
+  const at = 1_794_877_938; // the same message in every snapshot
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ voice, gesture: { name: "peace", age_s }, spoken: { text: SAYING, at, age_s, speaking } })));
+}
+
+it("shows what the peace sign says in the pill while the voice says it, then lets it go", async () => {
+  renderApp();
+  sendPeace(0.4, true);
+  const pill = (await screen.findByText(SAYING)).closest(".peace-pill");
+  expect(pill?.closest('[role="status"]')).toHaveClass("peace"); // read out as it comes in
+  sendPeace(9, true); // a long message: still talking past 6 s
+  expect(screen.getByText(SAYING)).toBeInTheDocument();
+  sendPeace(10, false);
+  await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
+  sendPeace(11, false);
+  expect(screen.queryByText(SAYING)).toBeNull();
+  expect(readToasts()).toEqual([]);
+});
+
+it("keeps the pill 6 s with the voice off, and none for an old message on load", async () => {
+  const voiceOff = { enabled: false, backend: "off", problem: null };
+  renderApp();
+  sendPeace(30, false, voiceOff);
+  await screen.findByRole("button", { name: "Account: Dayan" });
+  expect(screen.queryByText(SAYING)).toBeNull();
+  sendPeace(0.5, false, voiceOff);
+  expect(await screen.findByText(SAYING)).toBeInTheDocument();
+  sendPeace(5.5, false, voiceOff);
+  expect(screen.getByText(SAYING)).toBeInTheDocument();
+  sendPeace(6.5, false, voiceOff);
+  await waitFor(() => expect(screen.queryByText(SAYING)).toBeNull());
+});
+
+it("only fades the pill in with reduced motion", async () => {
+  const pillStyle = async () => ((await screen.findByText(SAYING)).closest(".peace-pill") as HTMLElement).style;
+  const { unmount } = render(
+    <MemoryRouter initialEntries={["/me"]}>
+      <App />
+    </MemoryRouter>,
+  );
+  sendPeace(0.4, true);
+  expect((await pillStyle()).filter).toBe("blur(4px)"); // where the rise starts
+  unmount();
+  render(
+    <MotionConfig reducedMotion="always">
+      <MemoryRouter initialEntries={["/me"]}>
+        <App />
+      </MemoryRouter>
+    </MotionConfig>,
+  );
+  sendPeace(0.4, true);
+  const reduced = await pillStyle();
+  expect([reduced.opacity, reduced.filter, reduced.transform]).toEqual(["0", "", ""]);
 });
 
 it("shows one toast at a time, the newest", async () => {

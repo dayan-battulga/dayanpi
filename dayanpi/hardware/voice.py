@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -211,6 +212,7 @@ class VoiceAnnouncer:
 
     For the status API: backend is what's actually in use ("off" after a fallback),
     enabled is backend != "off", and problem says why the chosen voice couldn't run.
+    is_saying() tells the page whether a phrase is still waiting or playing.
     """
 
     def __init__(
@@ -233,6 +235,7 @@ class VoiceAnnouncer:
         self._lock = threading.Lock()
         self._phrases: queue.Queue[str | None] | None = None
         self._thread: threading.Thread | None = None
+        self._saying: Counter[str] = Counter()  # phrases queued or playing, until aplay finishes them
 
     def start(self) -> None:
         with self._lock:
@@ -261,6 +264,7 @@ class VoiceAnnouncer:
                 self._phrases.put_nowait(None)
                 self._thread = None
                 self._phrases = None
+                self._saying.clear()
         if thread is not None:
             thread.join(timeout=STOP_JOIN_TIMEOUT_S)
 
@@ -286,14 +290,30 @@ class VoiceAnnouncer:
             else:
                 try:
                     self._phrases.put_nowait(phrase)
+                    self._saying[phrase] += 1
                     queued = True
                 except queue.Full:
                     logger.info("voice is busy, dropped %r", phrase)
         return queued
 
+    def is_saying(self, text: str) -> bool:
+        """True from say() until aplay has played the phrase (or it failed), while it waits behind others too."""
+        with self._lock:
+            saying = self._saying[clean_text(text)] > 0
+        return saying
+
     def _speak_queued(self, phrases: queue.Queue) -> None:
         while (phrase := phrases.get()) is not None:
             self._speak(phrase)
+            self._finish(phrases, phrase)
+
+    def _finish(self, phrases: queue.Queue, phrase: str) -> None:
+        with self._lock:
+            # After stop() the count is gone with its queue; a phrase that was mid-way then doesn't touch the next one's.
+            if phrases is self._phrases:
+                self._saying[phrase] -= 1
+                if self._saying[phrase] <= 0:
+                    del self._saying[phrase]
 
     def _speak(self, phrase: str) -> None:
         try:

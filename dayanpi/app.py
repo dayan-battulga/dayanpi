@@ -81,6 +81,7 @@ todos = TodoList(find_todo_path(), focus_log)
 mac_tracking = MacTrackingSetting(find_mac_tracking_path())
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
+last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill
 LLM_MODEL = read_llm_model()
 coach = TodoCoach(todos, read_bedtime(), None if LLM_MODEL is None else OllamaClient(LLM_MODEL))
 
@@ -120,6 +121,8 @@ def build_focus_status() -> dict:
     status["overlay"] = stamp_age(None if worker is None else worker.last_overlay, now)
     status["side_overlay"] = stamp_age(None if worker is None else worker.last_side_overlay, now)
     status["gesture"] = stamp_age(None if worker is None else worker.last_gesture, now)
+    spoken = last_spoken
+    status["spoken"] = None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])}
     status["voice"] = {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem}
     status["todos"] = todos.snapshot(now)
     status["mac_tracking"] = mac_tracking.enabled
@@ -165,10 +168,13 @@ def handle_focus_update(update: FocusUpdate, now: float) -> None:
 
 
 def say_todos(now: float) -> dict:
-    """Speaks the coach's message and returns which kind it was, for the gesture's log line."""
+    """Speaks the coach's message and returns which kind it was, for the gesture's log line.
+    The text goes to the page (last_spoken), which shows it while the voice says it; it's never logged."""
+    global last_spoken
     message = coach.pick(now)
     logger.info("peace sign: speaking the %s message", message.source)
     voice.say(message.text)
+    last_spoken = {"text": message.text, "at": round(now, 3)}
     return {"spoken": message.source}
 
 

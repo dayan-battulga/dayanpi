@@ -1,5 +1,6 @@
 import { Suspense, ViewTransition, lazy, useCallback, useLayoutEffect, useState } from "react";
 import { Outlet, useLocation, useOutletContext } from "react-router";
+import { PeacePill } from "@/components/frame/PeacePill";
 import { Dock } from "@/components/header/Dock";
 import { Header } from "@/components/header/Header";
 import { Toaster } from "@/components/ui/toaster";
@@ -30,8 +31,8 @@ export function useFrame(): FrameData {
   return useOutletContext<FrameData>();
 }
 
-// Every signed-in page: the top bar, the page itself (which cross-fades when it changes), the dock on a phone, ⌘K and
-// the toasts.
+// Every signed-in page: the top bar, the page itself (which cross-fades when it changes), the peace sign's pill, the
+// dock on a phone, ⌘K and the toasts.
 export function Frame() {
   const { snapshot, connection, receivedAt } = useSnapshot();
   const { user, setUser } = useMe();
@@ -65,6 +66,7 @@ export function Frame() {
           </main>
         </ViewTransition>
       </Suspense>
+      <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} />
       {phone && <Dock canAdd={user?.role === "owner"} />}
       {palette.used && (
         <Suspense fallback={null}>

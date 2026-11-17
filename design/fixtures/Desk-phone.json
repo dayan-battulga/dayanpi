@@ -95,7 +95,8 @@
           }
         ]
       },
-      "gesture": null
+      "gesture": null,
+      "spoken": null
     }
   },
   "routes": {
@@ -209,7 +210,8 @@
           "start": 1794875400,
           "end": null
         }
-      ]
+      ],
+      "spoken": null
     },
     "/api/apps?range=today": {
       "range": "today",

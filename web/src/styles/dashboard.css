@@ -1314,6 +1314,93 @@ button.todo-pill:active,
   border-bottom-color: var(--ink);
 }
 
+/* All done (components/todo/AllDone.tsx): one burst of Desk's confetti over the list, and its quiet line. */
+.confetti {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  right: 0;
+  height: 200px;
+  pointer-events: none;
+}
+
+.confetti span {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  animation-name: fall;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.all-done {
+  margin: 18px 14px 0;
+  color: var(--work);
+  font-size: 15px;
+  animation: rise 0.7s var(--ease) both;
+}
+
+/* ---------- the peace sign's pill (components/frame/PeacePill.tsx): Desk's "peace sign" moment ---------- */
+
+/* Fixed, so it shows wherever you've scrolled to; just under the top bar, like the mockup. */
+.peace {
+  position: fixed;
+  top: 92px;
+  left: 16px;
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* 30 px is a full pill on one or two lines, like the mockup's, and a rounded card when a long message wraps more. */
+.peace-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 640px;
+  padding: 10px 20px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 20px 44px -26px rgb(0 0 0 / 45%);
+}
+
+.peace-bars {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.peace-bars span {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--work);
+  animation: bar 0.9s ease-in-out infinite;
+}
+
+.peace-bars span:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.peace-bars span:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+.peace-bars span:nth-child(4) {
+  animation-delay: -0.15s;
+}
+
+.peace-text {
+  font-size: 14px;
+}
+
 /* ---------- Apps (components/apps/AppsCard.tsx): Desk's, next to the to-dos ---------- */
 
 .apps-head {
@@ -2072,6 +2159,11 @@ button.todo-pill:active,
 
   .shell {
     padding: 16px 16px 120px;
+  }
+
+  /* The phone's top bar is one shorter row, so the pill keeps the same 4 px under it. */
+  .peace {
+    top: 66px;
   }
 
   /* Centered, 12 px above the dock (26 px up, 62 px tall). */

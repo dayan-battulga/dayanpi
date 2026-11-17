@@ -166,6 +166,12 @@ Out of the box it's a fixed sentence (the template):
 
 Past bedtime (from bedtime until 5 a.m.) it says it's past your bedtime and to wrap up instead of counting hours. It reads the first 5 to-dos of each list and says how many more.
 
+### What the page shows while it talks
+
+Every page you have open shows the same words in a frosted pill just under the top bar, with little green sound bars moving next to them. It rises in when the sign fires, stays while the speaker is still saying it, and fades away once it's done (it waits for aplay to finish, so a long message keeps it up). With the voice off, or if the speaker couldn't say it, it stays 6 seconds. With Reduce motion on, it just fades in and out and the bars stand still.
+
+The words come through the live stream as `focus.spoken`: `{"text", "at", "age_s", "speaking"}`, where `speaking` is true from the moment the phrase is queued until aplay has played it (or it failed). The text is never written to the journal or the focus log; the log only says which kind you heard.
+
 ### Your bedtime
 
 `DAYANPI_BEDTIME` in `/etc/dayanpi.env`, as `HH:MM` on a 24-hour clock. The default is `00:00` (midnight). A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away. Something that isn't `HH:MM` logs a warning and falls back to midnight.

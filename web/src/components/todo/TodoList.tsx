@@ -2,6 +2,7 @@ import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { riseDelay } from "@/components/shared/rise";
+import { AllDone } from "@/components/todo/AllDone";
 import { TodoRow } from "@/components/todo/TodoRow";
 import { useTodos } from "@/hooks/useTodos";
 import { NEW_TODO_ID, TODO_TEXT_MAX } from "@/lib/todos";
@@ -27,6 +28,18 @@ export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProp
       seen.current = new Set(ids);
     }
   });
+  // "All done" once the open rows run out because they were checked off (not deleted, not on load, not a list that was
+  // empty to begin with), until a to-do is open again. Worked out while rendering, so it lands in the same commit as
+  // the check: a second commit would hold the checked row's slide into Done for a second.
+  const openIds = todos.open.map((item) => item.id);
+  const [lastOpen, setLastOpen] = useState<string[] | null>(null);
+  const [finished, setFinished] = useState(false);
+  if (streamed != null && openIds.join("\n") !== lastOpen?.join("\n")) {
+    const doneIds = new Set(todos.done.map((item) => item.id));
+    const before = lastOpen ?? [];
+    setFinished(openIds.length > 0 ? false : finished || (before.length > 0 && before.every((id) => doneIds.has(id))));
+    setLastOpen(openIds);
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -84,6 +97,7 @@ export function TodoList({ todos: streamed, state, now, readOnly }: TodoListProp
           {todos.open.map((item) => showRow(item, false))}
         </AnimatePresence>
       </ul>
+      {finished && <AllDone />}
       {todos.done.length > 0 && (
         <m.h3 layout="position" className="todo-done-title">
           Done

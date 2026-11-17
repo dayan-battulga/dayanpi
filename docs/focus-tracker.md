@@ -209,7 +209,7 @@ The frame around them:
 - **On a phone** (under 640 px wide) the tabs move into a frosted dock at the bottom: Desk, a **+** that jumps straight to the new to-do box (from any page), and Settings. The Pi page isn't in the dock yet, so on a phone open `/pi` yourself.
 - **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages dim until it's back. The old Live badge is gone: no chip means it's live.
 - **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
-- **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign fires, and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
+- **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign other than peace fires (peace has its own pill, see [Hand signs](#hand-signs)), and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
 - **Only the Desk downloads up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
 
 ### ⌘K and the keyboard
@@ -264,6 +264,7 @@ One running to-do list on the left of your desk page, under the totals, with App
 - **Start** makes that item the one you're on: its row gets a light tint, its time turns the state's color, and the button turns into **Working** (green, with a blinking dot) while you're focused, or **Paused** while you're on your phone or away. Click Working or Paused to stop it, so nothing's current. Only one item is current at a time, and it only collects time while you're **focused**, so phone and away time never count.
 - **Next to the title:** how many are open (the number rolls when it changes), or "Start one to collect its time" when nothing's current.
 - **Check it off** and it slides down into **Done**, ticked and crossed out, and the rows under it close up. Uncheck it and it slides back. Checking off the current item stops its clock.
+- **All done.** Check off the last open item and a burst of confetti falls over the list once, and "All done. Nice." shows in green until you add another one (or uncheck one). Not when the page opens on a finished list, not when the list was empty to begin with, and not when you delete the last one. With Reduce motion on there's no confetti, just the line.
 - **Add** with the "Add a to-do" line at the bottom: type and press Enter, and the new row rises in. **N** or ⌘K's "Add a to-do" puts the cursor there from anywhere (so does the **+** in the phone dock).
 - **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels.
 - **Delete** with the small × just past the end of a row. With a mouse it shows when you point at the row (or Tab to it); on a phone or a touch screen it's always there, in gray.
@@ -325,7 +326,7 @@ curl -s -b ~/.dayanpi-cookies "localhost:8000/api/days?month=$(date +%Y-%m)" | p
 
 ## Hand signs
 
-Hold up a peace sign ✌️ and the Pi gives you a quick rundown out loud: the time, how long until bed, what's left on your to-do list and what you finished today. That's a fixed sentence out of the box, or a friendlier one written by a small LLM on the Pi if you set one up. Both are in [What the peace sign says](voice.md#what-the-peace-sign-says). The page also pops up a little note at the bottom for a few seconds ("✌️ Peace sign: reading your to-dos"), so you can tell it worked even with the speaker off.
+Hold up a peace sign ✌️ and the Pi gives you a quick rundown out loud: the time, how long until bed, what's left on your to-do list and what you finished today. That's a fixed sentence out of the box, or a friendlier one written by a small LLM on the Pi if you set one up. Both are in [What the peace sign says](voice.md#what-the-peace-sign-says). The page shows what it's saying in a frosted pill under the top bar while it talks (6 seconds with the speaker off), so you can tell it worked and read along. See [What the page shows while it talks](voice.md#what-the-page-shows-while-it-talks).
 
 It runs on two small hand models (see [Where the models come from](#where-the-models-come-from)): one finds palms in the frame, the other finds 21 joints on the hand. Signs only come from the front camera, about once a second. (The hand models also look at the side camera's frame, but only for the [phone-in-hand check](#steps-2-to-4-the-tracker-runs-inside-the-site).) The code is in `dayanpi/vision/hands.py` (runs the models) and `dayanpi/vision/gestures.py` (finger rules and holds).
 
@@ -351,7 +352,7 @@ grep '"gesture"' data/focus_log/$(date +%F).jsonl
 
 ### Adding a sign
 
-Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (which fingers have to be open or folded; leave a finger out to ignore it), a hold time in `HOLD_SECONDS` in the same file, and what it does in `SIGN_ACTIONS` in `dayanpi/app.py`. Add a line for the page's toast in `web/src/hooks/useGestureToast.ts` if you want nicer text than the sign's name.
+Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (which fingers have to be open or folded; leave a finger out to ignore it), a hold time in `HOLD_SECONDS` in the same file, and what it does in `SIGN_ACTIONS` in `dayanpi/app.py`. The page shows a new sign in a toast with its name (`web/src/hooks/useGestureToast.ts`); peace is the one that gets the pill instead.
 
 ### Tuning
 
