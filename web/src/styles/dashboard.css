@@ -966,21 +966,23 @@ number-flow-react {
   gap: 8px;
 }
 
+/* Centered on the page: the tile in the camera's own shape (--ratio, width over height, from CameraCard), so the
+   whole picture fills it with no bars, as wide as the page allows but never taller than 520 px, with its caption and
+   readings under it. Switching cameras glides it to the other shape. */
 .cam {
-  margin-top: 28px;
+  width: min(100%, 520px * var(--ratio));
+  margin: 28px auto 0;
+  transition: width 0.45s var(--ease);
 }
 
-/* The camera's own shape (--ratio, width over height, from CameraCard), so the whole picture fills it with no bars;
-   as wide as the page allows, but never taller than 520 px. Switching cameras glides it to the other shape. */
 .cam-tile {
   position: relative;
-  width: min(100%, 520px * var(--ratio));
+  width: 100%;
   aspect-ratio: var(--ratio);
   overflow: hidden;
   border-radius: 28px;
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--line);
-  transition: width 0.45s var(--ease);
 }
 
 /* While peeking, a video's dark around the picture, the same in both themes (the mockup's stand-in for the feed). */

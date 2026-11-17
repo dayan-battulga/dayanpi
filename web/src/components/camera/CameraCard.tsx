@@ -70,8 +70,8 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
           </div>
         )}
       </div>
-      <figure className="cam">
-        <div className="cam-tile" data-peeking={(open && peeking) || undefined} style={{ "--ratio": ratios[shown.name] ?? FALLBACK_RATIO } as CSSProperties}>
+      <figure className="cam" style={{ "--ratio": ratios[shown.name] ?? FALLBACK_RATIO } as CSSProperties}>
+        <div className="cam-tile" data-peeking={(open && peeking) || undefined}>
           {/* Both stay mounted: the one not showing swaps to a blank image, which is what closes its stream. */}
           {open &&
             focus != null &&
@@ -96,8 +96,8 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
           </div>
         </div>
         <figcaption className="cam-caption">{shown.caption}</figcaption>
+        <p className="cam-note">{note}</p>
       </figure>
-      <p className="cam-note">{note}</p>
     </section>
   );
 }

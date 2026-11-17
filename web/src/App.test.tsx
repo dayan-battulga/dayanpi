@@ -368,7 +368,7 @@ it("shows one camera at a time; the switch flips it, remembered, and only the sh
 it("fits the tile to each camera's own shape, so there are no bars", async () => {
   const user = userEvent.setup();
   const cameras = await openPi();
-  const tileRatio = () => (cameras.querySelector(".cam-tile") as HTMLElement).style.getPropertyValue("--ratio");
+  const tileRatio = () => (cameras.querySelector(".cam") as HTMLElement).style.getPropertyValue("--ratio");
   const focus = makeFocus({ side_camera: true });
   FakeEventSource.latest?.send(makeSnapshot(focus));
   expect(tileRatio()).toBe(String(768 / 432)); // the front overlay's frame
