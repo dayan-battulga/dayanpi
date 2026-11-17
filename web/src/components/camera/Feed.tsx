@@ -15,12 +15,13 @@ interface FeedProps {
   alt: string;
   overlay: Overlay | null | undefined;
   cameraOk: boolean;
-  wanted: boolean; // peeking: only then does it stream
+  wanted: boolean; // peeking at this camera: only then does it stream
+  hidden: boolean; // the other camera is the one showing
 }
 
 // One camera's picture with its boxes. The tile is a fixed size, so the picture is fitted whole inside it in the
 // camera's own shape (dashboard.css .cam-picture): the boxes are fractions of the whole frame and stay on it.
-export function Feed({ src, alt, overlay, cameraOk, wanted }: FeedProps) {
+export function Feed({ src, alt, overlay, cameraOk, wanted, hidden }: FeedProps) {
   const [state, setState] = useState<FeedState>("off");
   const [stamp, setStamp] = useState(0);
   const [ratio, setRatio] = useState(FALLBACK_RATIO);
@@ -61,7 +62,7 @@ export function Feed({ src, alt, overlay, cameraOk, wanted }: FeedProps) {
   };
 
   return (
-    <div className={state === "live" ? "cam-picture is-live" : "cam-picture"} style={{ "--ratio": ratio } as CSSProperties}>
+    <div className={state === "live" ? "cam-picture is-live" : "cam-picture"} hidden={hidden} style={{ "--ratio": ratio } as CSSProperties}>
       <img alt={alt} width="640" height="480" src={wanted ? `${src}?t=${stamp}` : BLANK_IMAGE} onLoad={handleLoad} onError={handleError} />
       <div className="overlay" aria-hidden="true">
         {boxes.map((box) => (

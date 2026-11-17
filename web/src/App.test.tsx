@@ -337,27 +337,42 @@ it("drops the boxes once the overlay is more than 3 s old", async () => {
   expect(document.querySelectorAll(".box:not(.is-leaving)")).toHaveLength(0);
 });
 
-it("shows both cameras side by side; Peek opens both feeds with the readings, Hide closes them", async () => {
+it("shows one camera at a time; the switch flips it, remembered, and only the shown one streams", async () => {
   const user = userEvent.setup();
   const cameras = await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true })));
-  expect(Array.from(cameras.querySelectorAll("figcaption"), (caption) => caption.textContent)).toEqual(["Front", "Side"]);
-  expect(within(cameras).getByText("Hidden")).toBeVisible();
+  expect(cameras.querySelector("figcaption")).toHaveTextContent("Front");
 
   await user.click(within(cameras).getByRole("button", { name: "Peek" }));
-  expect(feedSources()).toEqual([expect.stringMatching(/^\/video\?t=/), expect.stringMatching(/^\/video\/side\?t=/)]);
+  expect(feedSources()).toEqual([expect.stringMatching(/^\/video\?t=/), expect.stringMatching(/^data:/)]);
   expect(within(cameras).getByRole("button", { name: "Hide" })).toHaveAttribute("aria-pressed", "true");
-  expect(cameras.querySelectorAll(".cam-tile[data-peeking]")).toHaveLength(2);
   expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
   expect(cameras.querySelector(".cam-note")).toHaveTextContent("person 0.92 · no phone");
-  expect(window.localStorage.getItem("dayanpi.peek")).toBe("1");
+
+  await user.click(within(cameras).getByRole("button", { name: "Show the side camera" }));
+  expect(feedSources()).toEqual([expect.stringMatching(/^data:/), expect.stringMatching(/^\/video\/side\?t=/)]);
+  const [front, side] = Array.from(cameras.querySelectorAll(".cam-picture"));
+  expect(front).not.toBeVisible();
+  expect(side).toBeVisible();
+  expect(cameras.querySelector("figcaption")).toHaveTextContent("Side");
+  expect(within(cameras).getByRole("button", { name: "Show the front camera" })).toHaveTextContent("Front");
+  expect(window.localStorage.getItem("dayanpi.camera")).toBe("side");
 
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true, last_check: { person: 0.9, phone: 0.81, elapsed_ms: 190 } })));
   expect(cameras.querySelector(".cam-note")).toHaveTextContent("person 0.90 · phone in hand 0.81");
 
   await user.click(within(cameras).getByRole("button", { name: "Hide" }));
   expect(feedSources()).toEqual([expect.stringMatching(/^data:/), expect.stringMatching(/^data:/)]);
-  expect(cameras.querySelectorAll(".cam-tile[data-peeking]")).toHaveLength(0);
+});
+
+it("has no switch without a side camera, and starts on the side camera when that was the pick", async () => {
+  window.localStorage.setItem("dayanpi.camera", "side");
+  const cameras = await openPi();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: false })));
+  expect(within(cameras).queryByRole("button", { name: /Show the/ })).toBeNull();
+  expect(cameras.querySelector("figcaption")).toHaveTextContent("Front");
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true })));
+  expect(cameras.querySelector("figcaption")).toHaveTextContent("Side");
 });
 
 it.each(["tailscale_only", "owner_only"] as const)("locks the cameras and never opens /video when the camera is %s", async (access) => {
@@ -365,11 +380,10 @@ it.each(["tailscale_only", "owner_only"] as const)("locks the cameras and never 
   const cameras = await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_access: access, side_camera: true, overlay: null })));
   expect(within(cameras).getByText("Only on your own devices")).toBeVisible();
-  expect(within(cameras).getByText("Locked")).toBeVisible();
   expect(cameras.querySelector(".cam-note")).toHaveTextContent("This browser isn’t one of your Tailscale devices, so the cameras stay closed.");
   expect(cameras.querySelector("img")).toBeNull();
   expect(cameras.querySelector(".cam-tile[data-peeking]")).toBeNull();
-  expect(within(cameras).queryByRole("button", { name: /Peek|Hide/ })).toBeNull();
+  expect(within(cameras).queryByRole("button", { name: /Peek|Hide|Show the/ })).toBeNull();
 });
 
 it("opens the feed as before when the camera is open, or the Pi doesn't say", async () => {

@@ -1,4 +1,4 @@
-import { EyeOff, Lock } from "lucide-react";
+import { ArrowLeftRight, EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
 import { Feed } from "@/components/camera/Feed";
 import { riseDelay } from "@/components/shared/rise";
@@ -6,8 +6,8 @@ import { readStored, writeStored } from "@/lib/storage";
 import type { FocusStatus } from "@/lib/types";
 
 const FEEDS = [
-  { name: "front", src: "/video", caption: "Front", alt: "Live front camera feed", overlayKey: "overlay", hidden: "Hidden while you work", locked: "Only on your own devices" },
-  { name: "side", src: "/video/side", caption: "Side", alt: "Live side camera feed", overlayKey: "side_overlay", hidden: "Hidden", locked: "Locked" },
+  { name: "front", src: "/video", caption: "Front", alt: "Live front camera feed", overlayKey: "overlay" },
+  { name: "side", src: "/video/side", caption: "Side", alt: "Live side camera feed", overlayKey: "side_overlay" },
 ] as const;
 const PHONE_MIN = 0.5; // focus/tracker.py's: a weaker phone doesn't count
 const HIDDEN_NOTE = "The readings keep updating while the picture is hidden.";
@@ -24,18 +24,25 @@ function describeReadings(focus: FocusStatus | undefined): string {
   return text;
 }
 
-// /pi's cameras: every feed side by side, hidden behind a veil until Peek, which opens them all (Hide closes them).
-// Off your own Tailscale devices they're locked, and /video never opens.
+// /pi's cameras: one tile, hidden behind a veil until Peek. With a side camera, the Front/Side button switches which
+// one it shows (remembered), and only that one's stream opens. Off your own Tailscale devices it's locked, and
+// /video never opens.
 export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
   const [peeking, setPeeking] = useState(() => readStored("peek", "0") === "1");
+  const [view, setView] = useState(() => (readStored("camera", "front") === "side" ? "side" : "front"));
   // The feeds wait for the first status, which says whether /video will answer this viewer at all.
   const open = (focus?.camera_access ?? "open") === "open";
-  const shown = open && peeking;
-  const feeds = focus?.side_camera ? FEEDS : FEEDS.slice(0, 1);
+  const canFlip = open && focus?.side_camera === true;
+  const shown = canFlip && view === "side" ? FEEDS[1] : FEEDS[0];
   const note = !open ? LOCKED_NOTE : peeking ? describeReadings(focus) : HIDDEN_NOTE;
   const togglePeek = () => {
     writeStored("peek", peeking ? "0" : "1");
     setPeeking(!peeking);
+  };
+  const flipCamera = () => {
+    const next = shown.name === "side" ? "front" : "side";
+    writeStored("camera", next);
+    setView(next);
   };
 
   return (
@@ -45,27 +52,44 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
           Cameras
         </h1>
         {open && (
-          <button type="button" className="peek-button" aria-pressed={peeking} onClick={togglePeek}>
-            {peeking ? "Hide" : "Peek"}
-          </button>
+          <div className="cameras-buttons">
+            {canFlip && (
+              <button type="button" className="peek-button" aria-label={shown.name === "side" ? "Show the front camera" : "Show the side camera"} onClick={flipCamera}>
+                <ArrowLeftRight size={16} strokeWidth={1.8} aria-hidden="true" />
+                {shown.name === "side" ? "Front" : "Side"}
+              </button>
+            )}
+            <button type="button" className="peek-button" aria-pressed={peeking} onClick={togglePeek}>
+              {peeking ? "Hide" : "Peek"}
+            </button>
+          </div>
         )}
       </div>
-      <div className="cam-tiles">
-        {feeds.map((feed, index) => (
-          <figure key={feed.name} className="cam">
-            <div className="cam-tile" data-peeking={shown || undefined}>
-              {open && focus != null && <Feed src={feed.src} alt={feed.alt} overlay={focus[feed.overlayKey]} cameraOk={focus.camera_ok} wanted={peeking} />}
-              <div className="cam-veil">
-                <div className="cam-veil-content">
-                  {index === 0 && (open ? <EyeOff size={22} strokeWidth={1.8} aria-hidden="true" /> : <Lock size={22} strokeWidth={1.8} aria-hidden="true" />)}
-                  <span className={index === 0 ? "cam-veil-title" : undefined}>{open ? feed.hidden : feed.locked}</span>
-                </div>
-              </div>
+      <figure className="cam">
+        <div className="cam-tile" data-peeking={(open && peeking) || undefined}>
+          {/* Both stay mounted: the one not showing swaps to a blank image, which is what closes its stream. */}
+          {open &&
+            focus != null &&
+            FEEDS.slice(0, canFlip ? 2 : 1).map((feed) => (
+              <Feed
+                key={feed.name}
+                src={feed.src}
+                alt={feed.alt}
+                overlay={focus[feed.overlayKey]}
+                cameraOk={focus.camera_ok}
+                wanted={peeking && feed === shown}
+                hidden={feed !== shown}
+              />
+            ))}
+          <div className="cam-veil">
+            <div className="cam-veil-content">
+              {open ? <EyeOff size={22} strokeWidth={1.8} aria-hidden="true" /> : <Lock size={22} strokeWidth={1.8} aria-hidden="true" />}
+              <span className="cam-veil-title">{open ? "Hidden while you work" : "Only on your own devices"}</span>
             </div>
-            <figcaption className="cam-caption">{feed.caption}</figcaption>
-          </figure>
-        ))}
-      </div>
+          </div>
+        </div>
+        <figcaption className="cam-caption">{shown.caption}</figcaption>
+      </figure>
       <p className="cam-note">{note}</p>
     </section>
   );
