@@ -8,15 +8,17 @@
   --surface: #ffffff;
   --sunken: #efefec;
   --line: rgb(17 17 19 / 8%);
-  --line-strong: rgb(17 17 19 / 16%);
+  --line-strong: rgb(17 17 19 / 18%);
   --ink: #111113;
   --ink-2: #3a3a40;
   --muted: #696970;
   --work: #0e6e63;
   --phone: #c2410c;
   --away: #6d5bd0;
-  --warm: #a16207;
+  --warm: #8f5a06;
   --hot: #be123c;
+  --scrim: rgb(17 17 19 / 24%);
+  --glass: rgb(255 255 255 / 78%);
   --shadow: 0 1px 2px rgb(17 17 19 / 4%), 0 14px 34px -16px rgb(17 17 19 / 16%);
 }
 
@@ -24,9 +26,9 @@
   color-scheme: dark;
   --bg: #0a0a0c;
   --surface: #131316;
-  --sunken: #0d0d10;
+  --sunken: #1a1a1e;
   --line: rgb(255 255 255 / 7%);
-  --line-strong: rgb(255 255 255 / 15%);
+  --line-strong: rgb(255 255 255 / 16%);
   --ink: #ededef;
   --ink-2: #c4c4ca;
   --muted: #8e8e96;
@@ -35,11 +37,15 @@
   --away: #a99bff;
   --warm: #f5b83d;
   --hot: #ff5c7a;
+  --scrim: rgb(0 0 0 / 50%);
+  --glass: rgb(24 24 28 / 76%);
   --shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 18px 40px -18px rgb(0 0 0 / 75%);
 }
 
 :root {
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* The mockups are content-box: 1180 px of content plus 32 px sides (16 on a phone). Here everything is border-box. */
+  --page-width: calc(1180px + 2 * 32px);
   --radius: 24px;
   --font-ui: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
@@ -123,9 +129,9 @@ ol {
 }
 
 .shell {
-  width: min(1240px, 100% - 2 * clamp(16px, 4vw, 40px));
+  max-width: var(--page-width);
   margin: 0 auto;
-  padding-bottom: 56px;
+  padding: 0 32px 56px;
 }
 
 .card {
@@ -200,21 +206,142 @@ ol {
   font-size: 13px;
 }
 
-.icon-button {
+/* ---------- the frame: top bar, tabs, dock ---------- */
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 22px 32px;
+}
+
+/* Login and Join's mockups set border-box on their bar: 1180 px including the sides. */
+.topbar-auth {
+  max-width: 1180px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wordmark {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.reconnecting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warm) 12%, transparent);
+  color: var(--warm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.reconnecting::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--warm);
+  animation: blink 1s ease-in-out infinite;
+}
+
+/* The page under a dropped stream: its numbers are stale until it's back. */
+.live {
+  transition: opacity 0.6s var(--ease);
+}
+
+.frame[data-connection="reconnecting"] .live {
+  opacity: 0.55;
+}
+
+/* isolation keeps each sliding pill (z-index -1) above its bar but under the labels. */
+.tabs,
+.dock {
+  isolation: isolate;
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.tabs {
+  gap: 2px;
+  padding: 4px;
+  background: var(--sunken);
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.3s var(--ease);
+}
+
+.tab:hover,
+.tab[aria-current="page"],
+.dock-item[aria-current="page"] {
+  color: var(--ink);
+}
+
+.tab-pill,
+.dock-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-button,
+.account-button,
+.dock-add {
   display: inline-grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink);
   cursor: pointer;
-  transition: transform 0.25s var(--ease);
+  transition:
+    transform 0.25s var(--ease),
+    box-shadow 0.3s var(--ease);
 }
 
-.icon-button:active {
-  transform: scale(0.94);
+.icon-button:active,
+.account-button:active,
+.dock-add:active {
+  transform: scale(0.97);
+}
+
+.icon-button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
 }
 
 .icon-button svg {
@@ -224,86 +351,59 @@ ol {
     opacity 0.4s var(--ease);
 }
 
-/* Show the icon for the theme you'd switch to. */
+/* Show the icon for the theme you'd switch to; the other one turns a quarter away. */
 :root[data-theme="light"] .icon-sun,
 :root[data-theme="dark"] .icon-moon {
   opacity: 0;
-  transform: rotate(-120deg) scale(0.5);
+  transform: rotate(-90deg);
 }
 
-/* ---------- header ---------- */
+.account-button,
+.dock-add {
+  border: 0;
+  background: var(--ink);
+  color: var(--bg);
+  font: 600 15px var(--font-ui);
+}
 
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
+.account-button[aria-current="page"] {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--work);
+}
+
+.dock {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  z-index: 40;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 28px 0 32px;
-}
-
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.wordmark {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-
-.sections {
-  display: flex;
   gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--sunken);
+  padding: 6px;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 20px 44px -24px rgb(0 0 0 / 45%);
 }
 
-.sections a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 14px;
+.dock-item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 48px;
   border-radius: 999px;
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  transition:
-    background-color 0.3s var(--ease),
-    color 0.3s var(--ease);
 }
 
-.sections a:hover {
-  background: var(--surface);
-  color: var(--ink);
+.dock-pill {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 
-.topbar-end {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-#status[data-state="connected"] .status-dot {
-  --pulse: var(--work);
-  background: var(--work);
-  animation: breathe 2.4s ease-in-out infinite;
-}
-
-#status[data-state="reconnecting"] .status-dot {
-  background: var(--warm);
-  animation: blink 1s ease-in-out infinite;
+.dock-add {
+  width: 48px;
+  height: 48px;
 }
 
 /* ---------- focus card ---------- */
@@ -1131,16 +1231,6 @@ ol {
   font-size: 13px;
 }
 
-.footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 56px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-}
-
 /* ---------- motion ---------- */
 
 .rise {
@@ -1148,11 +1238,12 @@ ol {
   animation-delay: calc(var(--d, 0) * 70ms);
 }
 
+/* design/SPEC.md's motion catalog, defined once (shine is further down). */
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
-    filter: blur(6px);
+    transform: translateY(var(--rise-y, 10px));
+    filter: blur(var(--rise-blur, 4px));
   }
   to {
     opacity: 1;
@@ -1161,19 +1252,112 @@ ol {
   }
 }
 
+/* Room's seats; lamp-small is RoomPhone's. */
+@keyframes lamp {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+      0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent),
+      0 30px 90px -38px color-mix(in srgb, var(--lamp) 72%, transparent);
+  }
+}
+
+@keyframes lamp-small {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+      0 22px 44px -32px color-mix(in srgb, var(--lamp) 60%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent),
+      0 22px 56px -26px color-mix(in srgb, var(--lamp) 78%, transparent);
+  }
+}
+
 @keyframes breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse, var(--ink)) 50%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse, var(--lamp, var(--ink))) 55%, transparent);
   }
   60% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--pulse, var(--ink)) 0%, transparent);
+    box-shadow: 0 0 0 var(--breathe-size, 6px) color-mix(in srgb, var(--pulse, var(--lamp, var(--ink))) 0%, transparent);
   }
 }
 
 @keyframes blink {
   50% {
     opacity: 0.35;
+  }
+}
+
+@keyframes bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.7);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes fall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(170px) rotate(320deg);
+    opacity: 0;
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -1236,20 +1420,50 @@ ol {
   }
 }
 
-@media (max-width: 560px) {
+/* A phone: RoomPhone's top bar, and room at the bottom for the dock. */
+@media (max-width: 639px) {
   .topbar {
-    padding-top: 20px;
+    padding: 18px 20px 0;
   }
 
-  .sections {
-    order: 3;
-    width: 100%;
-    justify-content: center;
+  .wordmark {
+    font-size: 18px;
   }
 
+  .topbar-end {
+    gap: 8px;
+  }
+
+  .shell {
+    padding: 16px 16px 120px;
+  }
+}
+
+/* Page changes (React's <ViewTransition> in Frame): the old page fades, the new one rises in a little.
+   The top bar isn't part of it, so the tab pill slides live instead of cross-fading with a ghost. */
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(.page) {
+  animation: fade-in 0.2s ease-in reverse both;
+}
+
+::view-transition-new(.page) {
+  --rise-y: 6px;
+  --rise-blur: 0px;
+  animation: rise 0.3s var(--ease) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(.page) {
+    animation-name: fade-in;
+  }
+
   *,
   *::before,
   *::after {

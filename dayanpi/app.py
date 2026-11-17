@@ -658,6 +658,8 @@ def side_video(request: Request):
 @app.get("/login")
 @app.get("/join/{code}")
 @app.get("/settings")
+@app.get("/me")
+@app.get("/pi")
 def page():
     """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""
     return FileResponse(INDEX_PAGE)

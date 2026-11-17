@@ -5,7 +5,7 @@ import { TodoRow } from "@/components/todo/TodoRow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { TODO_TEXT_MAX, sendTodo, type TodoChange } from "@/lib/todos";
+import { NEW_TODO_ID, TODO_TEXT_MAX, sendTodo, type TodoChange } from "@/lib/todos";
 import type { Segment, Todos } from "@/lib/types";
 
 // A snapshot built just before a change can still arrive after the reply, so the reply wins for a moment.
@@ -52,6 +52,7 @@ export function TodoCard({ todos, known, now, readOnly = false }: TodoCardProps)
       {!readOnly && (
         <form className="flex gap-2" onSubmit={addTodo}>
           <Input
+            id={NEW_TODO_ID}
             value={newText}
             onChange={(event) => setNewText(event.target.value)}
             maxLength={TODO_TEXT_MAX}

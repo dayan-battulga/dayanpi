@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from contextlib import ExitStack, contextmanager
+from urllib.parse import quote
 
 import anyio
 import httpx
@@ -417,10 +418,10 @@ def test_status_says_when_there_is_a_side_camera(monkeypatch):
 
 def test_the_dashboard_feeds_match_the_server():
     """The built page's feeds (FEEDS in web/src/components/camera/CameraCard.tsx) against the server:
-    a typo in one would just be a dead feed or no boxes."""
+    a typo in one would just be a dead feed or no boxes. The camera is on the lazy /pi page, a chunk
+    index.html doesn't name, so this reads every built script."""
     with open_client() as client:
-        page = client.get("/").text
-        bundle = "".join(client.get(path).text for path in re.findall(r'src="([^"]+\.js)"', page))
+        bundle = "".join(client.get(f"/assets/{path.name}").text for path in (app.STATIC_DIR / "assets").glob("*.js"))
         status = client.get("/api/focus").json()
     feed_paths = re.findall(r"src:[`\"'](/video[^`\"']*)", bundle)
     overlay_keys = re.findall(r"overlayKey:[`\"']([^`\"']+)", bundle)
@@ -1113,6 +1114,8 @@ ACCESS = {
     ("GET", "/login"): ("/login", None, 200, 200, 200),
     ("GET", "/join/{code}"): ("/join/abc_DEF-123", None, 200, 200, 200),
     ("GET", "/settings"): ("/settings", None, 303, 200, 200),
+    ("GET", "/me"): ("/me", None, 303, 200, 200),
+    ("GET", "/pi"): ("/pi", None, 303, 200, 200),  # members get the page too; it sends them on to /me
     ("GET", "/"): ("/", None, 303, 200, 200),  # the static mount: the dashboard and its files
 }
 
@@ -1144,13 +1147,13 @@ def test_the_owner_only_reads_turn_a_member_away():
         assert (reply.status_code, reply.json()) == (403, {"detail": "only the owner can do that"}), path
 
 
-@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings"])
+@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi"])
 def test_the_page_routes_serve_the_page(path):
     signed_in = let_in(stranger(), find_owner()).get(path)
     signed_out = stranger().get(path, follow_redirects=False)
     assert (signed_in.status_code, signed_in.text) == (200, app.INDEX_PAGE.read_text())
-    if path == "/settings":
-        assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=%2Fsettings")
+    if path in ("/settings", "/me", "/pi"):
+        assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=" + quote(path, safe=""))
     else:
         assert (signed_out.status_code, signed_out.text) == (200, app.INDEX_PAGE.read_text())
 

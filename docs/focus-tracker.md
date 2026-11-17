@@ -119,7 +119,7 @@ The numbers come from the real frames (a quick glance at the phone doesn't count
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 
-**The Focus card** on the dashboard shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6) and today's totals.
+**The Focus card** on your desk page (`/me`) shows the state, a live timer, a timeline from 6 am to midnight (teal = focused, orange = phone, violet = away; it starts earlier if you were up before 6) and today's totals.
 
 **Callouts** are the things it says (out loud once the speaker's in; always logged):
 
@@ -182,6 +182,25 @@ journalctl -u dayanpi -n 20 --no-pager     # look for "focus tracker running"
 ```
 
 Then open the site: the Focus card should flip to **focused** within a couple of seconds of you sitting down.
+
+## The pages
+
+The site is a few pages inside one frame now (the look comes from the mockups in `design/mockups`, see `design/SPEC.md`):
+
+| Page | Who | What's on it |
+| --- | --- | --- |
+| **Desk** (`/me`) | everyone | Your day: On the Mac, the Focus card, apps, to-dos and the calendar. `/` takes you here until the room exists. |
+| **Pi** (`/pi`) | you | The camera card and the Pi's own numbers (temp, CPU, memory, disk, power, voice). The red **Undervoltage** warning shows up here when the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
+| **Settings** (`/settings`) | everyone | Your name, password and Mac tokens, plus invites and accounts for you. |
+| **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
+
+The frame around them:
+
+- **The top bar:** the wordmark, the Desk / Pi tabs (the white pill slides over to the one you pick), the sun/moon button for the theme, and a round button with your initial that opens Settings and Sign out. It gets a teal ring while you're in Settings.
+- **On a phone** (under 640 px wide) the tabs move into a frosted dock at the bottom: Desk, a **+** that jumps straight to the new to-do box (from any page), and Settings. The Pi page isn't in the dock yet, so on a phone open `/pi` yourself.
+- **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages dim until it's back. The old Live badge is gone: no chip means it's live.
+- **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
+- **Only the Desk downloads up front.** Settings, the Pi page, sign-in and join load the first time you open them.
 
 ## With both cameras
 

@@ -21,3 +21,6 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
+// The frame scrolls each new page to its top, and the dock's + scrolls to the new to-do box.
+window.scrollTo = () => {};
+Element.prototype.scrollIntoView = function () {};

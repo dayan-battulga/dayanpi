@@ -1,14 +1,12 @@
-import { ArrowLeft, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useFrame } from "@/components/frame/Frame";
 import { RoomPanels } from "@/components/settings/RoomPanels";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { TokensPanel } from "@/components/settings/TokensPanel";
 import { Field } from "@/components/shared/Field";
 import { FormNote, buildErrorNote, type Note } from "@/components/shared/FormNote";
-import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { useMe } from "@/hooks/useMe";
 import { NAME_MAX, PASSWORD_MAX, PASSWORD_MIN, signOut } from "@/lib/account";
 import { request } from "@/lib/http";
 import type { User } from "@/lib/types";
@@ -92,36 +90,22 @@ function PasswordPanel({ username }: { username: string }) {
   );
 }
 
+// At /settings, inside the frame: the top bar's account button and the dock lead here and back.
 export function SettingsPage() {
-  const { user, setUser } = useMe();
+  const { user, setUser } = useFrame();
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link to="/" className="brand">
-          <span className="wordmark">dayanpi</span>
-          <span className="label">settings</span>
-        </Link>
-        <div className="topbar-end">
-          <Link to="/" className="button button-ghost button-small">
-            <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
-            Dashboard
-          </Link>
-          <ThemeToggle />
-        </div>
-      </header>
-      <main className="mx-auto flex max-w-2xl flex-col gap-4">
-        <h1 className="sr-only">Settings</h1>
-        {user == null ? (
-          <span className="muted text-sm">Loading…</span>
-        ) : (
-          <>
-            <ProfilePanel user={user} onSaved={setUser} />
-            <PasswordPanel username={user.username} />
-            <TokensPanel />
-            {user.role === "owner" && <RoomPanels />}
-          </>
-        )}
-      </main>
+    <div className="mx-auto flex max-w-2xl flex-col gap-4">
+      <h1 className="sr-only">Settings</h1>
+      {user == null ? (
+        <span className="muted text-sm">Loading…</span>
+      ) : (
+        <>
+          <ProfilePanel user={user} onSaved={setUser} />
+          <PasswordPanel username={user.username} />
+          <TokensPanel />
+          {user.role === "owner" && <RoomPanels />}
+        </>
+      )}
     </div>
   );
 }

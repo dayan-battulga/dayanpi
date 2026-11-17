@@ -1,45 +1,22 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "@/App";
 import { ME_RETRY_MS } from "@/hooks/useMe";
+import { PHONE_QUERY } from "@/hooks/useMediaQuery";
 import { STREAM_RETRY_MS } from "@/hooks/useSnapshot";
 import { loadPage } from "@/lib/navigation";
 import type { User } from "@/lib/types";
 import { answer, serveApi, type Route } from "@/test/fakeApi";
+import { FakeEventSource } from "@/test/fakeStream";
 import { MEMBER, OWNER, makeFocus, makeSnapshot } from "@/test/fixtures";
 
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 
-class FakeEventSource {
-  static readonly CLOSED = 2;
-  static latest: FakeEventSource | null = null;
-  readyState = 1;
-  closed = false;
-  onmessage: ((event: { data: string }) => void) | null = null;
-  onerror: (() => void) | null = null;
+const realMatchMedia = window.matchMedia;
 
-  constructor(public url: string) {
-    FakeEventSource.latest = this;
-  }
-
-  close() {
-    this.closed = true;
-  }
-
-  send(data: object) {
-    act(() => this.onmessage?.({ data: JSON.stringify(data) }));
-  }
-
-  // A dropped connection the browser retries (0, connecting), or a non-200 answer it gives up on (2, closed).
-  fail(readyState = 0) {
-    this.readyState = readyState;
-    act(() => this.onerror?.());
-  }
-}
-
-// The Pi's answers the dashboard asks for on load: who you are, and today's segments.
+// The Pi's answers the pages ask for on load: who you are, and today's segments.
 function servePi(me: User = OWNER, extra: Record<string, Route> = {}) {
   const start = Date.now() / 1000 - 3600;
   const sent = serveApi({
@@ -50,12 +27,29 @@ function servePi(me: User = OWNER, extra: Record<string, Route> = {}) {
   return sent;
 }
 
-function renderApp() {
+function ShowPath() {
+  return <output aria-label="Path">{useLocation().pathname}</output>;
+}
+
+function renderApp(path = "/me") {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <App />
+      <ShowPath />
     </MemoryRouter>,
   );
+}
+
+// /pi is a lazy page, and it waits for /api/me to say you're the owner.
+async function openPi() {
+  renderApp("/pi");
+  const camera = await screen.findByRole("region", { name: "Camera" });
+  return camera;
+}
+
+// A phone-sized window: only the phone query matches.
+function usePhone() {
+  window.matchMedia = (query: string) => ({ ...realMatchMedia(query), matches: query === PHONE_QUERY });
 }
 
 beforeEach(() => {
@@ -68,38 +62,152 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.mocked(loadPage).mockClear();
   window.localStorage.clear();
+  window.matchMedia = realMatchMedia;
 });
 
-it("draws every card from one stream", async () => {
+it("draws today's cards on /me from one stream", async () => {
   renderApp();
-  expect(screen.getByText("Offline")).toBeInTheDocument();
   expect(FakeEventSource.latest?.url).toBe("/api/stream");
 
   FakeEventSource.latest?.send(makeSnapshot());
 
-  expect(screen.getByText("Live")).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Focused");
   expect(document.getElementById("focus-state")).toHaveTextContent("Working");
   expect(document.getElementById("focus-timer")).toHaveTextContent("2:05");
   expect(document.getElementById("focus-working")).toHaveTextContent("1h 05m");
   expect(document.getElementById("focus-pickups")).toHaveTextContent("3");
-  expect(document.querySelector(".reading[data-key=person] .reading-value")).toHaveTextContent("0.92");
-  expect(document.getElementById("check-ms")).toHaveTextContent("~186 ms each");
-  expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
   expect(screen.getByText("finish the report")).toBeInTheDocument();
   expect(screen.getByText("12m")).toBeInTheDocument();
-  expect(document.getElementById("pi-summary")).toHaveTextContent("Running smooth");
-  expect(document.getElementById("temp")).toHaveTextContent("48.2");
-  expect(document.getElementById("cpu-cores")?.children).toHaveLength(4);
-  expect(document.getElementById("net")).toHaveTextContent("↓ 120 kb/s · ↑ 1.5 Mb/s");
   expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+  expect(screen.queryByRole("region", { name: "Camera" })).toBeNull();
+  expect(document.getElementById("pi")).toBeNull();
 
   await waitFor(() => expect(document.querySelector(".segment.is-working.is-live")).not.toBeNull());
   expect(screen.getByText("Sat down to work")).toBeInTheDocument();
 });
 
-it("drops the boxes once the overlay is more than 3 s old", () => {
+it("puts the camera and the Pi's numbers on /pi", async () => {
+  const camera = await openPi();
+  FakeEventSource.latest?.send(makeSnapshot());
+
+  expect(camera.querySelector(".reading[data-key=person] .reading-value")).toHaveTextContent("0.92");
+  expect(document.getElementById("check-ms")).toHaveTextContent("~186 ms each");
+  expect(document.querySelector(".box.is-person .box-label")).toHaveTextContent("person 0.92");
+  expect(document.getElementById("pi-summary")).toHaveTextContent("Running smooth");
+  expect(document.getElementById("temp")).toHaveTextContent("48.2");
+  expect(document.getElementById("cpu-cores")?.children).toHaveLength(4);
+  expect(document.getElementById("net")).toHaveTextContent("↓ 120 kb/s · ↑ 1.5 Mb/s");
+  expect(screen.queryByRole("region", { name: "On the Mac" })).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("warns about undervoltage on the Pi page", async () => {
+  await openPi();
+  const snapshot = makeSnapshot();
+  FakeEventSource.latest?.send({ ...snapshot, throttle: { ...snapshot.throttle, is_undervoltage: true } });
+  expect(screen.getByRole("alert")).toHaveTextContent("Undervoltage");
+});
+
+it("sends / to /me until the room exists", async () => {
+  renderApp("/");
+  await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me"));
+  expect(screen.getByRole("link", { name: "Desk" })).toHaveAttribute("aria-current", "page");
+});
+
+it.each([
+  ["/me", "Desk"],
+  ["/pi", "Pi"],
+] as const)("marks the tab for %s as the current page", async (path, tab) => {
+  renderApp(path);
+  const tabs = within(screen.getByRole("navigation", { name: "Pages" }));
+  expect(await tabs.findByRole("link", { name: tab })).toHaveAttribute("aria-current", "page");
+  expect(tabs.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page")).toHaveLength(1);
+});
+
+it("moves the pill and the page when you pick a tab", async () => {
+  const user = userEvent.setup();
   renderApp();
+  await user.click(await screen.findByRole("link", { name: "Pi" }));
+  expect(await screen.findByRole("region", { name: "Camera" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Pi" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("link", { name: "Desk" })).not.toHaveAttribute("aria-current");
+  expect(document.querySelectorAll(".tab-pill")).toHaveLength(1);
+  expect(screen.getByRole("link", { name: "Pi" }).querySelector(".tab-pill")).not.toBeNull();
+});
+
+it("marks no tab on Settings, and rings the account button instead", async () => {
+  renderApp("/settings");
+  const account = await screen.findByRole("button", { name: "Account: Dayan" });
+  expect(account).toHaveAttribute("aria-current", "page");
+  expect(within(screen.getByRole("navigation", { name: "Pages" })).getAllByRole("link").some((link) => link.hasAttribute("aria-current"))).toBe(false);
+});
+
+it("shows a member the desk without the owner's controls, and no Pi tab", async () => {
+  servePi(MEMBER);
+  renderApp();
+  FakeEventSource.latest?.send({ focus: makeFocus({ camera_access: "owner_only" }) });
+
+  expect(await screen.findByRole("button", { name: "Account: Sam" })).toBeInTheDocument();
+  expect(screen.getByText("finish the report")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
+  expect(screen.queryByRole("checkbox", { name: "Done: finish the report" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Mac tracking" })).toBeNull();
+  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+  expect(screen.getByRole("link", { name: "Desk" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Pi" })).toBeNull();
+});
+
+it("sends a member who types /pi to their desk", async () => {
+  servePi(MEMBER);
+  renderApp("/pi");
+  await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me"));
+  expect(screen.queryByRole("region", { name: "Camera" })).toBeNull();
+});
+
+it("puts the pages in a dock on a phone, with a + that jumps to a new to-do", async () => {
+  usePhone();
+  const user = userEvent.setup();
+  renderApp("/settings");
+  const dock = within(screen.getByRole("navigation", { name: "Pages" }));
+  expect(dock.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+  expect(document.querySelector(".tabs")).toBeNull();
+
+  await user.click(await dock.findByRole("button", { name: "New to-do" }));
+
+  expect(await screen.findByRole("textbox", { name: "New to-do" })).toHaveFocus();
+  expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me");
+  expect(dock.getByRole("link", { name: "Desk" })).toHaveAttribute("aria-current", "page");
+});
+
+it("focuses the new to-do box right away from the dock on the desk", async () => {
+  usePhone();
+  const user = userEvent.setup();
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot());
+  await user.click(await screen.findByRole("button", { name: "New to-do" }));
+  expect(screen.getByRole("textbox", { name: "New to-do" })).toHaveFocus();
+});
+
+it("has no + in a member's dock: they can't add to the owner's list", async () => {
+  usePhone();
+  servePi(MEMBER);
+  renderApp();
+  await screen.findByRole("button", { name: "Account: Sam" });
+  expect(screen.queryByRole("button", { name: "New to-do" })).toBeNull();
+});
+
+it("shows the last gesture or hand sign for a few seconds", () => {
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.6 } })));
+  expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Peace sign: reading your to-dos");
+
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 4.5 } })));
+
+  expect(screen.getByRole("status", { name: "" })).toBeEmptyDOMElement();
+});
+
+it("drops the boxes once the overlay is more than 3 s old", async () => {
+  await openPi();
   FakeEventSource.latest?.send(makeSnapshot());
   expect(document.querySelectorAll(".box:not(.is-leaving)")).toHaveLength(1);
 
@@ -109,8 +217,8 @@ it("drops the boxes once the overlay is more than 3 s old", () => {
   expect(document.querySelectorAll(".box:not(.is-leaving)")).toHaveLength(0);
 });
 
-it("shows the flip button only with a side camera, and only one feed at a time", () => {
-  renderApp();
+it("shows the flip button only with a side camera, and only one feed at a time", async () => {
+  await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ side_camera: true })));
   const flip = screen.getByRole("button", { name: "Show the side camera" });
   const [front, side] = Array.from(document.querySelectorAll(".feed-frame"));
@@ -124,16 +232,6 @@ it("shows the flip button only with a side camera, and only one feed at a time",
   expect(screen.getByRole("button", { name: "Show the front camera" })).toBeInTheDocument();
 });
 
-it("shows the last gesture or hand sign for a few seconds", () => {
-  renderApp();
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.6 } })));
-  expect(screen.getByRole("status")).toHaveTextContent("Peace sign: reading your to-dos");
-
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 4.5 } })));
-
-  expect(screen.getByRole("status")).toBeEmptyDOMElement();
-});
-
 it("puts what's in front on the Mac at the top, the site big when it's a browser", () => {
   renderApp();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: "Google Chrome", site: "youtube.com" })));
@@ -141,7 +239,6 @@ it("puts what's in front on the Mac at the top, the site big when it's a browser
   expect(document.getElementById("mac")).toHaveTextContent(/^youtube\.com$/);
   expect(card).toHaveTextContent("in Google Chrome");
   expect(card.compareDocumentPosition(document.getElementById("focus-card")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(document.querySelector("#pi dt")?.parentElement?.parentElement).not.toHaveTextContent(/Mac/);
 
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ app: null })));
   expect(document.getElementById("mac")).toHaveTextContent("Not reporting");
@@ -183,42 +280,24 @@ it("says Paused when the Pi says the switch is off", async () => {
   expect(document.getElementById("mac")).toHaveTextContent("Paused");
 });
 
-it("shows a member the dashboard without the owner's controls or the Pi's numbers", async () => {
-  servePi(MEMBER);
-  renderApp();
-  FakeEventSource.latest?.send({ focus: makeFocus({ camera_access: "owner_only" }) });
-
-  expect(await screen.findByRole("button", { name: "Sam" })).toBeInTheDocument();
-  expect(screen.getByText("finish the report")).toBeInTheDocument();
-  expect(screen.queryByRole("textbox", { name: "New to-do" })).toBeNull();
-  expect(screen.queryByRole("checkbox", { name: "Done: finish the report" })).toBeNull();
-  expect(screen.queryByRole("switch", { name: "Mac tracking" })).toBeNull();
-  expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
-  expect(document.getElementById("pi")).toBeNull();
-  expect(screen.queryByRole("link", { name: "Pi" })).toBeNull();
-  expect(document.getElementById("power-alert")).not.toBeVisible();
-});
-
 it.each([
   ["tailscale_only", "Tailscale only", "Open the dashboard on one of your own Tailscale devices to see the camera."],
   ["owner_only", "The camera is private", "The readings next to it still update."],
 ] as const)("never opens /video when the camera is %s, and says why", async (access, title, text) => {
   window.localStorage.setItem("dayanpi.peek", "1");
-  renderApp();
+  const camera = await openPi();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_access: access, side_camera: true, overlay: null })));
-  const camera = screen.getByRole("region", { name: "Camera" });
   expect(camera.querySelector(".veil")).toHaveTextContent(title);
   expect(camera.querySelector(".veil")).toHaveTextContent(text);
   expect(camera.querySelector("img")).toBeNull();
   expect(camera).not.toHaveClass("is-peeking");
   expect(document.getElementById("peek-toggle")).not.toBeVisible();
   expect(document.getElementById("camera-flip")).not.toBeVisible();
-  await screen.findByRole("button", { name: "Dayan" });
 });
 
-it("opens the feed as before when the camera is open, or the Pi doesn't say", () => {
+it("opens the feed as before when the camera is open, or the Pi doesn't say", async () => {
   window.localStorage.setItem("dayanpi.peek", "1");
-  renderApp();
+  await openPi();
   expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^data:/); // nothing opened before the first status
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_access: "open" })));
   expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^\/video\?t=/);
@@ -226,9 +305,25 @@ it("opens the feed as before when the camera is open, or the Pi doesn't say", ()
   expect(document.querySelector("#camera img")?.getAttribute("src")).toMatch(/^\/video\?t=/);
 });
 
+it("shows Reconnecting next to the wordmark and dims the live page while the stream is down", async () => {
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot());
+  expect(screen.queryByText("Reconnecting")).toBeNull();
+
+  FakeEventSource.latest?.fail();
+
+  expect(within(document.querySelector(".brand") as HTMLElement).getByRole("status")).toHaveTextContent("Reconnecting");
+  expect(document.querySelector(".frame")).toHaveAttribute("data-connection", "reconnecting");
+  expect(document.querySelector(".frame[data-connection=reconnecting] .live")).not.toBeNull();
+
+  FakeEventSource.latest?.send(makeSnapshot());
+  expect(screen.queryByText("Reconnecting")).toBeNull();
+  expect(document.querySelector(".frame")).toHaveAttribute("data-connection", "connected");
+});
+
 it("asks /api/me when the stream drops, and goes to /login on a 401", async () => {
   renderApp();
-  await screen.findByRole("button", { name: "Dayan" });
+  await screen.findByRole("button", { name: "Account: Dayan" });
   servePi(OWNER, { "GET /api/me": answer({ detail: "sign in first" }, 401) });
   window.history.pushState({}, "", "/?x=1");
 
@@ -243,17 +338,17 @@ it("asks /api/me again when it got no answer, so the owner isn't stuck read-only
   servePi(OWNER, { "GET /api/me": answer({ detail: "Pi restarting" }, 503) });
   renderApp();
   await act(() => vi.advanceTimersByTimeAsync(0));
-  expect(screen.queryByRole("button", { name: "Dayan" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Account: Dayan" })).not.toBeInTheDocument();
 
   servePi();
   await act(() => vi.advanceTimersByTimeAsync(ME_RETRY_MS));
 
-  expect(screen.getByRole("button", { name: "Dayan" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Account: Dayan" })).toBeInTheDocument();
 });
 
 it("reopens the stream a few seconds after the Pi turns it away with a 502 or 503", async () => {
   renderApp();
-  await screen.findByRole("button", { name: "Dayan" });
+  await screen.findByRole("button", { name: "Account: Dayan" });
   const first = FakeEventSource.latest;
   vi.useFakeTimers();
 
@@ -264,5 +359,5 @@ it("reopens the stream a few seconds after the Pi turns it away with a 502 or 50
   act(() => vi.advanceTimersByTime(STREAM_RETRY_MS));
   expect(FakeEventSource.latest).not.toBe(first);
   FakeEventSource.latest?.send(makeSnapshot());
-  expect(screen.getByText("Live")).toBeInTheDocument();
+  expect(screen.queryByText("Reconnecting")).toBeNull();
 });

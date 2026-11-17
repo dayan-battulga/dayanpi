@@ -1,53 +1,30 @@
-import { AppsCard } from "@/components/apps/AppsCard";
-import { CalendarCard } from "@/components/calendar/CalendarCard";
-import { CameraCard } from "@/components/camera/CameraCard";
-import { FocusCard } from "@/components/focus/FocusCard";
-import { Header } from "@/components/header/Header";
-import { MacCard } from "@/components/mac/MacCard";
-import { PiSection } from "@/components/pi/PiSection";
-import { GestureToast } from "@/components/shared/GestureToast";
-import { TodoCard } from "@/components/todo/TodoCard";
-import { useFocusSegments } from "@/hooks/useFocusSegments";
-import { useMe } from "@/hooks/useMe";
-import { useNow } from "@/hooks/useNow";
-import { useSnapshot } from "@/hooks/useSnapshot";
-import { readPiStats } from "@/lib/pi";
-import { mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
+import { Suspense, lazy } from "react";
+import { Navigate, Route, Routes } from "react-router";
+import { DeskPage } from "@/components/desk/DeskPage";
+import { Frame } from "@/components/frame/Frame";
 
-// The dashboard, at "/".
+// Downloaded only when you open them, so /me doesn't pay for them.
+const SettingsPage = lazy(() => import("@/components/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const PiPage = lazy(() => import("@/components/pi/PiPage").then((module) => ({ default: module.PiPage })));
+const LoginPage = lazy(() => import("@/components/auth/LoginPage").then((module) => ({ default: module.LoginPage })));
+const JoinPage = lazy(() => import("@/components/auth/JoinPage").then((module) => ({ default: module.JoinPage })));
+
+// The Pi serves index.html at /, /me, /pi, /settings, /login and /join/<code>. Sign-in and join have their
+// own small frame (no stream, no /api/me: you aren't signed in yet); everything else is inside Frame.
 export function App() {
-  const { snapshot, connection, receivedAt } = useSnapshot();
-  const { user } = useMe();
-  const clock = useNow();
-  // A snapshot can land between two ticks of the clock; never show time running backwards.
-  const now = Math.max(clock, receivedAt);
-  const focus = snapshot?.focus;
-  const { segments, loaded } = useFocusSegments(focus?.state);
-  const midnight = readLocalMidnight(now);
-  const known = mergeKnownSegments(segments, midnight);
-  const piStats = readPiStats(snapshot);
-  // Members get no Pi numbers in the stream; before the first snapshot only the owner sees "Connecting…".
-  const piShown = snapshot == null ? user?.role !== "member" : piStats != null;
-  // Members can look at the owner's things but not change them (the Pi would 403 anyway).
-  const readOnly = user?.role !== "owner";
-
   return (
-    <div className="shell">
-      <Header connection={connection} undervoltage={piStats?.throttle.is_undervoltage ?? false} user={user} piShown={piShown} />
-      <MacCard focus={focus} now={now} readOnly={readOnly} />
-      <FocusCard focus={focus} segments={segments} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} />
-      <AppsCard now={now} />
-      <div className="row">
-        <CameraCard focus={focus} />
-        <TodoCard todos={focus?.todos} known={known} now={now} readOnly={readOnly} />
-      </div>
-      <CalendarCard todayFocusSeconds={focus?.today.working_seconds} now={now} />
-      {piShown && <PiSection stats={piStats} focus={focus} />}
-      <footer className="footer mono muted small">
-        <span>dayanpi · served from the Pi on your desk</span>
-        <span>invite only · private</span>
-      </footer>
-      <GestureToast gesture={focus?.gesture} now={now} receivedAt={receivedAt} />
-    </div>
+    <Suspense fallback={null}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/join/:code" element={<JoinPage />} />
+        <Route element={<Frame />}>
+          <Route path="/me" element={<DeskPage />} />
+          <Route path="/pi" element={<PiPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          {/* "/" (and anything unknown) is my desk until the room exists. */}
+          <Route path="*" element={<Navigate to="/me" replace />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

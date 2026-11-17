@@ -2,6 +2,15 @@ import { request } from "@/lib/http";
 import type { Todos } from "@/lib/types";
 
 export const TODO_TEXT_MAX = 200;
+export const NEW_TODO_ID = "new-todo";
+
+// Brings the new to-do box into view with the cursor in it; false when this page doesn't have one.
+export function focusNewTodo(): boolean {
+  const input = document.getElementById(NEW_TODO_ID);
+  input?.scrollIntoView({ block: "center" });
+  input?.focus({ preventScroll: true });
+  return input != null;
+}
 
 export interface TodoChange {
   text?: string;

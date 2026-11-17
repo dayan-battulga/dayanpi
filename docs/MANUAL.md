@@ -276,7 +276,7 @@ A link works once, for 7 days. With 4 accounts, no invite works and you can't ma
 
 **What a member can do for now:** see the dashboard the way you see it (focus, timeline, to-dos, calendar, apps, the On the Mac card) and change their own name, password and Mac helper tokens. It's all still your data. Everyone getting their own desk is the next step.
 
-**What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), see the Pi section (temps, memory, disk, power), see the camera (the card shows a note instead), or touch invites and accounts.
+**What a member can't do:** change anything of yours (to-dos, the Mac tracking switch and Mac reports are all a 403 for them), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
 
 **Removing someone:** Settings → Accounts. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. The owner can't be removed.
 
@@ -372,7 +372,7 @@ journalctl -u dayanpi -b --no-pager | grep -i tailscale
 
 The journal line says the camera is locked to your login. Without the variable it warns "camera not locked to Tailscale, don't turn on Funnel" instead, and the camera works for you from anywhere, like before.
 
-**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, and the Camera card says **Tailscale only**.
+**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, open the Pi page, and the Camera card says **Tailscale only**.
 
 ### Funnel (the public internet)
 
@@ -436,7 +436,7 @@ If a dashboard tab is open somewhere, `poweroff` can hang for up to about 90 s. 
 | Site won't load at all | `sudo systemctl status dayanpi` and `tailscale serve status` |
 | Service keeps restarting | `journalctl -u dayanpi -b --no-pager \| tail -40` |
 | Camera card says reconnecting | Is the webcam plugged in? It reconnects on its own once it's there, no restart needed |
-| Power says `now: undervoltage` (red Undervoltage pill up top) | The supply is too weak. Undervoltage can reboot the Pi |
+| Power says `now: undervoltage` (red Undervoltage pill on the Pi page) | The supply is too weak. Undervoltage can reboot the Pi |
 
 ---
 
@@ -487,11 +487,12 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 ## The dashboard
 
-- **Header:** who's signed in, at the top right, with a menu for Settings and Sign out.
-- **Members** see the same page minus the Pi section, and the Camera card shows a note instead of the feed (see [Inviting someone](#inviting-someone)).
-- **Top:** the On the Mac card: what's in front on the Mac (the site for a browser, the app otherwise), in big letters for anyone to see, with a switch that pauses Mac tracking. Then the Focus card. State, a live timer, today's timeline (6 am to midnight), and today's numbers: focus, phone, pickups, time since your last pickup, best streak.
-- **Middle:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the to-do list (see [To-do list](focus-tracker.md#to-do-list)) and a list of today's last few changes. Under them, the calendar (see [Calendar](focus-tracker.md#calendar)).
-- **Bottom:** the Pi. A one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power and voice.
+The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `/pi` (just you), and **Settings**. The tabs, the dock on a phone and the Reconnecting chip are in [The pages](focus-tracker.md#the-pages).
+
+- **Top bar:** the Desk / Pi tabs, the theme button, and your initial at the top right, with a menu for Settings and Sign out.
+- **Members** get the Desk and Settings but no Pi tab, and `/pi` sends them back to the Desk (see [Inviting someone](#inviting-someone)).
+- **Desk:** the On the Mac card: what's in front on the Mac (the site for a browser, the app otherwise), in big letters for anyone to see, with a switch that pauses Mac tracking. Then the Focus card (state, a live timer, today's timeline from 6 am to midnight, and today's numbers: focus, phone, pickups, time since your last pickup, best streak), the apps, the to-do list (see [To-do list](focus-tracker.md#to-do-list)) with today's last few changes, and the calendar (see [Calendar](focus-tracker.md#calendar)).
+- **Pi:** the camera and "What the Pi sees" (the detector's latest numbers for person and phone), then the Pi itself: a one-line summary ("Running smooth", "Running warm", "Power problem"...), tiles for temp, CPU (the whole chip as a number, plus one live bar per core), memory and disk, and a status bar for network, uptime, power and voice.
 - **The camera starts hidden.** The page doesn't even open the video stream until you press **Peek**. Press **Hide** to close it again. Your browser remembers which one you picked.
 - **Boxes over the video.** While you're peeking, whatever the last check counted gets a box: you in the state's color and a phone in orange, each with how sure the detector was. Only the box numbers travel with the stats (never a picture), nothing gets saved, and boxes older than 3 seconds disappear so they never trail behind the video. The detector checks about once a second, so the boxes glide to catch up rather than tracking every frame.
 - **Two cameras.** With `DAYANPI_CAMERA=both`, the Camera card shows one feed at a time, front first, labeled Front or Side with its own boxes. The flip button next to Peek switches between them, and your browser remembers which one you picked. Only the feed you're looking at streams. "What the Pi sees" shows the best of the two cameras either way, since the detector keeps checking both. With one camera there's no flip button and the card looks the way it always has.

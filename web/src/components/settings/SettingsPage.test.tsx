@@ -2,10 +2,11 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
-import { SettingsPage } from "@/components/settings/SettingsPage";
+import { App } from "@/App";
 import { loadPage } from "@/lib/navigation";
 import type { Account, User } from "@/lib/types";
 import { answer, serveApi, type Route } from "@/test/fakeApi";
+import { FakeEventSource } from "@/test/fakeStream";
 import { MEMBER, OWNER } from "@/test/fixtures";
 
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
@@ -27,10 +28,12 @@ function serveSettings(me: User, accounts: Account[] = [{ ...OWNER, created_at: 
   return sent;
 }
 
+// Settings lives inside the frame, which opens the stream and shares who you are with the page.
 function renderSettings() {
+  vi.stubGlobal("EventSource", FakeEventSource);
   render(
     <MemoryRouter initialEntries={["/settings"]}>
-      <SettingsPage />
+      <App />
     </MemoryRouter>,
   );
   const user = userEvent.setup();
@@ -149,6 +152,7 @@ it("saves the display name and changes the password", async () => {
   await user.click(screen.getByRole("button", { name: "Save name" }));
   expect(await screen.findByText("Saved.")).toBeInTheDocument();
   expect(sent.at(-1)).toMatchObject({ method: "PATCH", path: "/api/me", body: { display_name: "Sammy" } });
+  expect(screen.getByRole("button", { name: "Account: Sammy" })).toBeInTheDocument();
 
   await user.type(screen.getByLabelText("Current password"), "not it at all");
   await user.type(screen.getByLabelText("New password"), "a new long one");
