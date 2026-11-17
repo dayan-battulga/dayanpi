@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useFrame } from "@/components/frame/Frame";
+import { PeekDialog } from "@/components/room/PeekDialog";
 import { AloneSeat, EmptySeat, SeatCard } from "@/components/room/SeatCard";
+import { useNudge } from "@/hooks/useNudge";
 import { ROOM_SIZE } from "@/lib/account";
 import { formatDuration } from "@/lib/format";
 import { orderSeats, summarizeRoom } from "@/lib/room";
 
 // The room, at / (Room.dc.html with SeatsInfo's seats): today's focus of everyone here who shares it, then a seat per
 // account, yours first, and the open seats up to ROOM_SIZE. Everything on it comes from the stream's "room", which the
-// Pi builds from what each person shares.
+// Pi builds from what each person shares. Someone else's seat opens the quick peek, and has Nudge when it's time.
 export function RoomPage() {
   const { snapshot, user, now, receivedAt } = useFrame();
   const room = snapshot?.room;
@@ -16,6 +19,10 @@ export function RoomPage() {
   const alone = seats.length === 1;
   const open = Math.max(0, ROOM_SIZE - seats.length);
   const elapsed = Math.max(0, now - receivedAt);
+  const nudger = useNudge();
+  const [peeking, setPeeking] = useState<string | null>(null);
+  // The peek follows the live seat, and closes if they leave the room.
+  const peeked = seats.find((seat) => seat.username === peeking) ?? null;
 
   return (
     room != null && (
@@ -28,10 +35,20 @@ export function RoomPage() {
         </section>
         <section className="seats live" aria-label="Seats">
           {seats.map((seat) => (
-            <SeatCard key={seat.username} seat={seat} mine={seat.username === user?.username} seconds={seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed} />
+            <SeatCard
+              key={seat.username}
+              seat={seat}
+              mine={seat.username === user?.username}
+              username={user?.username}
+              elapsed={elapsed}
+              now={now}
+              nudger={nudger}
+              onPeek={() => setPeeking(seat.username)}
+            />
           ))}
           {alone ? <AloneSeat owner={owner} /> : Array.from({ length: open }, (_, index) => <EmptySeat key={index} owner={owner} />)}
         </section>
+        <PeekDialog seat={peeked} username={user?.username} nudger={nudger} now={now} elapsed={elapsed} onClose={() => setPeeking(null)} />
       </div>
     )
   );

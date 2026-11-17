@@ -27,14 +27,14 @@ it("adds up today's focus of everyone here who shares it", () => {
 
 it("writes the line under a seat from what they share", () => {
   expect(describeSeatLine(makeSeat({ app: "Code" }))).toEqual({ todo: "finish the report", app: "Code" });
-  expect(describeSeatLine(makeSeat({ state: "phone", app: "Chrome", site: "github.com" }))).toEqual({ todo: "finish the report · paused", app: "github.com in Chrome" });
+  expect(describeSeatLine(makeSeat({ state: "phone", app: "Chrome", site: "github.com" }))).toEqual({ todo: "finish the report · paused", app: "Chrome, github.com" });
   expect(describeSeatLine(makeSeat({ todos: undefined }))).toEqual({ todo: null, app: null });
-  expect(describeSeatLine(makeSeat({ todos: { current: null, done: 0, total: 2 }, app: null }))).toEqual({ todo: null, app: null });
+  expect(describeSeatLine(makeSeat({ todos: { current: null, current_seconds: null, done: 0, total: 2 }, app: null }))).toEqual({ todo: null, app: null });
 });
 
 it("fills the done bar with the share of to-dos done, and shows none without a list", () => {
   expect(findDoneShare(makeSeat())).toBe(25);
-  expect(findDoneShare(makeSeat({ todos: { current: null, done: 0, total: 0 } }))).toBeNull();
+  expect(findDoneShare(makeSeat({ todos: { current: null, current_seconds: null, done: 0, total: 0 } }))).toBeNull();
   expect(findDoneShare(makeSeat({ todos: undefined }))).toBeNull();
 });
 

@@ -60,8 +60,10 @@ export function makeSeat(changes: Partial<Seat> = {}): Seat {
     here: true,
     state: "working",
     seconds_in_state: 125,
+    shares: ["focus", "todos", "history"],
     focus_seconds: 3900,
-    todos: { current: "finish the report", done: 1, total: 4 },
+    todos: { current: "finish the report", current_seconds: 754, done: 1, total: 4 },
+    nudge: { wait_s: 0, age_s: null },
     ...changes,
   };
   return seat;

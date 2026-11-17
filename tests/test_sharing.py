@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, SharingSetting, build_seat, is_here
+from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, NEEDS, NUDGE_AFTER_S, NUDGE_EVERY_S, SharingSetting, build_seat, can_nudge, is_here, share_parts
 
 NOW = 1_800_000_000.0
 # A desk's full status, with something to find for every part.
@@ -32,7 +32,7 @@ def share(**on) -> dict:
 
 def test_the_switches_start_with_focus_todos_and_history_on(tmp_path):
     assert SharingSetting(tmp_path / "sharing.json").read() == {
-        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False,
+        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True,
     }
 
 
@@ -63,24 +63,28 @@ def test_a_switched_off_part_is_nowhere_in_the_seat(switch):
 
 def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
     everything = share(**{key: True for key in DEFAULT_SHARING})
-    assert build_seat("sam", "Sam", STATUS, everything, here=True) == {
+    assert build_seat("sam", "Sam", STATUS, everything, here=True, now=NOW) == {
         "username": "sam",
         "name": "Sam",
         "here": True,
         "state": "phone",
         "seconds_in_state": 365.0,
+        "shares": ["focus", "todos", "apps", "sites", "video", "history"],
         "focus_seconds": 6480.0,
-        "todos": {"current": "current thing", "done": 1, "total": 3},
+        "todos": {"current": "current thing", "current_seconds": 2, "done": 1, "total": 3},
         "app": "SecretApp",
         "site": "secret.example",
+        "nudge": {"wait_s": 0.0, "age_s": None},
     }
-    assert build_seat("sam", "Sam", STATUS, share(), here=True) == {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0}
+    status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": []}
+    assert build_seat("sam", "Sam", STATUS, share(), here=True) == status_only
 
 
 def test_sites_only_count_while_apps_is_on():
     assert "secret.example" not in json.dumps(build_seat("sam", "Sam", STATUS, share(sites=True), here=True))
     with_apps = build_seat("sam", "Sam", STATUS, share(apps=True), here=True)
     assert (with_apps["app"], "site" in with_apps) == ("SecretApp", False)
+    assert build_seat("sam", "Sam", STATUS, share(sites=True), here=True)["shares"] == [], "sites alone shows nothing"
 
 
 def test_someone_who_isnt_here_is_offline_with_no_timer():
@@ -100,3 +104,29 @@ def test_someone_who_isnt_here_is_offline_with_no_timer():
 def test_here_is_the_site_open_or_tracking_in_the_last_two_minutes(seen_at, checked_at, here):
     status = {**STATUS, "last_check": None if checked_at is None else {"at": checked_at}}
     assert is_here(seen_at, status, NOW) is here
+
+
+def test_the_gate_never_makes_a_part_whose_switches_are_off():
+    made = []
+    parts = {"apps": lambda: made.append("apps"), "sites": lambda: made.append("sites"), "day_focus": lambda: made.append("day")}
+    shared = share_parts(share(apps=True, focus=True), parts)
+    assert (set(shared), made) == ({"apps"}, ["apps"])
+    assert set(share_parts(share(focus=True, history=True), parts)) == {"day_focus"}, "the group line needs focus and history"
+    with pytest.raises(KeyError):
+        share_parts(share(), {"something_new": lambda: 1})
+    assert set(NEEDS["sites"]) == {"apps", "sites"}
+
+
+def test_nudging_needs_the_phone_for_five_minutes_their_ok_and_ten_minutes_since_the_last():
+    def seat(state="phone", seconds=NUDGE_AFTER_S, nudges=True, nudged=None, here=True):
+        return build_seat("sam", "Sam", {**STATUS, "state": state, "seconds_in_state": seconds}, share(nudges=nudges), here, nudged, NOW)
+
+    assert can_nudge(seat())
+    assert not can_nudge(seat(seconds=NUDGE_AFTER_S - 1))
+    assert not can_nudge(seat(state="working"))
+    assert not can_nudge(seat(here=False))
+    assert not can_nudge(seat(nudges=False))
+    assert "nudge" not in seat(nudges=False), "nudges off: nothing about them leaves"
+    recent = seat(nudged={"by": "dayan", "at": NOW - 60})
+    assert (can_nudge(recent), recent["nudge"]) == (False, {"wait_s": NUDGE_EVERY_S - 60, "age_s": 60.0})
+    assert can_nudge(seat(nudged={"by": "dayan", "at": NOW - NUDGE_EVERY_S}))

@@ -3,17 +3,23 @@ import { Outlet, useLocation, useOutletContext } from "react-router";
 import { PeacePill } from "@/components/frame/PeacePill";
 import { Dock } from "@/components/header/Dock";
 import { Header } from "@/components/header/Header";
+import { RoomBar, RoomRail } from "@/components/room/WhoIsHere";
 import { Toaster } from "@/components/ui/toaster";
 import { useCommands, useShortcuts } from "@/hooks/useCommands";
 import { useGestureToast } from "@/hooks/useGestureToast";
 import { usePeaceVoice } from "@/hooks/usePeaceVoice";
 import { type MacTracking, useMacTracking } from "@/hooks/useMacTracking";
 import { useMe } from "@/hooks/useMe";
-import { PHONE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { PHONE_QUERY, WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { useNudgeToast } from "@/hooks/useNudge";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
-import { orderSeats, summarizeRoom } from "@/lib/room";
+import { listOthersHere, orderSeats, summarizeRoom } from "@/lib/room";
+import { readStored, writeStored } from "@/lib/storage";
 import type { Connection, Snapshot, User } from "@/lib/types";
+
+// The pages that show who's here, in the sidebar or the bottom bar. The room and their desks show it themselves.
+const PAGES_WITH_ROOM = new Set(["/me", "/pi", "/settings"]);
 
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
@@ -33,13 +39,15 @@ export function useFrame(): FrameData {
   return useOutletContext<FrameData>();
 }
 
-// Every signed-in page: the top bar, the page itself (which cross-fades when it changes), the peace sign's pill, the
-// dock on a phone, ⌘K and the toasts.
+// Every signed-in page: the top bar, the page itself (which cross-fades when it changes), who's here (the sidebar from
+// 1280 px, the bottom bar down to a phone), the peace sign's pill, the dock on a phone, ⌘K and the toasts.
 export function Frame() {
   const { snapshot, connection, receivedAt } = useSnapshot();
   const { user, setUser } = useMe();
   const clock = useNow();
   const phone = useMediaQuery(PHONE_QUERY);
+  const wide = useMediaQuery(WIDE_QUERY);
+  const [collapsed, setCollapsed] = useState(() => readStored("rail", "open") === "collapsed");
   const { pathname } = useLocation();
   // A snapshot can land between two ticks of the clock; never show time running backwards.
   const now = Math.max(clock, receivedAt);
@@ -51,16 +59,29 @@ export function Frame() {
   const togglePalette = useCallback(() => setPalette((current) => ({ open: !current.open, used: true })), []);
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
+  useNudgeToast(snapshot?.focus?.spoken);
   const peaceVoice = usePeaceVoice(snapshot?.focus?.spoken);
   const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking };
-  const room = summarizeRoom(orderSeats(snapshot?.room?.seats ?? [], user?.username));
+  const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
+  const room = summarizeRoom(seats);
+  const others = listOthersHere(seats, user?.username);
+  const elapsed = Math.max(0, now - receivedAt);
+  // The sidebar holds its place once anyone else has an account, so the page doesn't jump as people come and go; the
+  // bottom bar floats, so it only comes when someone's here.
+  const withRoom = PAGES_WITH_ROOM.has(pathname);
+  const rail = withRoom && wide && seats.length > 1 ? (collapsed ? "collapsed" : "open") : undefined;
+  const bar = withRoom && !wide && !phone && others.length > 0;
+  const collapseRail = (folded: boolean) => {
+    setCollapsed(folded);
+    writeStored("rail", folded ? "collapsed" : "open");
+  };
   // Before the new page is drawn, so it starts at its top instead of wherever the last one was scrolled to.
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
 
   return (
-    <div className="frame" data-connection={connection}>
+    <div className="frame" data-connection={connection} data-rail={rail} data-bar={bar ? "" : undefined}>
       <Header
         connection={connection}
         user={user}
@@ -69,14 +90,18 @@ export function Frame() {
         hereLabel={room.hereLabel}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      {/* Suspense outside the keyed page, so a lazy page keeps the old one up while it loads instead of a blank. */}
-      <Suspense fallback={null}>
-        <ViewTransition key={pathname} enter="page" exit="page" default="none">
-          <main className="shell">
-            <Outlet context={frame} />
-          </main>
-        </ViewTransition>
-      </Suspense>
+      <div className="frame-body">
+        {/* Suspense outside the keyed page, so a lazy page keeps the old one up while it loads instead of a blank. */}
+        <Suspense fallback={null}>
+          <ViewTransition key={pathname} enter="page" exit="page" default="none">
+            <main className="shell">
+              <Outlet context={frame} />
+            </main>
+          </ViewTransition>
+        </Suspense>
+        {rail != null && <RoomRail others={others} elapsed={elapsed} together={room.focusSeconds} collapsed={rail === "collapsed"} onCollapse={collapseRail} />}
+      </div>
+      {bar && <RoomBar others={others} elapsed={elapsed} />}
       <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} voice={peaceVoice} />
       {phone && <Dock />}
       {palette.used && (

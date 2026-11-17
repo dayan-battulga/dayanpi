@@ -138,7 +138,8 @@
         "history": true,
         "apps": false,
         "sites": false,
-        "video": false
+        "video": false,
+        "nudges": true
       }
     },
     "room": {
@@ -149,11 +150,21 @@
           "here": true,
           "state": "working",
           "seconds_in_state": 2538,
+          "shares": [
+            "focus",
+            "todos",
+            "history"
+          ],
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
+            "current_seconds": 2280,
             "done": 1,
             "total": 4
+          },
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
           }
         }
       ]

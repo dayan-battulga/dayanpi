@@ -11,6 +11,7 @@ const LoginPage = lazy(() => import("@/components/auth/LoginPage").then((module)
 const JoinPage = lazy(() => import("@/components/auth/JoinPage").then((module) => ({ default: module.JoinPage })));
 // Its worker brings ONNX Runtime, which no other page loads.
 const TrackTestPage = lazy(() => import("@/components/track/TrackTestPage").then((module) => ({ default: module.TrackTestPage })));
+const TheirDeskPage = lazy(() => import("@/components/people/TheirDeskPage").then((module) => ({ default: module.TheirDeskPage })));
 const TrackPage = lazy(() => import("@/components/track/TrackPage").then((module) => ({ default: module.TrackPage })));
 
 // The Pi serves index.html at /, /me, /pi, /settings, /track, /track/test, /login and /join/<code>. Sign-in and join
@@ -27,6 +28,7 @@ export function App() {
         <Route element={<Frame />}>
           <Route path="/" element={<RoomPage />} />
           <Route path="/me" element={<DeskPage />} />
+          <Route path="/people/:username" element={<TheirDeskPage />} />
           <Route path="/pi" element={<PiPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           {/* Anything unknown goes to the room, where everyone lands after signing in. */}

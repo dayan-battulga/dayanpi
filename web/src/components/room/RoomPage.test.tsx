@@ -11,9 +11,9 @@ import { MEMBER, OWNER, makeSeat, makeSnapshot } from "@/test/fixtures";
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 
 const ME = makeSeat({ focus_seconds: 11538, app: "Code" });
-const SAM = makeSeat({ username: "sam", name: "Sam", state: "phone", seconds_in_state: 365, focus_seconds: 6480, todos: { current: "Read chapter 7", done: 1, total: 4 }, app: "Chrome" });
+const SAM = makeSeat({ username: "sam", name: "Sam", state: "phone", seconds_in_state: 365, focus_seconds: 6480, todos: { current: "Read chapter 7", current_seconds: 1440, done: 1, total: 4 }, app: "Chrome" });
 // Alex shares nothing but the status, which always shows: no focus time, no to-dos, no apps.
-const ALEX: Seat = { username: "alex", name: "Alex", here: true, state: "away", seconds_in_state: 760 };
+const ALEX: Seat = { username: "alex", name: "Alex", here: true, state: "away", seconds_in_state: 760, shares: [] };
 
 function ShowPath() {
   return <output aria-label="Path">{useLocation().pathname}</output>;

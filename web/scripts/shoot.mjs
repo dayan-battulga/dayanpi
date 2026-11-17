@@ -8,6 +8,7 @@
 //
 // compare options:
 //   --phone                  390 px wide instead of the mockup's own size
+//   --width=1200             this wide instead (BottomBar only shows below 1280 px), the mockup's own height
 //   --mockup=RoomPhone       compare against a different mockup (the fixture still comes from the first name)
 //   --fixture=Desk-away      use design/fixtures/Desk-away.json instead of Desk.json
 //   --options="moment=day page&myState=away"   mockup options for this run, on top of the fixture's
@@ -292,8 +293,8 @@ async function compare(name, route, options) {
   const browser = await openBrowser();
   const outDir = path.join(shotDir, "compare");
   mkdirSync(outDir, { recursive: true });
-  const size = options.phone ? PHONE : { width: preview.width, height: preview.height };
-  const sizeLabel = options.phone ? "phone" : "desktop";
+  const size = options.phone ? PHONE : { width: Number(options.width ?? preview.width), height: preview.height };
+  const sizeLabel = options.phone ? "phone" : options.width ? `w${options.width}` : "desktop";
   const mockupOptions = { ...(fixture.mockupOptions ?? {}), ...Object.fromEntries(new URLSearchParams(options.options ?? "")) };
   const usedThemes = themes.filter((value) => value !== null).length > 0 ? themes : ["light"];
   for (const theme of usedThemes) {
@@ -332,6 +333,7 @@ async function main() {
     await compare(args[0], args[1], {
       phone: flags.includes("--phone"),
       mockup: readFlag(flags, "mockup"),
+      width: readFlag(flags, "width"),
       fixture: readFlag(flags, "fixture"),
       options: readFlag(flags, "options"),
       label: readFlag(flags, "label"),
@@ -340,7 +342,7 @@ async function main() {
       presses: readFlags(flags, "press"),
     });
   } else {
-    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name]");
+    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name]");
     process.exitCode = 1;
   }
 }

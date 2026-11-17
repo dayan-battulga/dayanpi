@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 import logging
 import os
@@ -29,7 +30,7 @@ from dayanpi.focus.browser_camera import BrowserCheck
 from dayanpi.focus.camera_source import SOURCES
 from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
-from dayanpi.focus.sharing import build_seat, is_here
+from dayanpi.focus.sharing import NUDGE_EVERY_S, build_seat, can_nudge, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
 from dayanpi.focus.todos import TEXT_MAX
@@ -74,7 +75,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -207,8 +208,54 @@ def build_desk_status(desk: Desk, now: float) -> dict:
 
 def seat_desk(desk: Desk, name: str, status: dict, now: float) -> dict:
     """One desk's seat, through sharing.build_seat: what anyone else may see of it."""
-    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now))
+    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now), desk.last_nudged, now)
     return seat
+
+
+def find_user(username: str) -> User:
+    """Raises the same 404 for a name nobody has."""
+    user = next((user for user in auth_routes.accounts.list_users() if user.username == username), None)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="nobody by that name")
+    return user
+
+
+def build_history(desk: Desk, joined_at: float, focus: dict, now: float) -> dict:
+    """This month's focused minutes per day (today's live) and the total since they joined."""
+    today = format_day(now)
+    written = days.read_focus_minutes(desk.days_dir) | {today: days.count_minutes(focus["today"]["working_seconds"])}
+    joined = format_day(joined_at)
+    history = {
+        "month": today[:7],
+        "today": today,
+        "joined_at": joined_at,
+        "days": {day: minutes for day, minutes in written.items() if day.startswith(today[:7])},
+        "total_minutes": sum(minutes for day, minutes in written.items() if day >= joined),
+    }
+    return history
+
+
+def build_their_desk(user: User, now: float) -> dict:
+    """Someone's desk as anyone else may see it: their seat and each piece they share, all through sharing.share_parts.
+    A piece they don't share is never read from their logs."""
+    desk = desks.open(user.username, now)
+    focus = build_desk_status(desk, now)
+    chart = functools.cache(lambda: days.build_apps_chart(desk.log, now, "today"))
+    pieces = share_parts(
+        desk.sharing.read(),
+        {
+            "here_since": lambda: focus["today"]["first_seen"] if is_here(desk.seen_at, focus, now) else None,
+            "today": lambda: {key: focus["today"][key] for key in ("working_seconds", "phone_seconds", "pickups")} | {"segments": desk.tracker.segments()},
+            "todo_list": lambda: focus["todos"],
+            "apps": lambda: [{"app": row["app"], "total_seconds": row["total_seconds"]} for row in chart()],
+            "app_youtube": lambda: {row["app"]: row["youtube_seconds"] for row in chart() if row.get("youtube_seconds")},
+            "sites": lambda: days.build_sites_chart(desk.log, now),
+            "history": lambda: build_history(desk, user.created_at, focus, now),
+            "video": lambda: True,
+        },
+    )
+    their = seat_desk(desk, user.display_name, focus, now) | pieces
+    return their
 
 
 def build_room(statuses: dict[str, dict], now: float) -> dict:
@@ -279,14 +326,15 @@ def handle_focus_update(desk: Desk, update: FocusUpdate, now: float) -> None:
     desk.todos.track(update.state == "working", now)
 
 
-def speak_to(desk: Desk, text: str, now: float) -> None:
-    """Says text where the desk's peace sign speaks, and puts it on its pill (desk.last_spoken, never logged).
+def speak_to(desk: Desk, text: str, now: float, kind: str = "peace") -> None:
+    """Says text where the desk's peace sign speaks, and puts it on its pill (desk.last_spoken, never logged). A nudge
+    ("nudge") goes the same way, and the page shows it as a toast instead of the pill.
 
     The Pi's speaker says it with aplay. For this computer, Piper makes a clip that waits in memory for the
     desk's own page (GET /api/voice/clip); a clip for an older message never replaces a newer one's.
     """
     at = round(now, 3)
-    desk.last_spoken = {"text": text, "at": at}
+    desk.last_spoken = {"text": text, "at": at, "kind": kind}
     if find_voice_output(desk) == "pi":
         voice.say(text)
     else:
@@ -720,7 +768,30 @@ def day_page(request: Request, day: Annotated[str, PathParam(pattern=days.DAY_PA
         page = path.read_text(encoding="utf-8")
     else:
         raise HTTPException(status_code=404, detail="no page for that day")
-    return {"day": day, "today": day == today, "markdown": page}
+    return {"day": day, "today": day == today, "markdown": page, "others": list_others_focus(desk.username, day, now)}
+
+
+def read_day_focus_minutes(desk: Desk, day: str, now: float) -> int:
+    """One desk's focused minutes on a day: today's live, a past day's from its page (0 without one)."""
+    path = desk.days_dir / f"{day}.md"
+    if day == format_day(now):
+        minutes = days.count_minutes(desk.tracker.status(now)["today"]["working_seconds"])
+    else:
+        minutes = days.read_page_totals(path.read_text(encoding="utf-8")).get("focus_minutes", 0) if path.is_file() else 0
+    return minutes
+
+
+def list_others_focus(username: str, day: str, now: float) -> list[dict]:
+    """The group calendar's line: everyone else's focused minutes that day, only from people who share focus time and
+    history (sharing.share_parts), and only those who focused at all."""
+    others = []
+    for user in auth_routes.accounts.list_users():
+        if user.username != username:
+            desk = desks.open(user.username, now)
+            shared = share_parts(desk.sharing.read(), {"day_focus": lambda: read_day_focus_minutes(desk, day, now)})
+            if shared.get("day_focus"):
+                others.append({"name": user.display_name, "focus_minutes": shared["day_focus"]})
+    return others
 
 
 @app.get("/api/todos")
@@ -866,6 +937,7 @@ class SharingChange(BaseModel):
     apps: StrictBool | None = None
     sites: StrictBool | None = None
     video: StrictBool | None = None
+    nudges: StrictBool | None = None
 
 
 @app.post("/api/sharing")
@@ -876,6 +948,44 @@ def set_sharing(request: Request, change: SharingChange):
     now = time.time()
     seat = seat_desk(desk, auth_routes.read_viewer(request).user.display_name, build_desk_status(desk, now), now)
     return {"sharing": sharing, "seat": seat}
+
+
+@app.get("/api/people/{username}")
+def their_desk(username: str):
+    """Someone's desk (TheirDesk), the quick peek's too: only what they share. Your own works, as the room sees it."""
+    return build_their_desk(find_user(username), time.time())
+
+
+class NudgeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=64)
+
+
+def nudge_line(sender: str) -> str:
+    return f"{sender} says put the phone down"
+
+
+@app.post("/api/nudge")
+def nudge(request: Request, asked: NudgeRequest):
+    """Nudges someone who's been on their phone NUDGE_AFTER_S: their speaker says so, where their peace sign speaks (the
+    Pi's for me, their own computer for anyone else). At most one per person every NUDGE_EVERY_S, from anyone."""
+    sender = auth_routes.read_viewer(request).user
+    target = find_user(asked.username)
+    if target.id == sender.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="that's you")
+    now = time.time()
+    desk = desks.open(target.username, now)
+    seat = seat_desk(desk, target.display_name, build_desk_status(desk, now), now)
+    wait = 0.0 if seat.get("nudge") is None else seat["nudge"]["wait_s"]
+    if wait > 0:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="nudged a few minutes ago", headers={"Retry-After": str(int(wait) + 1)})
+    if not can_nudge(seat):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="they can't be nudged right now")
+    desk.last_nudged = {"by": sender.username, "at": round(now, 3)}
+    logger.info("%s nudged %s, through %s", sender.username, target.username, find_voice_output(desk))
+    speak_to(desk, nudge_line(sender.display_name), now, kind="nudge")
+    return {"status": "ok", "wait_s": NUDGE_EVERY_S}
 
 
 class VoiceChange(BaseModel):
@@ -1004,6 +1114,7 @@ def model_file(name: str):
 @app.get("/pi")
 @app.get("/track")
 @app.get("/track/test")
+@app.get("/people/{username}")
 def page():
     """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""
     return FileResponse(INDEX_PAGE)

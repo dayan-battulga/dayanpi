@@ -54,6 +54,7 @@ export interface Spoken {
   age_s: number;
   speaking: boolean;
   clip?: boolean;
+  kind?: "peace" | "nudge"; // a nudge plays the same way, and shows as a toast instead of the pill
 }
 
 export interface FocusStatus {
@@ -97,7 +98,10 @@ export interface Sharing {
   apps: boolean;
   sites: boolean;
   video: boolean;
+  nudges: boolean; // whether others may nudge you
 }
+
+export type SharedPart = "focus" | "todos" | "apps" | "sites" | "video" | "history";
 
 export type SeatState = FocusState | "offline";
 
@@ -108,10 +112,24 @@ export interface Seat {
   here: boolean;
   state: SeatState;
   seconds_in_state: number | null; // null while offline
+  shares: SharedPart[]; // what they show, so a page can tell a piece turned on or off
   focus_seconds?: number;
-  todos?: { current: string | null; done: number; total: number };
+  todos?: { current: string | null; current_seconds: number | null; done: number; total: number };
   app?: string | null;
   site?: string | null;
+  nudge?: { wait_s: number; age_s: number | null }; // only while they take nudges
+}
+
+// Someone's desk (/api/people/<username>): their seat and each piece they share. A piece they don't share is missing.
+export interface TheirDesk extends Seat {
+  here_since: number | null; // when the camera first saw them today, while they're here; status, so always there
+  today?: { working_seconds: number; phone_seconds: number; pickups: number; segments: Segment[] };
+  todo_list?: Todos;
+  apps?: { app: string; total_seconds: number }[];
+  app_youtube?: Record<string, number>;
+  sites?: { site: string; seconds: number }[];
+  history?: { month: string; today: string; joined_at: number; days: Record<string, number>; total_minutes: number };
+  video?: true;
 }
 
 export interface Room {
@@ -189,6 +207,7 @@ export interface DayPageReply {
   day: string;
   today: boolean;
   markdown: string;
+  others?: { name: string; focus_minutes: number }[]; // everyone else who shares focus time and history
 }
 
 export type AppsRange = "today" | "week";

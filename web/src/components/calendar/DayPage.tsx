@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { Fragment, useEffect, useState } from "react";
-import { formatDayLabel } from "@/lib/calendar";
+import { formatCompactMinutes, formatDayLabel } from "@/lib/calendar";
 import { fetchJson } from "@/lib/http";
 import { readDayPage, type DayPageParts, type NamedTime } from "@/lib/markdown";
 import type { DayPageReply } from "@/lib/types";
@@ -76,14 +76,14 @@ interface DayPageProps {
 
 // What goes in the day dialog: the day's page from /api/days/<day>, laid out like the mockup's.
 export function DayPage({ day, isToday, now }: DayPageProps) {
-  const [page, setPage] = useState<{ day: string; markdown: string | null } | null>(null);
+  const [page, setPage] = useState<{ day: string; markdown: string | null; others: DayPageReply["others"] } | null>(null);
   const refresh = isToday ? Math.floor(now / TODAY_REFRESH_S) : 0;
 
   useEffect(() => {
     let current = true;
     fetchJson<DayPageReply>(`/api/days/${day}`).then((reply) => {
       if (current) {
-        setPage({ day, markdown: reply?.markdown ?? null });
+        setPage({ day, markdown: reply?.markdown ?? null, others: reply?.others });
       }
     });
     return () => {
@@ -106,6 +106,10 @@ export function DayPage({ day, isToday, now }: DayPageProps) {
           <p className="day-note">No page for this day.</p>
         ) : (
           <DayParts parts={readDayPage(page.markdown)} />
+        )}
+        {/* The group calendar: everyone else who shares focus time and history, quietly. */}
+        {page?.day === day && (page.others?.length ?? 0) > 0 && (
+          <p className="day-others">Also focused: {page.others?.map((other) => `${other.name} ${formatCompactMinutes(other.focus_minutes)}`).join(" · ")}</p>
         )}
       </div>
     </>

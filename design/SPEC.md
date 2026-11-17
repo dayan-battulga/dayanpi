@@ -18,7 +18,7 @@ The mockups in `design/mockups/` are the plan for every page of the site (approv
 `npm run shots -- compare <Mockup> <route>` writes the mockup and the real page side by side, in light and dark, to `design/shots/compare/` (gitignored). Example: `npm run shots -- compare Desk /me`.
 
 - The real page runs on a local Vite dev server. Every `/api` call is answered from `design/fixtures/<Mockup>.json` and the page's clock is frozen at the fixture's `now`, so both sides show the same day: same names, numbers and times.
-- `--phone` makes the pair 390 px wide. `--mockup=RoomPhone` compares against a different mockup (the room has its own phone mockup).
+- `--phone` makes the pair 390 px wide, and `--width=1200` any other width (BottomBar only shows below 1280 px). `--mockup=RoomPhone` compares against a different mockup (the room has its own phone mockup).
 - `npm run shots -- mockups Desk` screenshots one mockup in every option. That's handy for the moments: peace sign, all done, day page and so on.
 - **A step isn't done until you've opened every compare image** and the layout, spacing, sizes, type, colors and radii match in both themes and at both widths. Differences that only come from the data are fine, but fix the fixture first if you can.
 - Nothing here reaches the internet or the Pi. The fonts come from web/node_modules, the mockup pages get a header that blocks outside requests, and Chrome runs through playwright-core (no browser download).

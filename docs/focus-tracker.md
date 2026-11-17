@@ -202,7 +202,8 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 
 | Page | Who | What's on it |
 | --- | --- | --- |
-| **Room** (`/`) | everyone | Everyone's seat, and how long the people here have focused today together. Where you land after signing in. See [The room and sharing](#the-room-and-sharing-study-room-step-6-part-1). |
+| **Room** (`/`) | everyone | Everyone's seat, and how long the people here have focused today together. Where you land after signing in. Tap someone's seat for the quick peek. See [The room and sharing](#the-room-and-sharing-study-room-step-6-part-1). |
+| **Their desk** (`/people/<username>`) | everyone | Someone else's desk, read-only, built from what they share. Your own name takes you to your desk. See [Seeing the others](#seeing-the-others-nudges-and-the-group-calendar-study-room-step-6-part-2). |
 | **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. |
 | **Pi** (`/pi`) | you | **Cameras**: one feed at a time (the **Side** / **Front** button switches, and only the one showing streams), hidden behind a veil until you press **Peek**, with the boxes over it and the latest readings under it. Off your own Tailscale devices they're locked. Then **The Pi**: temperature, CPU, memory and uptime, rolling to each new number. An amber **Undervoltage** warning shows up there while the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
 | **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Sharing (what the room sees of you), Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
@@ -248,11 +249,39 @@ Each seat has:
 
 ### What each person shares
 
-Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** and **History** (your past days) start on; **Apps**, **Sites** and **Video** start off, and Sites only counts while Apps is on. Next to the switches is **What the room sees**: your seat exactly as everyone else gets it, straight from the Pi, so it changes the moment you flip something. History and Video have nothing to show yet: someone's desk page and the video come later in step 6 and in step 7, and they'll read these switches then. Your own desk always shows you everything.
+Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** and **History** (your past days) start on; **Apps**, **Sites** and **Video** start off, and Sites only counts while Apps is on. Next to the switches is **What the room sees**: your seat exactly as everyone else gets it, straight from the Pi, so it changes the moment you flip something. History shows on their desk page (part 2, below); Video has nothing to show until step 7, which will read it. **Nudges** (on to start) is whether others can nudge you. Your own desk always shows you everything.
 
 ### How it's enforced (for changing it)
 
-The Pi decides, not the page. Each desk keeps its switches in `data/users/<name>/sharing.json` (`dayanpi/focus/sharing.py`), and `build_seat()` in there is the one function that turns a desk into what anyone else sees: a part that's switched off is never in what it returns. Once a second the Pi builds every seat with it (`app.build_room`) and puts that in every stream event as `"room"`; `POST /api/sharing` answers with your seat built the same way, which is what the preview shows. No route hands out anyone else's desk. Anything new that shows another person's data has to go through `build_seat()`.
+The Pi decides, not the page. Each desk keeps its switches in `data/users/<name>/sharing.json` (`dayanpi/focus/sharing.py`), and `share_parts()` in there is the one gate everything about another person goes through: every part (a seat's to-do, their desk's apps, the day dialog's group line...) is listed in `NEEDS` with the switches it needs, and a part whose switches aren't all on is never even made. A new part that isn't in `NEEDS` is an error, so nothing new slips out without saying what it needs. Once a second the Pi builds every seat with it (`app.build_room`) and puts that in every stream event as `"room"`; `POST /api/sharing` answers with your seat built the same way, which is what the preview shows. Their desk (`GET /api/people/<username>`) and the group line on `GET /api/days/<day>` go through it too. No route hands out anyone else's whole desk.
+
+## Seeing the others, nudges and the group calendar (study room step 6, part 2)
+
+### Who's here, on every page
+
+On the Desk, the Pi page and Settings, who's here sits next to your page, but only once anyone else has an account:
+
+- **From 1280 px wide: the sidebar** ("In the room"). Each person here gets a row: their state and timer, the current to-do with its time and "paused" while they aren't working on it, the app (and site), a dot per to-do (filled when done) and today's total, each only if they share it. At the bottom: how long the people here have focused together today, and **Open the room →**. The button at the top folds it to a column of faces, and it stays folded (it's remembered in this browser).
+- **Below that, down to a phone: the bottom bar**, a frosted pill along the bottom with each person here (face, name, timer, to-do, app) and a button for the room. It only shows while someone else is here.
+- **On a phone** there's neither: the dock has the room.
+
+Clicking anyone opens their desk.
+
+### Their desk
+
+`/people/<username>` is someone's desk, read-only, built from separate pieces, each only if they share it: **video** (their initial in a tile until step 7), **Today** (focus time, phone time, pickups and the timeline), **To-do**, **Apps** (with a browser's YouTube part in red when they share sites too), **Sites** and **History** (this month's calendar and how long they've focused since joining). A line at the top says what they share. When a piece is off, the rest fill the row; when they flip a switch while you watch, that piece fades in or out and the rest slide over. Their state and timer are live off the room stream; the pieces come from `GET /api/people/<username>`, asked again the moment what they share changes and every 30 s. Your own name goes to your desk.
+
+### The quick peek
+
+Tapping someone's seat in the room opens the quick peek: what they're working on, their day, their to-dos and today's apps (each only if they share it), **Nudge**, and **Open <name>'s desk →**.
+
+### Nudges
+
+Someone who's been on their phone for 5 minutes or more gets a **Nudge** button: a bell on their seat, and a button in the peek and on their desk. Press it and their speaker says "Dayan says put the phone down": the Pi's speaker for you (where your peace sign speaks), their own computer for anyone else, the same way their peace sign plays (step 5). They get a toast with it, two rings leave their seat for everyone in the room to see, and you get a "Nudged Sam" toast. A person can only be nudged once every 10 minutes, by anyone; until then the button stays greyed and says how long is left. Anyone can turn **Nudges** off in Settings → Sharing, and then the button doesn't show for them at all. The Pi checks all of this again (`POST /api/nudge`): yourself is a 400, not on the phone 5 minutes or nudges off a 409, too soon a 429 with Retry-After. Nudges are kept in memory, so a restart forgets the last one.
+
+### The group calendar
+
+A day's page in the calendar gets a quiet line at the bottom with how long everyone else focused that day ("Also focused: Sam 1h 48m · Alex 2h 5m"), only from people who share both focus time and history, and only those who focused at all.
 
 ## With both cameras
 
@@ -342,7 +371,7 @@ It's all built from that day's focus log (the to-dos come from its `todo` lines)
 
 Click a day and its page opens in a popup: the totals (focused, phone, away), the to-dos you finished that day with their time, and the apps. Esc, the ×, or a click outside closes it. Today works too, built live, and it refreshes every minute while it's open.
 
-The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from your own desk's `days/`. A day with no page is a 404.
+The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown", "others"}` (others is the group line's names and minutes). The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from your own desk's `days/`. A day with no page is a 404.
 
 ```bash
 ls data/users/$ME/days/

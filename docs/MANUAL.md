@@ -37,7 +37,10 @@ Always use the **`main`** branch on both machines.
 | `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
 | `/api/stats` | One JSON snapshot (owner only) |
 | `/api/stream` | Live SSE feed: your own desk's `focus` and everyone's seat as `room` (members don't get the Pi's numbers) |
-| `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video"}` as true/false; answers with all your switches and your seat as the room now sees it |
+| `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video", "nudges"}` as true/false; answers with all your switches and your seat as the room now sees it |
+| `/people/<username>` | Someone's desk, read-only, built from what they share (yours goes to `/me`) |
+| `/api/people/<username>` | That desk as JSON: their seat and only the pieces they share |
+| `/api/nudge` | Nudge someone on their phone 5+ minutes: POST `{"username": ...}` (once per person every 10 minutes; 409 when they can't be nudged, 429 too soon) |
 | `/api/health` | Health check (open, no sign-in) |
 | `/video` | MJPEG camera (owner only; with the camera lock on, only from your own Tailscale devices; 404 otherwise) |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise; same lock as `/video`) |
@@ -47,7 +50,7 @@ Always use the **`main`** branch on both machines.
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
-| `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page) |
+| `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
 | `/api/track/reading` | The tracker's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
 | `/api/track/pause` | The tracker's Pause (POST `{}`): your desk says paused until the next reading |
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
@@ -327,6 +330,9 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 - **Status** (working, on the phone, away, and for how long) always shows.
 - **Focus time**, **To-do list** and **History** start on.
 - **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. Video doesn't do anything until step 7.
+- **Nudges** starts on: others can nudge you once you've been on your phone 5 minutes (at most once every 10). Off, nobody gets the button. A nudge speaks where your peace sign does (the Pi's speaker for you, their own computer for everyone else), so it needs the Pi's voice on like the peace sign ([voice.md](voice.md)); with it off they still get the toast.
+
+Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as the group line in their calendar's day pages.
 
 The preview next to the switches is your seat exactly as the others get it. The switches live in each person's folder as `data/users/<name>/sharing.json`, so a restart keeps them. More in [focus-tracker.md](focus-tracker.md#the-room-and-sharing-study-room-step-6-part-1).
 

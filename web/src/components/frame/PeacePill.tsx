@@ -21,7 +21,8 @@ export function PeacePill({ spoken, receivedAt, now, voice }: PeacePillProps) {
   const reduced = useReducedMotionConfig();
   const age = spoken == null ? Infinity : spoken.age_s + (now - receivedAt);
   const saying = spoken?.speaking === true || voice.playing;
-  const shown = spoken != null && (saying || age < (voice.blocked ? BLOCKED_S : SHOW_S)) ? spoken : null;
+  // A nudge plays the same way but shows as a toast (useNudgeToast), so only the peace sign's words get the pill.
+  const shown = spoken != null && spoken.kind !== "nudge" && (saying || age < (voice.blocked ? BLOCKED_S : SHOW_S)) ? spoken : null;
   // With reduced motion it only fades, and the bars stand still (dashboard.css).
   const hidden = reduced ? { opacity: 0 } : { opacity: 0, y: 10, filter: "blur(4px)" };
   return (

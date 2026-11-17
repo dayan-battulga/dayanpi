@@ -2442,19 +2442,19 @@ button.todo-pill:active,
 /* ---------- the room (components/room): Room.dc.html's layout with SeatsInfo.dc.html's seats ---------- */
 
 /* A state's color, for everything that shows one: seats, the faces up top and Settings' preview. */
-:is(.seat, .here-face, .share-tile) {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk) {
   --lamp: var(--muted);
 }
 
-:is(.seat, .here-face, .share-tile)[data-state="working"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="working"] {
   --lamp: var(--work);
 }
 
-:is(.seat, .here-face, .share-tile)[data-state="phone"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="phone"] {
   --lamp: var(--phone);
 }
 
-:is(.seat, .here-face, .share-tile)[data-state="away"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="away"] {
   --lamp: var(--away);
 }
 
@@ -2878,6 +2878,1035 @@ button.todo-pill:active,
   }
 }
 
+/* ---------- seeing the others (study room step 6, part 2): the peek, nudges, who's here and their desk ---------- */
+
+/* Someone else's seat is one big button for the quick peek; the bell sits above it. Seats squish when pressed. */
+.seat {
+  transition: transform 0.2s var(--ease);
+}
+
+.seat:has(.seat-peek:active) {
+  transform: scale(0.97);
+}
+
+.seat-peek {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.seat-peek:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* Room's nudge: a round bell on the seat, in the phone color while the 10 minutes since the last one run down. */
+.nudge-bell {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease),
+    background-color 0.3s var(--ease),
+    color 0.3s var(--ease);
+}
+
+.nudge-bell[data-waiting] {
+  background: var(--phone);
+  color: var(--bg);
+  cursor: default;
+}
+
+.nudge-bell:active:not(:disabled),
+.nudge-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.nudge-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 22px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--phone);
+  color: var(--bg);
+  font: 600 14px var(--font-ui);
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease),
+    opacity 0.3s var(--ease);
+}
+
+.nudge-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Two rings leave a nudged seat's initial, the second 0.6 s behind, two rounds and done. */
+.seat-ripples span {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--phone);
+  border-radius: 999px;
+  animation: ripple 1.8s var(--ease) 2 both;
+}
+
+.seat-ripples span + span {
+  animation-delay: 0.6s;
+}
+
+.toast-nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast-nudge svg {
+  flex: none;
+  color: var(--phone);
+}
+
+.toast-meta {
+  color: var(--muted);
+}
+
+/* The quick peek (PersonPanel.dc.html): a solid card in the middle, lit from the top in their state color. */
+.peek {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  width: calc(100% - 48px);
+  max-width: 720px;
+  height: fit-content;
+  max-height: calc(100% - 48px);
+  margin: auto;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 40px 100px -30px rgb(0 0 0 / 60%);
+  color: var(--ink);
+}
+
+.peek-inner {
+  padding: 26px 30px 28px;
+  background: radial-gradient(460px 170px at 50% -60px, color-mix(in srgb, var(--lamp) 14%, transparent), transparent 75%);
+}
+
+.peek-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.peek-face,
+.their-face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.peek-face {
+  background: var(--sunken);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--lamp);
+}
+
+.peek-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.peek-name {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.peek-state,
+.rail-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.peek-state::before,
+.rail-state::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--lamp);
+}
+
+.peek .day-close {
+  margin: 0;
+}
+
+.peek-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.peek-head + .peek-label {
+  margin-top: 32px;
+}
+
+.peek-task {
+  margin-top: 6px;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.peek-meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.peek-foot .peek-meta {
+  margin-top: 0;
+}
+
+.peek-day {
+  margin-top: 28px;
+}
+
+.peek-day .their-bar {
+  height: 8px;
+}
+
+.peek-day .their-bar-ends {
+  margin-top: 8px;
+}
+
+.peek-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 44px;
+  margin-top: 30px;
+}
+
+.peek-todos {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.peek-todos .peek-label {
+  margin-bottom: 4px;
+}
+
+.peek-apps {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.peek-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.peek-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.peek .nudge-button {
+  height: 48px;
+  margin-top: 0;
+  padding: 0 28px;
+  font-size: 15px;
+}
+
+.peek .nudge-button svg {
+  display: none;
+}
+
+/* Someone's day as a still bar, on a card (the peek and their desk). */
+.their-bar {
+  --track: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.their-bar-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Their to-dos: the current one ringed and bold, open ones hollow, done ones filled and struck. */
+/* The mockups' list rows are content-box: their height plus the 1 px line under them. */
+.their-todo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 45px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.their-card .their-todos {
+  margin-top: 10px;
+}
+
+.their-card .their-todo {
+  min-height: 49px;
+}
+
+.their-todo-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.their-todo[data-kind="current"] .their-todo-mark {
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 0 0 0 2px var(--surface),
+    inset 0 0 0 7px var(--ink);
+}
+
+.their-todo[data-kind="done"] .their-todo-mark {
+  border: 0;
+  background: var(--ink-2);
+}
+
+.their-todo-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.their-todo[data-kind="current"] .their-todo-text {
+  font-weight: 600;
+}
+
+.their-todo[data-kind="done"] .their-todo-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.their-todo-time,
+.their-app-time {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Their apps: each bar its share of the longest, a browser's YouTube part first in --hot. */
+.their-app {
+  margin-top: 14px;
+}
+
+.their-apps .their-app {
+  margin-top: 18px;
+}
+
+.their-app-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.their-app-track {
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.their-app-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+}
+
+.their-app-youtube,
+.their-app-rest {
+  flex-basis: 0;
+  border-radius: 999px;
+}
+
+.their-app-youtube {
+  background: var(--hot);
+}
+
+.their-app-rest {
+  background: var(--ink-2);
+}
+
+/* Their desk (TheirDesk.dc.html): the state up top, then a card per piece they share. */
+.their-desk {
+  padding-top: 8px;
+}
+
+.their-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.their-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.their-shares {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.their-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px 48px;
+  margin-top: 28px;
+}
+
+.their-now {
+  flex: 3 1 520px;
+  min-width: 0;
+}
+
+.their-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.their-face {
+  background: var(--surface);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--lamp);
+}
+
+.their-name {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.their-since {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.their-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-top: 40px;
+}
+
+.their-state {
+  font-size: clamp(52px, 7vw, 96px);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+}
+
+.their-timer {
+  color: var(--lamp);
+  font-family: var(--font-mono);
+  font-size: clamp(40px, 5vw, 68px);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.their-working {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.their-num {
+  color: var(--ink);
+}
+
+.their-video {
+  flex: 2 1 360px;
+  min-width: 0;
+}
+
+.their-video-tile {
+  position: relative;
+  height: 280px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.their-desk:is([data-state="working"], [data-state="phone"]) .their-video-tile {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent),
+    0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent);
+  animation: lamp 6s ease-in-out infinite;
+}
+
+.their-desk[data-state="phone"] .their-video-tile {
+  animation-duration: 2.4s;
+}
+
+.their-desk:is([data-state="working"], [data-state="phone"]) .their-video-tile .seat-initial {
+  color: var(--ink);
+}
+
+.their-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 20px;
+  margin-top: 48px;
+}
+
+.their-piece {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+}
+
+.their-today {
+  flex: 1 1 100%;
+}
+
+.their-card {
+  flex: 1 1 340px;
+}
+
+.their-history {
+  flex: 2 1 520px;
+}
+
+.their-piece-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.their-piece-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.their-piece-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.their-today .their-piece-meta {
+  font-size: 14px;
+}
+
+.their-empty {
+  margin-top: 14px;
+}
+
+.their-today-bar {
+  margin-top: 20px;
+}
+
+.their-sites {
+  margin-top: 10px;
+}
+
+.their-site {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 45px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.their-site [data-hot] {
+  color: var(--hot);
+}
+
+.their-weekdays,
+.their-week {
+  display: flex;
+  gap: 6px;
+}
+
+.their-weekdays {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.their-weekdays span {
+  flex: 1 1 0;
+  padding-left: 8px;
+}
+
+.their-week {
+  margin-top: 6px;
+}
+
+.their-day {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 52px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  font-size: 12px;
+}
+
+.their-day[data-shade="1"] {
+  background: color-mix(in srgb, var(--work) 12%, transparent);
+}
+
+.their-day[data-shade="2"] {
+  background: color-mix(in srgb, var(--work) 25%, transparent);
+}
+
+.their-day[data-shade="3"] {
+  background: color-mix(in srgb, var(--work) 40%, transparent);
+}
+
+.their-day[data-shade="4"] {
+  background: color-mix(in srgb, var(--work) 60%, transparent);
+}
+
+.their-day[data-today] {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  font-weight: 600;
+}
+
+.their-day[data-quiet] {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.their-day[data-out] {
+  background: transparent;
+  opacity: 0.3;
+}
+
+.their-day-minutes {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.their-nothing {
+  flex: 1 1 100%;
+  padding: 48px 0;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* The group calendar: the others' focused time that day, quietly, under the day's page. */
+.day-others {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Who's here as the sidebar (SideRail.dc.html): the frame widens to 1320 px and the room sits on the right. */
+.frame[data-rail] .topbar {
+  max-width: calc(1320px + 2 * 32px);
+}
+
+.frame[data-rail] .frame-body {
+  display: flex;
+  align-items: stretch;
+  max-width: calc(1320px + 2 * 32px);
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.frame[data-rail] .shell {
+  flex: 999 1 640px;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0 56px 64px 0;
+}
+
+/* Next to the sidebar the Desk's top is SideRail's: a little smaller and higher. */
+.frame[data-rail] .focus {
+  margin-top: 40px;
+}
+
+.frame[data-rail] .focus-word {
+  font-size: clamp(56px, 7vw, 104px);
+}
+
+.frame[data-rail] .focus-timer {
+  font-size: clamp(40px, 5vw, 72px);
+}
+
+.frame[data-rail] .timeline-wrap {
+  margin-top: 48px;
+}
+
+.rail {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 380px;
+  padding: 36px 0 64px 36px;
+  border-left: 1px solid var(--line);
+  animation: slide 0.45s var(--ease) both;
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rail-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rail-toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rail-people {
+  margin-top: 4px;
+}
+
+.rail-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.rail-person {
+  display: block;
+  margin: 0 -12px;
+  padding: 20px 12px;
+  border-radius: 16px;
+  transition: background-color 0.3s var(--ease);
+}
+
+.rail-person:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.rail-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rail-thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 72px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--sunken);
+  box-shadow: 0 0 0 1.5px var(--lamp);
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rail-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.rail-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rail-state {
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.rail-state::before {
+  width: 6px;
+  height: 6px;
+}
+
+.rail-task {
+  margin-top: 14px;
+  font-size: 15px;
+}
+
+.rail-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rail-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rail-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rail-dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.rail-dot[data-done] {
+  border: 0;
+  background: var(--ink-2);
+}
+
+.rail-today {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rail-empty {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.rail-room {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rail-collapsed {
+  display: flex;
+  flex: 0 0 76px;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 36px 0 0 20px;
+  animation: none;
+}
+
+.rail-face {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3.5px var(--lamp);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Who's here as a frosted bar along the bottom (BottomBar.dc.html), between a phone's width and the sidebar's. */
+.frame[data-bar] .shell {
+  padding-bottom: 160px;
+}
+
+.room-bar {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 32px);
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 24px 50px -28px rgb(0 0 0 / 50%);
+  transform: translateX(-50%);
+}
+
+.bar-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 380px;
+  min-height: 52px;
+  padding: 0 18px 0 8px;
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.bar-face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--sunken);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--lamp);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bar-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.bar-timer {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-timer::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--lamp);
+}
+
+.bar-rule {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--line-strong);
+}
+
+.bar-rule-tall {
+  height: 28px;
+  margin: 0 4px;
+}
+
+.bar-task {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-app {
+  flex: none;
+  color: var(--muted);
+}
+
+.bar-room {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: var(--ink);
+}
+
+@media (max-width: 639px) {
+  .nudge-bell {
+    top: 8px;
+    right: 8px;
+  }
+}
+
 /* ---------- motion ---------- */
 
 .rise {
@@ -2951,6 +3980,14 @@ button.todo-pill:active,
   }
   50% {
     transform: scaleY(1);
+  }
+}
+
+/* SideRail's sidebar coming in. */
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
   }
 }
 

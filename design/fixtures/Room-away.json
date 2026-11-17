@@ -109,7 +109,8 @@
         "history": true,
         "apps": true,
         "sites": false,
-        "video": false
+        "video": false,
+        "nudges": true
       }
     },
     "room": {
@@ -120,13 +121,24 @@
           "here": true,
           "state": "away",
           "seconds_in_state": 520,
+          "shares": [
+            "focus",
+            "todos",
+            "apps",
+            "history"
+          ],
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
+            "current_seconds": 2280,
             "done": 1,
             "total": 4
           },
-          "app": "Code"
+          "app": "Code",
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          }
         },
         {
           "username": "sam",
@@ -134,13 +146,24 @@
           "here": true,
           "state": "phone",
           "seconds_in_state": 365,
+          "shares": [
+            "focus",
+            "todos",
+            "apps",
+            "history"
+          ],
           "focus_seconds": 6480,
           "todos": {
             "current": "Read chapter 7",
+            "current_seconds": 1440,
             "done": 1,
             "total": 4
           },
-          "app": "Chrome"
+          "app": "Chrome",
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          }
         },
         {
           "username": "alex",
@@ -148,11 +171,21 @@
           "here": true,
           "state": "away",
           "seconds_in_state": 760,
+          "shares": [
+            "focus",
+            "todos",
+            "history"
+          ],
           "focus_seconds": 7500,
           "todos": {
             "current": "Flashcards, unit 4",
+            "current_seconds": 900,
             "done": 3,
             "total": 5
+          },
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
           }
         }
       ]

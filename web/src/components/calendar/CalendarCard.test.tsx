@@ -40,7 +40,7 @@ beforeEach(() => {
       const replies: Record<string, object> = {
         "/api/days?month=2026-11": { month: "2026-11", today: "2026-11-15", days: { "2026-11-14": { focus_minutes: 140 }, "2026-11-15": { focus_minutes: 50 } } },
         "/api/days?month=2026-10": { month: "2026-10", today: "2026-11-15", days: { "2026-10-30": { focus_minutes: 30 } } },
-        "/api/days/2026-11-14": { day: "2026-11-14", today: false, markdown: PAGE },
+        "/api/days/2026-11-14": { day: "2026-11-14", today: false, markdown: PAGE, others: [{ name: "Sam", focus_minutes: 108 }, { name: "Alex", focus_minutes: 125 }] },
         "/api/days/2026-11-15": { day: "2026-11-15", today: true, markdown: TODAY_PAGE },
       };
       const reply = replies[path];
@@ -89,7 +89,7 @@ it("opens a day's page in a dialog and closes it with Esc, back on the day", asy
   const day = await screen.findByRole("button", { name: "November 14, 2h 20m focused" });
   await user.click(day);
   const dialog = await screen.findByRole("dialog", { name: "Saturday, November 14" });
-  expect(await within(dialog).findByText("focused", { exact: false })).toHaveTextContent("2h 20m focused · 12m phone · 1h 05m away");
+  expect((await within(dialog).findAllByText("focused", { exact: false }))[0]).toHaveTextContent("2h 20m focused · 12m phone · 1h 05m away");
   const done = within(dialog).getAllByRole("listitem").map((row) => [...row.children].map((part) => part.textContent));
   expect(done).toEqual([
     ["Read: chapter 7", "1h 40m"],
@@ -97,6 +97,7 @@ it("opens a day's page in a dialog and closes it with Esc, back on the day", asy
   ]);
   expect(within(dialog).getByText("Apps").nextElementSibling).toHaveTextContent("Code 2h 05m · Google Chrome 1h 10m");
   expect(within(dialog).getByText("Mac tracking was paused for 20m, so that time isn't counted.")).toBeInTheDocument();
+  expect(within(dialog).getByText(/^Also focused/)).toHaveTextContent("Also focused: Sam 1h 48m · Alex 2h 5m"); // the group calendar
   expect(day).toHaveAttribute("data-picked");
 
   await user.keyboard("{Escape}");

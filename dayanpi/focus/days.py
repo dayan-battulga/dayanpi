@@ -21,6 +21,7 @@ DAY_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MONTH_PATTERN = r"^\d{4}-\d{2}$"
 TOP_APPS = 10
 CHART_APPS = 8  # /api/apps names this many apps, the rest are summed
+TOP_SITES = 5  # someone's desk lists this many of today's sites
 OTHER_APPS = "Other apps"
 WEEK_DAYS = 7
 YOUTUBE = "youtube.com"  # and its subdomains (m., music.), in any browser; the only site the day page counts
@@ -63,26 +64,43 @@ class AppSeconds:
     has_site: bool = False  # a sample named a site, so the app is a browser
 
 
-def count_app_seconds(lines: list[dict], day: str) -> dict[str, AppSeconds]:
-    """Seconds per Mac app (every app, no cutoff) while you were at the desk. The day page and /api/apps both use this.
-
-    From the sample lines: each one stands for the SAMPLE_LOG_INTERVAL_S before it, and
-    counts when you were working or on your phone (not away or unknown), the Mac wasn't
-    locked, and Mac tracking wasn't paused. Older logs without an app on their samples
-    count nothing; without a site, all the time is plain app time.
-    """
-    apps: dict[str, AppSeconds] = {}
+def list_counted_samples(lines: list[dict], day: str) -> list[dict]:
+    """The sample lines that count toward the Mac's time, each standing for the SAMPLE_LOG_INTERVAL_S before it: you were
+    working or on your phone (not away or unknown), the Mac wasn't locked, and Mac tracking wasn't paused. Older logs
+    without an app on their samples count nothing."""
+    counted = []
     paused = False
     for line in list_day_lines(lines, day):
         app = line.get("app")
         if line.get("event") == "mac_tracking":
             paused = line.get("enabled") is False
         if line.get("event") == "sample" and app and not paused and line.get("state") in AT_DESK_STATES and app != LOCKED_APP:
-            counted = apps.setdefault(app, AppSeconds())
-            counted.total += SAMPLE_LOG_INTERVAL_S
-            counted.youtube += SAMPLE_LOG_INTERVAL_S if is_youtube(line.get("site")) else 0.0
-            counted.has_site = counted.has_site or bool(line.get("site"))
+            counted.append(line)
+    return counted
+
+
+def count_app_seconds(lines: list[dict], day: str) -> dict[str, AppSeconds]:
+    """Seconds per Mac app (every app, no cutoff) while you were at the desk. The day page and /api/apps both use this.
+    Without a site, all the time is plain app time."""
+    apps: dict[str, AppSeconds] = {}
+    for line in list_counted_samples(lines, day):
+        counted = apps.setdefault(line["app"], AppSeconds())
+        counted.total += SAMPLE_LOG_INTERVAL_S
+        counted.youtube += SAMPLE_LOG_INTERVAL_S if is_youtube(line.get("site")) else 0.0
+        counted.has_site = counted.has_site or bool(line.get("site"))
     return apps
+
+
+def build_sites_chart(log: FocusLog, now: float) -> list[dict]:
+    """Today's TOP_SITES sites by seconds in front, most first, from the same samples as the apps."""
+    today = format_day(now)
+    sites: dict[str, float] = {}
+    for line in list_counted_samples(log.read_day(today), today):
+        if line.get("site"):
+            sites[line["site"]] = sites.get(line["site"], 0.0) + SAMPLE_LOG_INTERVAL_S
+    ranked = sorted(sites, key=lambda site: (-sites[site], site))
+    chart = [{"site": site, "seconds": sites[site]} for site in ranked[:TOP_SITES]]
+    return chart
 
 
 def rank_apps(apps: dict[str, AppSeconds]) -> list[str]:
@@ -245,6 +263,16 @@ def read_month(days_dir: Path, month: str) -> dict[str, dict]:
         if re.fullmatch(DAY_PATTERN, path.stem)
     }
     return month_days
+
+
+def read_focus_minutes(days_dir: Path) -> dict[str, int]:
+    """Every written day's focused minutes, from its page, oldest first."""
+    minutes = {
+        path.stem: read_page_totals(path.read_text(encoding="utf-8")).get("focus_minutes", 0)
+        for path in sorted(days_dir.glob("*.md"))
+        if re.fullmatch(DAY_PATTERN, path.stem)
+    }
+    return minutes
 
 
 def find_seconds_until_midnight(now: float) -> float:

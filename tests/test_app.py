@@ -639,7 +639,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     for secret in ("secret plan", "SecretApp", "secret.example"):
         assert secret not in seen
     [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
-    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state"}
+    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "nudge"}
 
     desk.sharing.set({"focus": True, "todos": True, "apps": True})
     make_room(monkeypatch, now)
@@ -674,7 +674,7 @@ def test_the_sharing_route_saves_your_switches_and_your_seat_is_what_the_room_ge
     assert [seat["username"] for seat in room["seats"]] == [owner.username, member.username]
     without_timer = lambda seat: {key: value for key, value in seat.items() if key != "seconds_in_state"}  # noqa: E731
     assert without_timer(reply.json()["seat"]) == without_timer(room["seats"][1]), "Settings' preview is what the room gets"
-    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "focus_seconds", "app"}
+    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "app", "nudge"}
     for bad in ({"status": False}, {"apps": "yes"}):
         assert client.post("/api/sharing", json=bad).status_code == 422
 
@@ -830,7 +830,7 @@ def test_day_routes_serve_past_pages_and_build_today_live():
     assert listed["month"] == month and listed["today"] == today
     assert listed["days"][past] == {"focus_minutes": 95}
     assert listed["days"][today]["focus_minutes"] == 10, "today comes live from the log"
-    assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n"}
+    assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n", "others": []}
     assert live["today"] is True and "- Focus: 10m" in live["markdown"]
     assert not (days_dir / f"{today}.md").exists(), "today's page is never saved"
     assert missing.status_code == 404
@@ -1265,7 +1265,10 @@ ACCESS = {
     ("POST", "/api/track/source"): ("/api/track/source", {"source": "webcam"}, 401, 422, 422),
     ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
-    ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),  # the voice is off in the tests, so nothing plays
+    ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
+    ("GET", "/api/people/{username}"): ("/api/people/nobody", None, 401, 404, 404),
+    ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
+    ("GET", "/people/{username}"): ("/people/sam", None, 303, 200, 200),  # the voice is off in the tests, so nothing plays
     ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
     ("GET", "/video"): ("/video", None, 401, 404, 200),
@@ -1309,12 +1312,12 @@ def test_the_owner_only_reads_turn_a_member_away():
         assert (reply.status_code, reply.json()) == (403, {"detail": "only the owner can do that"}), path
 
 
-@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track", "/track/test"])
+@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track", "/track/test", "/people/sam"])
 def test_the_page_routes_serve_the_page(path):
     signed_in = let_in(stranger(), find_owner()).get(path)
     signed_out = stranger().get(path, follow_redirects=False)
     assert (signed_in.status_code, signed_in.text) == (200, app.INDEX_PAGE.read_text())
-    if path in ("/settings", "/me", "/pi", "/track", "/track/test"):
+    if path in ("/settings", "/me", "/pi", "/track", "/track/test", "/people/sam"):
         assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=" + quote(path, safe=""))
     else:
         assert (signed_out.status_code, signed_out.text) == (200, app.INDEX_PAGE.read_text())
@@ -1950,3 +1953,148 @@ def test_removing_someone_moves_their_desk_aside_and_the_name_starts_empty():
     removed = app.desks.users_dir / "removed" / f"bo-{format_day(time.time())}"
     assert "the first bo's" in (removed / "todos.json").read_text(), "moved aside, never deleted"
     assert fresh == [], "the same username starts empty"
+
+
+# ----- someone's desk, nudges and the group calendar (study room step 6, part 2) -----
+
+SECRETS = {
+    "today": ["phone_seconds", "segments"],
+    "todo_list": ["secret plan", "older secret"],
+    "apps": ["SecretApp"],
+    "sites": ["secret.example"],
+    "history": ["joined_at", "total_minutes"],
+}
+
+
+def make_sams_desk():
+    """Sam's desk with something to find in every piece: to-dos, a Mac app on a site, and a past day's page."""
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    now = time.time()
+    plan = desk.todos.add("secret plan", now)
+    desk.todos.change(plan["id"], now, current=True)
+    desk.todos.change(desk.todos.add("older secret", now)["id"], now, done=True)
+    desk.tracker.record_app("SecretApp", now, site="secret.example")
+    write_app_samples(desk.log, format_day(now), now - 100, "SecretApp", 3, site="secret.example")
+    desk.days_dir.mkdir(parents=True)
+    (desk.days_dir / f"{format_day(now)[:7]}-01.md").write_text("---\nfocus_minutes: 77\n---\n")
+    return sam, desk
+
+
+@pytest.mark.parametrize(
+    "switches, pieces",
+    [
+        ({"apps": True, "sites": True, "video": True}, {"today", "todo_list", "apps", "app_youtube", "sites", "history", "video"}),
+        ({"focus": False, "apps": False}, {"todo_list", "history"}),  # TheirDeskLess: to-dos and history only
+        ({"apps": True}, {"today", "todo_list", "apps", "history"}),  # sites stay off, so no YouTube part either
+        ({"apps": False, "sites": True}, {"today", "todo_list", "history"}),  # sites without apps counts for nothing
+        ({"focus": False, "todos": False, "history": False}, set()),
+    ],
+)
+def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
+    sam, desk = make_sams_desk()
+    desk.sharing.set(switches)
+    reply = let_in(stranger(), find_owner()).get("/api/people/sam")
+    their = reply.json()
+    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since"}
+    assert reply.status_code == 200
+    assert set(their) - seat_keys == pieces
+    for piece, texts in SECRETS.items():
+        for text in texts:
+            assert (text in reply.text) == (piece in pieces), f"{text} with {piece} {'on' if piece in pieces else 'off'}"
+    if "history" in pieces:
+        assert their["history"]["days"][f"{format_day(time.time())[:7]}-01"] == 77
+    if "app_youtube" in pieces:
+        assert their["sites"] == [{"site": "secret.example", "seconds": 90.0}]
+
+
+def test_nobodys_desk_is_a_404_and_yours_is_what_the_room_sees():
+    owner = find_owner()
+    desk_of(owner).sharing.set({"todos": False})
+    client = let_in(stranger(), owner)
+    assert client.get("/api/people/nobody").status_code == 404
+    mine = client.get(f"/api/people/{owner.username}").json()
+    assert "todo_list" not in mine and "todos" not in mine
+
+
+def put_on_the_phone(monkeypatch, desk, seconds=400):
+    """The desk's tracker says phone for this long, and just checked them (so they're here)."""
+    real = desk.tracker.status
+    monkeypatch.setattr(desk.tracker, "status", lambda now: {**real(now), "state": "phone", "seconds_in_state": seconds, "last_check": {"at": now}})
+
+
+def test_a_member_nudges_me_on_the_pis_speaker(monkeypatch):
+    member = add_member()
+    mine = use_owner_desk(monkeypatch)
+    put_on_the_phone(monkeypatch, mine)
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text))
+    reply = let_in(stranger(), member).post("/api/nudge", json={"username": find_owner().username})
+    assert (reply.status_code, reply.json()["wait_s"]) == (200, 600)
+    assert said == ["Bo says put the phone down"]
+    assert mine.last_spoken["kind"] == "nudge"
+    assert mine.last_nudged["by"] == "bo"
+
+
+def test_i_nudge_a_member_on_their_own_computer(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    put_on_the_phone(monkeypatch, desk)
+    rendered = []
+    monkeypatch.setattr(app.voice, "render", lambda text, sink: rendered.append(text))
+    monkeypatch.setattr(app.voice, "say", lambda text: pytest.fail("a member's nudge never plays on the Pi"))
+    reply = let_in(stranger(), find_owner()).post("/api/nudge", json={"username": "sam"})
+    assert reply.status_code == 200
+    assert rendered == ["tester says put the phone down"]
+    spoken = app.describe_spoken(desk, time.time())
+    assert (spoken["text"], spoken["kind"]) == ("tester says put the phone down", "nudge")
+
+
+def test_nudges_wait_ten_minutes_per_person_and_only_on_the_phone(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    monkeypatch.setattr(app.voice, "render", lambda text, sink: None)
+    owner = let_in(stranger(), find_owner())
+    other = let_in(stranger(), add_member("al"))
+    assert owner.post("/api/nudge", json={"username": "sam"}).status_code == 409, "not on the phone"
+    put_on_the_phone(monkeypatch, desk, seconds=299)
+    assert owner.post("/api/nudge", json={"username": "sam"}).status_code == 409, "not for 5 minutes yet"
+    put_on_the_phone(monkeypatch, desk)
+    assert owner.post("/api/nudge", json={"username": "sam"}).status_code == 200
+    again = other.post("/api/nudge", json={"username": "sam"})
+    assert (again.status_code, again.json()["detail"]) == (429, "nudged a few minutes ago"), "one per person, whoever asks"
+    assert 590 <= int(again.headers["Retry-After"]) <= 601
+    seat = app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())
+    assert seat["nudge"]["wait_s"] > 590 and seat["nudge"]["age_s"] < 5
+    desk.last_nudged["at"] -= app.NUDGE_EVERY_S
+    assert other.post("/api/nudge", json={"username": "sam"}).status_code == 200
+    assert owner.post("/api/nudge", json={"username": find_owner().username}).status_code == 400, "not yourself"
+    assert owner.post("/api/nudge", json={"username": "nobody"}).status_code == 404
+
+
+def test_nobody_can_nudge_someone_who_turned_nudges_off(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    put_on_the_phone(monkeypatch, desk)
+    let_in(stranger(), sam).post("/api/sharing", json={"nudges": False})
+    reply = let_in(stranger(), find_owner()).post("/api/nudge", json={"username": "sam"})
+    assert reply.status_code == 409
+    assert desk.last_nudged is None and desk.last_spoken is None
+    assert "nudge" not in app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())
+
+
+def test_the_day_page_has_the_others_who_share_focus_and_history():
+    owner, sam, al = find_owner(), add_member("sam"), add_member("al")
+    now = time.time()
+    day = f"{format_day(now)[:7]}-01" if format_day(now)[8:] != "01" else f"{format_day(now)[:7]}-02"
+    for user, minutes in ((owner, 30), (sam, 108), (al, 125)):
+        desk = desk_of(user)
+        desk.days_dir.mkdir(parents=True)
+        (desk.days_dir / f"{day}.md").write_text(f"---\nfocus_minutes: {minutes}\n---\n")
+    desk_of(al).sharing.set({"history": False})
+    mine = let_in(stranger(), owner).get(f"/api/days/{day}").json()
+    sams = let_in(stranger(), sam).get(f"/api/days/{day}").json()
+    assert mine["others"] == [{"name": "Sam", "focus_minutes": 108}], "Al keeps history private"
+    assert sams["others"] == [{"name": "tester", "focus_minutes": 30}]
+    desk_of(sam).sharing.set({"focus": False})
+    assert let_in(stranger(), owner).get(f"/api/days/{day}").json()["others"] == []

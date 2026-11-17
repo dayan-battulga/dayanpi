@@ -1,6 +1,6 @@
 import { m } from "motion/react";
 import type { ReactNode } from "react";
-import { NavLink } from "react-router";
+import { Link, useLocation } from "react-router";
 import { AccountMenu } from "@/components/header/AccountMenu";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { SPRINGS } from "@/lib/motion";
@@ -22,20 +22,19 @@ interface PillLinkProps {
   to: string;
   kind: "tab" | "dock";
   label?: string;
+  under?: string; // pages below this count too: someone's desk (/people/...) is part of the Room
   children: ReactNode;
 }
 
 // A page link; the active one carries the pill, which slides over when you pick another (the toggle spring).
-export function PillLink({ to, kind, label, children }: PillLinkProps) {
+export function PillLink({ to, kind, label, under, children }: PillLinkProps) {
+  const { pathname } = useLocation();
+  const active = pathname === to || (under != null && pathname.startsWith(under));
   return (
-    <NavLink to={to} end className={kind === "tab" ? "tab" : "dock-item"} aria-label={label}>
-      {({ isActive }) => (
-        <>
-          {isActive && <m.span layoutId={`${kind}-pill`} className={`${kind}-pill`} transition={SPRINGS.toggle} />}
-          {children}
-        </>
-      )}
-    </NavLink>
+    <Link to={to} className={kind === "tab" ? "tab" : "dock-item"} aria-label={label} aria-current={active ? "page" : undefined}>
+      {active && <m.span layoutId={`${kind}-pill`} className={`${kind}-pill`} transition={SPRINGS.toggle} />}
+      {children}
+    </Link>
   );
 }
 
@@ -68,7 +67,7 @@ export function Header({ connection, user, phone, here, hereLabel, onOpenPalette
       </span>
       {!phone && (
         <nav className="tabs" aria-label="Pages">
-          <PillLink to="/" kind="tab">
+          <PillLink to="/" kind="tab" under="/people/">
             Room
           </PillLink>
           <PillLink to="/me" kind="tab">

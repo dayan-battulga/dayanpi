@@ -47,6 +47,7 @@ class Desk:
     voice: VoiceSetting  # bedtime and where the peace sign speaks
     sharing: SharingSetting  # what the room sees (focus/sharing.py)
     seen_at: float | None = None  # the last second this person's site had the stream open; memory only
+    last_nudged: dict | None = None  # {"by", "at"}: the last nudge this person got, for its ripples and the 10 min wait; memory only
     last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill; never logged
     coach: TodoCoach | None = None  # made by app.find_coach the first time it's needed
 

@@ -19,9 +19,10 @@ const SWITCHES: { key: keyof Sharing; label: string }[] = [
   { key: "apps", label: "Apps" },
   { key: "sites", label: "Sites" },
   { key: "video", label: "Video" },
+  { key: "nudges", label: "Nudges" }, // whether others may nudge you; the button doesn't show for anyone while it's off
 ];
 
-const DEFAULT_SHARING: Sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false };
+const DEFAULT_SHARING: Sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true };
 
 const PIECE_IN = { opacity: 1, transition: SPRINGS.enter };
 const PIECE_OUT = { opacity: 0, transition: SPRINGS.exit };

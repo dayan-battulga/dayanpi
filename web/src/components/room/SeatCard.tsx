@@ -1,25 +1,46 @@
 import { Plus } from "lucide-react";
 import { Link } from "react-router";
+import { NudgeButton } from "@/components/room/NudgeButton";
+import type { Nudger } from "@/hooks/useNudge";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SEAT_WORDS, describeSeatLine, findDoneShare, readInitial } from "@/lib/room";
 import type { Seat } from "@/lib/types";
 
+// Two ripple rings, the second 0.6 s behind, two rounds of 1.8 s each: SPEC's ripple, then they stop.
+const RIPPLE_S = 4.2;
+
 interface SeatCardProps {
   seat: Seat;
   mine: boolean;
-  seconds: number | null; // the live time in their state; null while they're offline
+  username: string | undefined;
+  elapsed: number; // seconds since the snapshot the seat came in
+  now: number;
+  nudger: Nudger;
+  onPeek: () => void; // someone else's seat opens the quick peek
 }
 
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their initial until video comes, today's total,
 // their name and timer, the current to-do and app, and the to-dos-done bar. Each detail only if they share it.
-export function SeatCard({ seat, mine, seconds }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
+  const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
+  // Everyone in the room sees the rings leave a seat that was just nudged. They're gone long before the next nudge can
+  // come (10 minutes), so each one mounts them fresh and they play once.
+  const nudgedAgo = seat.nudge?.age_s == null ? null : seat.nudge.age_s + elapsed;
   return (
     <article className="seat" data-state={seat.state} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
+      {!mine && <button type="button" className="seat-peek" aria-label={`Peek at ${seat.name}`} aria-haspopup="dialog" onClick={onPeek} />}
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
+        {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
+          <span className="seat-ripples">
+            <span />
+            <span />
+          </span>
+        )}
       </span>
+      <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
       {seat.focus_seconds != null && (
         <span className="seat-chip">
           {formatDuration(seat.focus_seconds)}
