@@ -86,7 +86,7 @@ it("draws today's cards on /me from one stream", async () => {
   expect(document.getElementById("pi")).toBeNull();
 
   await waitFor(() => expect(document.querySelector(".segment.is-working.is-live")).not.toBeNull());
-  expect(screen.getByText("Sat down to work")).toBeInTheDocument();
+  expect(screen.queryByText("Sat down to work")).toBeNull(); // the Today list is gone: the timeline shows the same
 });
 
 it("puts the camera and the Pi's numbers on /pi", async () => {

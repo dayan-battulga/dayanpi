@@ -258,16 +258,23 @@ curl -s -b ~/.dayanpi-cookies localhost:8000/api/focus | python3 -c "import json
 
 ## To-do list
 
-The card next to the camera is one running to-do list. It carries over from day to day.
+One running to-do list on the left of your desk page, under the totals, with Apps on its right (on a phone, Apps goes under it). It carries over from day to day.
 
-- **Add** with the box at the top (Enter or **Add**). **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels. **Delete** with the ×.
-- **Check it off** and it moves down to **Done today**, ticked and crossed out. Uncheck it and it goes back to where it was.
-- **The current one.** The round button on an item makes it the one you're on (press it again to stop). It only collects time while you're **focused**, so phone time and away time don't count. Only one item is current at a time, and checking it off stops its clock. The time shows next to every item, in both lists.
+- **Each row** has a checkbox, the text, the time it's collected (a dash before it has any), and a button on the right.
+- **Start** makes that item the one you're on: its row gets a light tint, its time turns the state's color, and the button turns into **Working** (green, with a blinking dot) while you're focused, or **Paused** while you're on your phone or away. Click Working or Paused to stop it, so nothing's current. Only one item is current at a time, and it only collects time while you're **focused**, so phone and away time never count.
+- **Next to the title:** how many are open (the number rolls when it changes), or "Start one to collect its time" when nothing's current.
+- **Check it off** and it slides down into **Done**, ticked and crossed out, and the rows under it close up. Uncheck it and it slides back. Checking off the current item stops its clock.
+- **Add** with the "Add a to-do" line at the bottom: type and press Enter, and the new row rises in. **N** or ⌘K's "Add a to-do" puts the cursor there from anywhere (so does the **+** in the phone dock).
+- **Edit** by clicking an item's text: Enter or clicking somewhere else saves, Esc cancels.
+- **Delete** with the small × just past the end of a row. With a mouse it shows when you point at the row (or Tab to it); on a phone or a touch screen it's always there, in gray.
+- **It answers right away.** Every click shows up straight away, before the Pi replies. If the Pi doesn't take it (it's restarting, or the Wi-Fi blinked), the row goes back to how it was and a little toast says so. A new item shows up once the Pi has it (a moment), and if that fails your text goes back in the box.
+- **Members** see the list and what's current, but get no checkboxes, buttons or add line.
+- The old "Today" list of state changes is gone: the timeline at the top shows the same thing.
 - **Midnight.** Done shows what you finished today. At local midnight those items leave the list, and that day's [calendar page](#calendar) keeps them. Unfinished ones stay put.
 - **Where it lives.** `data/todos.json` on the Pi (or in `DAYANPI_DATA_DIR`). Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
 - **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
 
-The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the card keeps up.
+The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the page keeps up.
 
 ```bash
 curl -s -b ~/.dayanpi-cookies localhost:8000/api/todos | python3 -m json.tool
@@ -303,7 +310,7 @@ It's all built from that day's focus log (the to-dos come from its `todo` lines)
 
 **When pages get written.** Once when the service starts, for every past day that has a log and no page yet (that's how the old days get filled in the first time), then again a few seconds after each local midnight for the day that just ended. Like the focus checks, it waits for the network clock first. A page is never written over, so if you edit one, your edits stay. Today never gets a file; asking for today builds its page live from the log.
 
-**The calendar card** sits under the camera and to-do cards. Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. Click a day to read its page under the calendar, and click it again to close it. Today's page refreshes every minute while it's open. The arrows move between months, and the top line adds up the month's focus. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
+**The calendar card** sits under the to-do list and Apps. Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. Click a day to read its page under the calendar, and click it again to close it. Today's page refreshes every minute while it's open. The arrows move between months, and the top line adds up the month's focus. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
 
 The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from `data/days`. A day with no page is a 404.
 

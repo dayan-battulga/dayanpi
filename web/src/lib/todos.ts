@@ -1,6 +1,6 @@
 import type { NavigateFunction } from "react-router";
 import { request } from "@/lib/http";
-import type { Todos } from "@/lib/types";
+import type { TodoItem, Todos } from "@/lib/types";
 
 export const TODO_TEXT_MAX = 200;
 export const NEW_TODO_ID = "new-todo";
@@ -25,6 +25,36 @@ export interface TodoChange {
   text?: string;
   done?: boolean;
   current?: boolean;
+}
+
+// What the list will look like once the Pi takes a change, the way focus/todos.py does it: a checked item leaves
+// the open list (and stops being current), an unchecked one goes back to the end of it, only an open item can be
+// current. The Pi's reply puts an unchecked item back in its own place.
+export function applyTodoChange(todos: Todos, id: string, change: TodoChange, now: number): Todos {
+  const item = [...todos.open, ...todos.done].find((entry) => entry.id === id);
+  let next = todos;
+  if (item != null) {
+    const doneAt = change.done === undefined ? item.done_at : change.done ? (item.done_at ?? now) : null;
+    const edited = { ...item, text: change.text ?? item.text, done_at: doneAt };
+    const replaceIn = (list: TodoItem[]) => (list.some((entry) => entry.id === id) ? list.map((entry) => (entry.id === id ? edited : entry)) : [...list, edited]);
+    const without = (list: TodoItem[]) => list.filter((entry) => entry.id !== id);
+    let current = todos.current;
+    if (doneAt != null && current === id) {
+      current = null;
+    } else if (change.current === true && doneAt == null) {
+      current = id;
+    } else if (change.current === false && current === id) {
+      current = null;
+    }
+    next = { current, open: doneAt == null ? replaceIn(todos.open) : without(todos.open), done: doneAt == null ? without(todos.done) : replaceIn(todos.done) };
+  }
+  return next;
+}
+
+export function removeTodo(todos: Todos, id: string): Todos {
+  const without = (list: TodoItem[]) => list.filter((entry) => entry.id !== id);
+  const next = { current: todos.current === id ? null : todos.current, open: without(todos.open), done: without(todos.done) };
+  return next;
 }
 
 // Sends one change and hands back the list the server replied with, or null if it didn't work.

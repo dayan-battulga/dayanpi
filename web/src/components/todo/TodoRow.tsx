@@ -1,23 +1,31 @@
-import { CircleDot, X } from "lucide-react";
-import { useRef, useState, type KeyboardEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
+import { m } from "motion/react";
+import { useRef, useState, type KeyboardEvent, type Ref } from "react";
 import { formatDuration } from "@/lib/format";
+import { SPRINGS } from "@/lib/motion";
 import { TODO_TEXT_MAX, type TodoChange } from "@/lib/todos";
 import type { TodoItem } from "@/lib/types";
-import { cn } from "@/lib/utils";
+
+// A new row rises in; a row leaving fades where it was while the rest slide into its place.
+const ROW_HIDDEN = { opacity: 0, y: 10, filter: "blur(4px)" };
+const ROW_SHOWN = { opacity: 1, y: 0, filter: "blur(0px)", transitionEnd: { filter: "none" }, transition: SPRINGS.enter };
+const ROW_LEAVING = { opacity: 0, transition: SPRINGS.exit };
 
 interface TodoRowProps {
   item: TodoItem;
   done: boolean;
   current: boolean;
-  readOnly: boolean;
+  focused: boolean; // Working while you are, Paused otherwise
+  readOnly: boolean; // a member: no checkbox, Start, × or editing
+  isNew: boolean; // just added, so it rises in
   onChange: (change: TodoChange) => void;
   onDelete: () => void;
+  ref?: Ref<HTMLLIElement>; // AnimatePresence's popLayout measures the row through it
 }
 
-export function TodoRow({ item, done, current, readOnly, onChange, onDelete }: TodoRowProps) {
+// One to-do, like Desk's: the checkbox, the text (click it to edit), its time, and Start, or Working/Paused on the
+// current one. layoutId lets a checked row slide down into Done and back up.
+export function TodoRow({ item, done, current, focused, readOnly, isNew, onChange, onDelete, ref }: TodoRowProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const finished = useRef(false);
 
@@ -44,59 +52,69 @@ export function TodoRow({ item, done, current, readOnly, onChange, onDelete }: T
     }
   };
 
-  const textClass = cn("min-w-0 flex-1 py-2 [overflow-wrap:anywhere]", current && "font-semibold", done && "text-muted-foreground line-through");
+  const pill = focused ? "Working" : "Paused";
+  let text = (
+    <button type="button" className="todo-text" title="Edit" onClick={startEditing}>
+      {item.text}
+    </button>
+  );
+  if (readOnly) {
+    text = <span className="todo-text">{item.text}</span>;
+  } else if (draft != null) {
+    text = (
+      <input
+        autoFocus
+        className="todo-edit"
+        value={draft}
+        maxLength={TODO_TEXT_MAX}
+        aria-label={`Edit: ${item.text}`}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={handleKey}
+        onBlur={() => finishEditing(true)}
+        onFocus={(event) => event.currentTarget.select()}
+      />
+    );
+  }
 
   return (
-    <li className="rise flex min-h-12 items-center gap-2.5 border-b border-border text-sm last:border-b-0">
-      {!readOnly && (
-        <Checkbox
-          checked={done}
-          onCheckedChange={(checked) => onChange({ done: checked === true })}
-          aria-label={`${done ? "Not done" : "Done"}: ${item.text}`}
-          className="size-5 cursor-pointer border-muted-foreground data-[state=checked]:border-work data-[state=checked]:bg-work dark:data-[state=checked]:bg-work"
-        />
+    <m.li
+      ref={ref}
+      layout
+      layoutId={`todo-${item.id}`}
+      className="todo-row"
+      data-current={current || undefined}
+      data-done={done || undefined}
+      initial={isNew ? ROW_HIDDEN : false}
+      animate={ROW_SHOWN}
+      exit={ROW_LEAVING}
+      transition={{ layout: SPRINGS.layout }}
+    >
+      {!readOnly && <input type="checkbox" className="todo-check" checked={done} onChange={() => onChange({ done: !done })} aria-label={`${done ? "Not done" : "Done"}: ${item.text}`} />}
+      {text}
+      <span className="todo-time">{item.seconds > 0 ? formatDuration(item.seconds) : "—"}</span>
+      {!done && current && readOnly && (
+        <span className="todo-pill" data-working={focused || undefined}>
+          {pill}
+        </span>
       )}
-      {readOnly ? (
-        <span className={textClass}>{item.text}</span>
-      ) : draft == null ? (
-        <button type="button" title="Edit" onClick={startEditing} className={cn(textClass, "cursor-text text-left")}>
-          {item.text}
+      {!done && current && !readOnly && (
+        <button type="button" className="todo-pill" data-working={focused || undefined} aria-pressed="true" aria-label={`Stop working on ${item.text}`} onClick={() => onChange({ current: false })}>
+          {pill}
         </button>
-      ) : (
-        <Input
-          autoFocus
-          value={draft}
-          maxLength={TODO_TEXT_MAX}
-          aria-label={`Edit: ${item.text}`}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKey}
-          onBlur={() => finishEditing(true)}
-          onFocus={(event) => event.currentTarget.select()}
-          className="h-9 flex-1 rounded-full bg-secondary px-4"
-        />
       )}
-      {/* Plain classes, not cn(): tailwind-merge reads text-work as a font size and drops it. */}
-      <span className={`mono shrink-0 text-xs ${current ? "text-work" : "text-muted-foreground"}`}>
-        {item.seconds > 0 ? formatDuration(item.seconds) : "—"}
-      </span>
-      {!done && !readOnly && (
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-pressed={current}
-          aria-label={current ? `Stop working on: ${item.text}` : `Work on: ${item.text}`}
-          title={current ? "Current: collecting time while you work" : "Make current"}
-          onClick={() => onChange({ current: !current })}
-          className="rounded-full text-muted-foreground aria-pressed:text-work"
-        >
-          <CircleDot strokeWidth={1.8} />
-        </Button>
+      {!done && !current && !readOnly && (
+        <button type="button" className="todo-start" aria-pressed="false" aria-label={`Work on ${item.text}`} onClick={() => onChange({ current: true })}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="6 3 20 12 6 21 6 3" />
+          </svg>
+          Start
+        </button>
       )}
       {!readOnly && (
-        <Button variant="ghost" size="icon" aria-label={`Delete: ${item.text}`} onClick={onDelete} className="rounded-full text-muted-foreground">
-          <X strokeWidth={1.8} />
-        </Button>
+        <button type="button" className="todo-delete" aria-label={`Delete ${item.text}`} onClick={onDelete}>
+          <X size={16} strokeWidth={1.8} aria-hidden="true" />
+        </button>
       )}
-    </li>
+    </m.li>
   );
 }

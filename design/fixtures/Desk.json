@@ -347,6 +347,72 @@
     },
     "/api/mac/tracking": {
       "enabled": true
+    },
+    "PATCH /api/todos/t2": {
+      "todos": {
+        "current": "t2",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      }
+    },
+    "PATCH /api/todos/t1": {
+      "todos": {
+        "current": null,
+        "open": [
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          },
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": 1794877938
+          }
+        ]
+      }
     }
   }
 }

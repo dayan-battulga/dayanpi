@@ -117,7 +117,7 @@ export function AppsCard({ now }: { now: number }) {
   const empty = RANGES.find((entry) => entry.range === range)?.empty;
 
   return (
-    <Card id="apps" className="card rise mt-4 gap-0 p-5" style={riseDelay(2)} aria-label="Apps">
+    <Card id="apps" className="card rise gap-0 p-5" style={riseDelay(2)} aria-label="Apps">
       <div className="card-head">
         <div className="card-title">
           <h2 className="label">Apps</h2>

@@ -60,7 +60,7 @@ export function CalendarCard({ todayFocusSeconds, now }: CalendarCardProps) {
   const monthMinutes = weeks.flat().reduce((sum, cell) => sum + (cell.inMonth ? (readMinutes(cell.day) ?? 0) : 0), 0);
 
   return (
-    <Card id="calendar" className="card rise mt-4 gap-0 p-5" style={riseDelay(4)} aria-label="Calendar">
+    <Card id="calendar" className="card rise gap-0 p-5" style={riseDelay(4)} aria-label="Calendar">
       <div className="card-head">
         <div className="card-title">
           <h2 className="label">Calendar</h2>

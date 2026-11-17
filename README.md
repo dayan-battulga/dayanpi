@@ -73,7 +73,7 @@ python3 -m venv .venv
 
 They cover the focus state machine (driven with fake clocks), the detector decoding, the worker thread, the accounts (hashing, invites, sign-ins, the wrong-password wait), the API routes (who can reach what, the camera lock, validation), and startup without a camera. `pyproject.toml` tells pytest where the tests and the package are, so plain `pytest` from the repo root works too.
 
-The dashboard has its own tests (Vitest), for the time and box math, the timeline, the to-do card and the whole page on a fake stream:
+The dashboard has its own tests (Vitest), for the time and box math, the timeline, the to-do list and the whole page on a fake stream:
 
 ```bash
 cd web && npm ci && npm test

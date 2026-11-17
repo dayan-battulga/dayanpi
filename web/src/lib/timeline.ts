@@ -3,7 +3,6 @@ import type { FocusState, FocusStatus, Segment } from "@/lib/types";
 
 export const DAY_SECONDS = 86400;
 export const DAY_START_HOUR = 6;
-export const TODAY_LIST_LENGTH = 5;
 export const MIN_SEGMENT_SHARE = 0.4; // % of the bar, so a one-minute pickup still shows
 export const MERGE_GAP_S = 60;
 
@@ -28,14 +27,6 @@ export interface TimelineLayout {
   startHour: number;
   pieces: TimelinePiece[];
   cursorLeft: number;
-}
-
-export interface TodayItem {
-  key: string;
-  at: number;
-  kind: FocusState;
-  title: string;
-  segment: Segment;
 }
 
 export function readLocalMidnight(now: number): number {
@@ -89,40 +80,6 @@ export function layoutTimeline(known: Segment[], now: number, midnight: number):
     cursorLeft: Math.min(100, shareOf(now - windowStart)),
   };
   return layout;
-}
-
-export function describeSegment(segment: Segment, previous: Segment | undefined): string {
-  let title = "Stepped away";
-  if (segment.state === "phone") {
-    title = "Picked up your phone";
-  } else if (segment.state === "working" && previous?.state === "away") {
-    title = "Back at the desk";
-  } else if (segment.state === "working" && previous?.state === "phone") {
-    title = "Back to work";
-  } else if (segment.state === "working") {
-    title = "Sat down to work";
-  }
-  return title;
-}
-
-export function describeLength(segment: Segment, now: number): string {
-  const length = formatDuration((segment.end ?? now) - segment.start);
-  const text = segment.end == null ? `now · ${length}` : length;
-  return text;
-}
-
-// State changes, newest first.
-export function buildTodayItems(known: Segment[]): TodayItem[] {
-  const items = known.map((segment, index) => ({
-    key: `${segment.state}@${segment.start}:${segment.end == null}`,
-    at: segment.start,
-    kind: segment.state,
-    title: describeSegment(segment, known[index - 1]),
-    segment,
-  }));
-  items.sort((first, second) => second.at - first.at);
-  const recent = items.slice(0, TODAY_LIST_LENGTH);
-  return recent;
 }
 
 // The timeline's left end: "6 am", or earlier on a day that started before it.

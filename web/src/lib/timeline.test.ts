@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTodayItems, describeProblems, describeStartHour, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
+import { describeProblems, describeStartHour, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
 import type { FocusStatus, Segment } from "@/lib/types";
 
 const MIDNIGHT = new Date(2026, 10, 15).getTime() / 1000;
@@ -55,21 +55,6 @@ describe("layoutTimeline", () => {
     const layout = layoutTimeline([], at(2, 30), MIDNIGHT);
     expect(layout.startHour).toBe(2);
     expect(layout.cursorLeft).toBeCloseTo((0.5 / 22) * 100);
-  });
-});
-
-describe("buildTodayItems", () => {
-  it("lists the last five changes newest first, saying what kind of change each was", () => {
-    const known: Segment[] = [
-      { state: "working", start: at(9), end: at(10) },
-      { state: "phone", start: at(10), end: at(10, 5) },
-      { state: "working", start: at(10, 5), end: at(11) },
-      { state: "away", start: at(11), end: at(12) },
-      { state: "working", start: at(12), end: at(13) },
-      { state: "phone", start: at(13), end: null },
-    ];
-    const titles = buildTodayItems(known).map((item) => item.title);
-    expect(titles).toEqual(["Picked up your phone", "Back at the desk", "Stepped away", "Back to work", "Picked up your phone"]);
   });
 });
 

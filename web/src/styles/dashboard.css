@@ -568,28 +568,32 @@ ol {
 /* ---------- the top of the Desk ---------- */
 
 .focus,
+.todos,
 .camera {
   --state: var(--muted);
 }
 
 .focus[data-state="working"],
+.todos[data-state="working"],
 .camera[data-state="working"] {
   --state: var(--work);
 }
 
 .focus[data-state="phone"],
+.todos[data-state="phone"],
 .camera[data-state="phone"] {
   --state: var(--phone);
 }
 
 .focus[data-state="away"],
+.todos[data-state="away"],
 .camera[data-state="away"] {
   --state: var(--away);
 }
 
 /* The top of the Desk (components/focus/FocusNow.tsx): on the page, no card, with Desk.dc.html's exact values. */
 .focus {
-  margin: 56px 0;
+  margin-top: 56px;
 }
 
 .focus-head {
@@ -1058,77 +1062,256 @@ number-flow-react {
   border-top: 1px solid var(--line);
 }
 
-/* ---------- to-do + today ---------- */
+/* ---------- the to-do list (components/todo/TodoList.tsx): Desk's, on the page next to Apps ---------- */
 
-.todo {
+/* To-dos on the left, Apps on the right; they stack once there's no room for both (and always on a phone). */
+.desk-columns {
   display: flex;
-  flex: 1 1 400px;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 56px 80px;
+  margin: 88px 0;
+}
+
+.desk-columns > #apps {
+  flex: 1 1 380px;
   min-width: 0;
-  padding: 20px;
 }
 
-.today-title {
-  margin-top: 22px;
+.todos {
+  position: relative;
+  flex: 1 1 460px;
+  min-width: 0;
 }
 
-.today-list {
+.todos-head {
   display: flex;
-  flex-direction: column;
-  margin-top: 4px;
-  padding: 0;
-  list-style: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.today-list li {
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.todos-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* popLayout lifts a leaving row out with position: absolute, measured from here. */
+.todo-list {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.todo-list.is-done {
+  display: block;
+  margin-top: 0;
+}
+
+.todo-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-  animation: rise 0.7s var(--ease) both;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 8px 0 14px;
+  border-radius: 16px;
 }
 
-.today-list li:last-child {
-  border-bottom: 0;
+.todo-row[data-current] {
+  background: color-mix(in srgb, var(--state) 9%, transparent);
 }
 
-.today-time {
+.todo-row[data-done] {
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+/* Light even in the dark theme, so an empty box is white like the mockup's instead of the page's dark gray. */
+.todo-check {
   flex: none;
-  width: 68px;
-  color: var(--muted);
-  font-size: 12px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--work);
+  color-scheme: light;
+  cursor: pointer;
 }
 
-.today-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-2);
-}
-
-.today-dot.is-working {
-  background: var(--work);
-}
-
-.today-dot.is-phone {
-  background: var(--phone);
-}
-
-.today-dot.is-away {
-  background: var(--away);
-}
-
-.today-what {
+.todo-text {
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
-.today-meta {
+button.todo-text {
+  cursor: text;
+}
+
+.todo-row[data-current] .todo-text {
+  font-weight: 600;
+}
+
+.todo-row[data-done] .todo-text {
   color: var(--muted);
-  font-size: 12px;
+  text-decoration: line-through;
+}
+
+.todo-edit {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font: 400 15px var(--font-ui);
+}
+
+.todo-time {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.todo-row[data-current] .todo-time {
+  color: var(--state);
+}
+
+.todo-pill,
+.todo-start {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: 600 13px var(--font-ui);
+  transition: transform 0.2s var(--ease);
+}
+
+button.todo-pill,
+.todo-start {
+  cursor: pointer;
+}
+
+button.todo-pill:active,
+.todo-start:active {
+  transform: scale(0.97);
+}
+
+.todo-pill {
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.todo-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.todo-pill[data-working] {
+  background: var(--work);
+  color: var(--bg);
+}
+
+.todo-pill[data-working]::before {
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+.todo-start {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* The mockup has no room for a ×, so with a mouse it waits just past the row's end and shows on hover or focus. */
+.todo-delete {
+  position: absolute;
+  top: 50%;
+  right: -32px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  margin-top: -22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.2s var(--ease);
+}
+
+.todo-row:hover .todo-delete,
+.todo-delete:focus-visible {
+  opacity: 1;
+}
+
+/* A touch screen can't hover, and a phone has no room past the row: there it's always there, in the row, muted. */
+@media (hover: none), (max-width: 639px) {
+  .todo-delete {
+    position: static;
+    flex: none;
+    width: 44px;
+    margin: 0 -8px 0 -6px;
+    opacity: 1;
+  }
+}
+
+.todo-done-title {
+  margin: 20px 14px 2px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.todo-add {
+  margin: 10px 14px 0;
+}
+
+.todo-add-input {
+  width: 100%;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 400 15px var(--font-ui);
+  transition: border-color 0.3s var(--ease);
+}
+
+.todo-add-input::placeholder {
+  color: var(--muted);
+}
+
+/* The underline darkens instead of a ring, like the mockup's bare field. */
+.todo-add-input:focus-visible {
+  outline: none;
+  border-bottom-color: var(--ink);
 }
 
 /* ---------- Pi ---------- */
