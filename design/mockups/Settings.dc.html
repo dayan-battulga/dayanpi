@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+input::placeholder { color: var(--muted); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1040px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --hot: {{t.hot}}; --lamp: {{t.work}};">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Room</a>
+      <a href="Desk.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="#" aria-current="page" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--work);">D</a>
+    </div>
+  </header>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: 40px 32px 96px;">
+    <h1 style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.045em;">Settings</h1>
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px 64px; margin-top: 36px;">
+
+      <nav aria-label="Settings sections" style="flex: 1 1 220px; min-width: 0;">
+        <ul style="list-style: none; display: grid; gap: 2px; margin: 0; padding: 0;">
+          <sc-for list="{{nav}}" as="item" hint-placeholder-count="6">
+            <li><button type="button" aria-current="{{item.current}}" onClick="{{item.pick}}" style="display: flex; align-items: center; width: 100%; min-height: 44px; padding: 0 14px; border: 0; border-radius: 12px; background: {{item.bg}}; color: {{item.color}}; font: 500 14px 'Geist', sans-serif; text-align: left; cursor: pointer;">{{item.name}}</button></li>
+          </sc-for>
+        </ul>
+        <a href="Login.dc.html" style="display: flex; align-items: center; min-height: 44px; margin-top: 18px; padding: 0 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; text-decoration: none;">Sign out</a>
+      </nav>
+
+      <div style="flex: 999 1 560px; min-width: 0;">
+
+        <sc-if value="{{show.profile}}" hint-placeholder-val="{{false}}">
+          <section aria-labelledby="set-profile" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <h2 id="set-profile" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Profile</h2>
+            <div style="display: flex; align-items: center; gap: 16px; margin-top: 24px;">
+              <span aria-hidden="true" style="display: grid; place-items: center; width: 60px; height: 60px; border-radius: 999px; background: var(--surface); font-size: 24px; font-weight: 600; box-shadow: 0 0 0 1px var(--line);">D</span>
+              <span style="font-size: 14px; color: var(--muted);">@dayan · owner</span>
+            </div>
+            <label for="set-name" style="display: block; margin-top: 24px; font-size: 13px; color: var(--muted);">Name</label>
+            <input id="set-name" type="text" value="Dayan" style="display: block; width: 100%; max-width: 420px; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+            <label for="set-pass" style="display: block; margin-top: 20px; font-size: 13px; color: var(--muted);">New password</label>
+            <input id="set-pass" type="password" autocomplete="new-password" placeholder="At least 10 characters" style="display: block; width: 100%; max-width: 420px; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+            <button type="button" style="min-height: 44px; margin-top: 20px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 14px 'Geist', sans-serif; cursor: pointer;">Save</button>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{show.sharing}}" hint-placeholder-val="{{true}}">
+          <section aria-labelledby="set-sharing" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <h2 id="set-sharing" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Share with the room</h2>
+            <p style="margin: 6px 0 0; font-size: 14px; color: var(--muted);">Your own desk always shows you everything.</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 32px 48px; margin-top: 24px;">
+              <ul style="list-style: none; flex: 1 1 300px; min-width: 0; margin: 0; padding: 0;">
+                <li style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; border-bottom: 1px solid var(--line);">
+                  <span style="font-size: 15px;">Status</span>
+                  <span style="font-size: 13px; color: var(--muted);">Always on</span>
+                </li>
+                <sc-for list="{{switches}}" as="sw" hint-placeholder-count="5">
+                  <li style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; border-bottom: 1px solid var(--line);">
+                    <span style="font-size: 15px;">{{sw.label}}</span>
+                    <button type="button" role="switch" aria-checked="{{sw.ariaOn}}" aria-label="{{sw.label}}" onClick="{{sw.toggle}}" style="display: grid; place-items: center; width: 56px; height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer;">
+                      <span style="position: relative; display: block; width: 46px; height: 28px; border-radius: 999px; background: {{sw.track}}; transition: background-color 0.3s ease;">
+                        <span style="position: absolute; top: 3px; left: {{sw.knob}}; width: 22px; height: 22px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);"></span>
+                      </span>
+                    </button>
+                  </li>
+                </sc-for>
+              </ul>
+
+              <div style="flex: 1 1 280px; min-width: 0; max-width: 340px;">
+                <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">What the room sees</p>
+                <div style="position: relative; height: 200px; overflow: hidden; border-radius: 24px; background: {{preview.tileBg}}; box-shadow: 0 0 0 1px color-mix(in srgb, var(--work) 22%, transparent), 0 24px 50px -36px color-mix(in srgb, var(--work) 60%, transparent);">
+                  <sc-if value="{{preview.video}}" hint-placeholder-val="{{false}}">
+                    <svg viewBox="0 0 340 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+                      <rect x="226" y="40" width="80" height="52" rx="5" fill="#2a3346"></rect>
+                      <circle cx="160" cy="92" r="28" fill="#474d59"></circle>
+                      <path d="M96 200 C102 152 130 130 160 130 C190 130 218 152 224 200 Z" fill="#343945"></path>
+                    </svg>
+                    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);"></div>
+                  </sc-if>
+                  <sc-if value="{{preview.initial}}" hint-placeholder-val="{{true}}">
+                    <div style="position: absolute; inset: 0; display: grid; place-items: center;"><span style="display: grid; place-items: center; width: 64px; height: 64px; border-radius: 999px; background: var(--sunken); font-size: 26px; font-weight: 600;">D</span></div>
+                  </sc-if>
+                  <div style="position: absolute; left: 18px; right: 18px; bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: {{preview.text}};">
+                    <span style="font-size: 15px; font-weight: 600;">Dayan</span>
+                    <span style="display: inline-flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 14px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--work);"></span>42:18</span>
+                  </div>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 13px;">
+                  <sc-if value="{{preview.focus}}" hint-placeholder-val="{{true}}"><span style="padding: 6px 12px; border-radius: 999px; background: var(--sunken);">3h 12m today</span></sc-if>
+                  <sc-if value="{{preview.todos}}" hint-placeholder-val="{{true}}"><span style="padding: 6px 12px; border-radius: 999px; background: var(--sunken);">Problem set 3</span></sc-if>
+                  <sc-if value="{{preview.apps}}" hint-placeholder-val="{{false}}"><span style="padding: 6px 12px; border-radius: 999px; background: var(--sunken);">VS Code</span></sc-if>
+                  <sc-if value="{{preview.sites}}" hint-placeholder-val="{{false}}"><span style="padding: 6px 12px; border-radius: 999px; background: var(--sunken);">github.com</span></sc-if>
+                </div>
+              </div>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{show.camera}}" hint-placeholder-val="{{false}}">
+          <section aria-labelledby="set-camera" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <h2 id="set-camera" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Camera</h2>
+            <fieldset style="margin: 24px 0 0; padding: 0; border: 0;">
+              <legend style="padding: 0; font-size: 13px; color: var(--muted);">Track focus with</legend>
+              <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; margin-top: 8px; border-bottom: 1px solid var(--line); font-size: 15px; cursor: pointer;"><input type="radio" name="cam-source" checked="{{true}}" style="width: 18px; height: 18px; margin: 0; accent-color: var(--work);">This desk’s Pi cameras</label>
+              <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line); font-size: 15px; cursor: pointer;"><input type="radio" name="cam-source" checked="{{false}}" style="width: 18px; height: 18px; margin: 0; accent-color: var(--work);">This browser’s camera</label>
+            </fieldset>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; margin-top: 16px; border-bottom: 1px solid var(--line);">
+              <span style="font-size: 15px;">Show my video in the room</span>
+              <span style="font-size: 13px; color: var(--muted);">Set in Sharing</span>
+            </div>
+            <p style="margin: 16px 0 0; font-size: 14px; color: var(--muted);">Your seat never shows video while you’re away.</p>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{show.voice}}" hint-placeholder-val="{{false}}">
+          <section aria-labelledby="set-voice" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <h2 id="set-voice" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Voice and bedtime</h2>
+            <label for="set-bedtime" style="display: block; margin-top: 24px; font-size: 13px; color: var(--muted);">Bedtime</label>
+            <input id="set-bedtime" type="time" value="00:00" style="display: block; width: 180px; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist Mono', monospace;">
+            <fieldset style="margin: 24px 0 0; padding: 0; border: 0;">
+              <legend style="padding: 0; font-size: 13px; color: var(--muted);">The peace sign speaks through</legend>
+              <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; margin-top: 8px; border-bottom: 1px solid var(--line); font-size: 15px; cursor: pointer;"><input type="radio" name="voice-out" checked="{{true}}" style="width: 18px; height: 18px; margin: 0; accent-color: var(--work);">The Pi’s speaker</label>
+              <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line); font-size: 15px; cursor: pointer;"><input type="radio" name="voice-out" checked="{{false}}" style="width: 18px; height: 18px; margin: 0; accent-color: var(--work);">This computer</label>
+            </fieldset>
+            <button type="button" style="min-height: 44px; margin-top: 20px; padding: 0 20px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 14px 'Geist', sans-serif; cursor: pointer;">Test the voice</button>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{show.mac}}" hint-placeholder-val="{{false}}">
+          <section aria-labelledby="set-mac" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <h2 id="set-mac" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Mac helper</h2>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; margin-top: 16px; border-bottom: 1px solid var(--line);">
+              <span style="font-size: 15px;">Track apps and sites</span>
+              <span style="font-size: 13px; color: var(--work);">On</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; border-bottom: 1px solid var(--line);">
+              <span style="font-size: 15px;">MacBook <span style="color: var(--muted); font-size: 13px;">· made Nov 15 · last seen now</span></span>
+              <button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;">Revoke</button>
+            </div>
+            <button type="button" style="min-height: 44px; margin-top: 20px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 14px 'Geist', sans-serif; cursor: pointer;">New token</button>
+            <p style="margin: 14px 0 0; font-size: 14px; color: var(--muted);">You see a token once. Paste it into the helper.</p>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{show.room}}" hint-placeholder-val="{{false}}">
+          <section aria-labelledby="set-room" style="animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <h2 id="set-room" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Room and invites</h2>
+              <span style="font-size: 13px; color: var(--muted);">3 of 4 seats</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 24px; padding: 8px 8px 8px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);">
+              <span style="flex: 1 1 240px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Geist Mono', monospace; font-size: 13px;">dayoon.tail279594.ts.net/join/7Hq2fk</span>
+              <span style="font-size: 13px; color: var(--muted);">works once · 6 days left</span>
+              <button type="button" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 13px 'Geist', sans-serif; cursor: pointer;">Copy</button>
+            </div>
+            <ul style="list-style: none; margin: 24px 0 0; padding: 0;">
+              <li style="display: flex; align-items: center; gap: 14px; min-height: 60px; border-bottom: 1px solid var(--line);"><span aria-hidden="true" style="display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: var(--sunken); font-size: 13px; font-weight: 600;">D</span><span style="flex: 1; font-size: 15px;">Dayan <span style="font-size: 13px; color: var(--muted);">· owner</span></span></li>
+              <li style="display: flex; align-items: center; gap: 14px; min-height: 60px; border-bottom: 1px solid var(--line);"><span aria-hidden="true" style="display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: var(--sunken); font-size: 13px; font-weight: 600;">S</span><span style="flex: 1; font-size: 15px;">Sam <span style="font-size: 13px; color: var(--muted);">· joined Nov 12</span></span><button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;">Remove</button></li>
+              <li style="display: flex; align-items: center; gap: 14px; min-height: 60px; border-bottom: 1px solid var(--line);"><span aria-hidden="true" style="display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: var(--sunken); font-size: 13px; font-weight: 600;">A</span><span style="flex: 1; font-size: 15px;">Alex <span style="font-size: 13px; color: var(--muted);">· joined Nov 14</span></span><button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;">Remove</button></li>
+            </ul>
+          </section>
+        </sc-if>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"section":{"editor":"enum","options":["Profile","Sharing","Camera","Voice and bedtime","Mac helper","Room and invites"],"default":"Sharing","section":"Preview"},"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: {
+        bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)',
+        ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', hot: '#ff5c7a'
+      },
+      light: {
+        bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)',
+        ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', hot: '#be123c'
+      }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const names = ['Profile', 'Sharing', 'Camera', 'Voice and bedtime', 'Mac helper', 'Room and invites'];
+    const active = st.section || this.props.section || 'Sharing';
+    const nav = names.map((name) => ({
+      name: name,
+      current: name === active ? 'page' : 'false',
+      bg: name === active ? 'var(--sunken)' : 'transparent',
+      color: name === active ? 'var(--ink)' : 'var(--muted)',
+      pick: () => this.setState({ section: name })
+    }));
+    const share = Object.assign({ focus: true, todos: true, apps: false, sites: false, video: false }, st.share || {});
+    const labels = [
+      { key: 'focus', label: 'Focus time' },
+      { key: 'todos', label: 'To-do list' },
+      { key: 'apps', label: 'Apps' },
+      { key: 'sites', label: 'Sites' },
+      { key: 'video', label: 'Video' }
+    ];
+    const switches = labels.map((item) => {
+      const on = share[item.key];
+      return {
+        label: item.label,
+        ariaOn: on ? 'true' : 'false',
+        track: on ? 'var(--work)' : 'color-mix(in srgb, var(--ink) 18%, transparent)',
+        knob: on ? '21px' : '3px',
+        toggle: () => {
+          const next = Object.assign({}, share);
+          next[item.key] = !on;
+          this.setState({ share: next });
+        }
+      };
+    });
+    const video = 'radial-gradient(260px 160px at 72% 28%, rgba(159, 183, 255, 0.22), transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    return {
+      t: t,
+      nav: nav,
+      show: {
+        profile: active === 'Profile',
+        sharing: active === 'Sharing',
+        camera: active === 'Camera',
+        voice: active === 'Voice and bedtime',
+        mac: active === 'Mac helper',
+        room: active === 'Room and invites'
+      },
+      switches: switches,
+      preview: {
+        video: share.video,
+        initial: !share.video,
+        tileBg: share.video ? video : 'var(--surface)',
+        text: share.video ? '#ffffff' : 'var(--ink)',
+        focus: share.focus,
+        todos: share.todos,
+        apps: share.apps,
+        sites: share.apps && share.sites
+      },
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

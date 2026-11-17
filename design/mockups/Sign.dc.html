@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Desk sign · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@300..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+@keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lamp) 55%, transparent); } 60% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--lamp) 0%, transparent); } }
+@keyframes glow { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; width: 1180px; height: 820px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --line: {{t.line}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --lamp: {{me.color}};">
+  <div aria-hidden="true" style="position: absolute; left: 50%; bottom: -260px; width: 900px; height: 520px; margin-left: -450px; border-radius: 999px; background: radial-gradient(closest-side, color-mix(in srgb, var(--lamp) 16%, transparent), transparent); animation: glow 8s ease-in-out infinite;"></div>
+
+  <div style="position: relative; display: flex; justify-content: space-between; padding: 32px 40px 0; font-size: 15px; color: var(--muted);">
+    <span>dayanpi</span>
+    <span>7h 05m together</span>
+  </div>
+
+  <div style="position: relative; flex: 1; display: grid; place-items: center; text-align: center;">
+    <div>
+      <p style="margin: 0; display: inline-flex; align-items: center; gap: 12px; font-size: 22px; color: var(--lamp);"><span style="width: 10px; height: 10px; border-radius: 999px; background: var(--lamp); animation: breathe 2.4s ease-in-out infinite;"></span>{{me.word}}</p>
+      <p style="margin: 12px 0 0; font-family: 'Geist Mono', monospace; font-size: 230px; font-weight: 300; letter-spacing: -0.07em; line-height: 0.9;">{{me.timer}}</p>
+      <p style="margin: 22px 0 0; font-size: 24px; color: var(--muted);">Problem set 3</p>
+    </div>
+  </div>
+
+  <ul aria-label="The room" style="position: relative; list-style: none; display: flex; justify-content: center; gap: 44px; margin: 0; padding: 0 0 44px;">
+    <li style="display: grid; justify-items: center; gap: 10px; font-size: 13px; color: var(--muted);"><span style="width: 14px; height: 14px; border-radius: 999px; background: var(--lamp); box-shadow: 0 0 18px color-mix(in srgb, var(--lamp) 70%, transparent);"></span>You</li>
+    <li style="display: grid; justify-items: center; gap: 10px; font-size: 13px; color: var(--muted);"><span style="width: 14px; height: 14px; border-radius: 999px; background: var(--phone); box-shadow: 0 0 18px color-mix(in srgb, var(--phone) 70%, transparent);"></span>Sam</li>
+    <li style="display: grid; justify-items: center; gap: 10px; font-size: 13px; color: var(--muted);"><span style="width: 14px; height: 14px; border-radius: 999px; background: color-mix(in srgb, var(--away) 60%, transparent);"></span>Alex</li>
+    <li style="display: grid; justify-items: center; gap: 10px; font-size: 13px; color: var(--muted);"><span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 1.5px dashed var(--muted);"></span>Open</li>
+  </ul>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"myState":{"editor":"enum","options":["working","phone","away"],"default":"working","section":"Preview"},"$preview":{"width":1180,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', line: 'rgba(255, 255, 255, 0.07)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff' },
+      light: { bg: '#f6f6f4', line: 'rgba(17, 17, 19, 0.08)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0' }
+    };
+    const t = themes[this.props.theme] || themes.dark;
+    const states = {
+      working: { key: 'work', word: 'Focused', timer: '42:18' },
+      phone: { key: 'phone', word: 'On your phone', timer: '03:12' },
+      away: { key: 'away', word: 'Away', timer: '08:40' }
+    };
+    const s = states[this.props.myState] || states.working;
+    return { t: t, me: Object.assign({}, s, { color: t[s.key] }) };
+  }
+}
+</script>
+</body>
+</html>

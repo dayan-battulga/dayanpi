@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pi · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1000px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --warm: {{t.warm}};">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Room</a>
+      <a href="Desk.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Desk</a>
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: 40px 32px 96px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+      <h1 style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.045em;">Cameras</h1>
+      <sc-if value="{{cam.canToggle}}" hint-placeholder-val="{{true}}">
+        <button type="button" aria-pressed="{{cam.pressed}}" onClick="{{cam.toggle}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 14px 'Geist', sans-serif; cursor: pointer;">{{cam.buttonLabel}}</button>
+      </sc-if>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 28px;">
+      <figure style="flex: 1 1 480px; min-width: 0; margin: 0;">
+        <div style="position: relative; height: 300px; overflow: hidden; border-radius: 28px; background: {{cam.tileBg}}; box-shadow: 0 0 0 1px var(--line);">
+          <sc-if value="{{cam.peeking}}" hint-placeholder-val="{{false}}">
+            <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; animation: rise 0.5s ease both;">
+              <rect x="436" y="78" width="150" height="98" rx="8" fill="#252b38"></rect>
+              <rect x="446" y="88" width="130" height="78" rx="4" fill="#3a4a6c" opacity="0.75"></rect>
+              <circle cx="306" cy="170" r="48" fill="#474d59"></circle>
+              <path d="M192 360 C202 268 252 232 306 232 C360 232 410 268 420 360 Z" fill="#343945"></path>
+              <rect x="0" y="324" width="640" height="36" fill="#15171b"></rect>
+            </svg>
+            <span style="position: absolute; left: 31%; top: 20%; width: 38%; height: 78%; box-sizing: border-box; border: 1.5px solid var(--work); border-radius: 10px;"></span>
+            <span style="position: absolute; left: 31%; top: calc(20% - 26px); padding: 2px 8px; border-radius: 999px; background: var(--work); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px;">person 0.94</span>
+          </sc-if>
+          <sc-if value="{{cam.hidden}}" hint-placeholder-val="{{true}}">
+            <div style="position: absolute; inset: 0; display: grid; place-items: center; text-align: center;">
+              <div style="display: grid; justify-items: center; gap: 10px; color: var(--muted);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>
+                <span style="font-size: 15px; color: var(--ink);">Hidden while you work</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{cam.locked}}" hint-placeholder-val="{{false}}">
+            <div style="position: absolute; inset: 0; display: grid; place-items: center; text-align: center;">
+              <div style="display: grid; justify-items: center; gap: 10px; color: var(--muted);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <span style="font-size: 15px; color: var(--ink);">Only on your own devices</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <figcaption style="margin-top: 10px; font-size: 13px; color: var(--muted);">Front · Pi camera</figcaption>
+      </figure>
+
+      <figure style="flex: 1 1 480px; min-width: 0; margin: 0;">
+        <div style="position: relative; height: 300px; overflow: hidden; border-radius: 28px; background: {{cam.tileBg}}; box-shadow: 0 0 0 1px var(--line);">
+          <sc-if value="{{cam.peeking}}" hint-placeholder-val="{{false}}">
+            <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; animation: rise 0.5s ease both;">
+              <rect x="60" y="60" width="200" height="120" rx="8" fill="#252b38"></rect>
+              <circle cx="420" cy="178" r="44" fill="#474d59"></circle>
+              <path d="M322 360 C330 272 374 238 420 238 C466 238 510 272 518 360 Z" fill="#343945"></path>
+              <rect x="0" y="330" width="640" height="30" fill="#15171b"></rect>
+            </svg>
+            <span style="position: absolute; left: 51%; top: 24%; width: 34%; height: 74%; box-sizing: border-box; border: 1.5px solid var(--work); border-radius: 10px;"></span>
+            <span style="position: absolute; left: 51%; top: calc(24% - 26px); padding: 2px 8px; border-radius: 999px; background: var(--work); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px;">person 0.88</span>
+          </sc-if>
+          <sc-if value="{{cam.hidden}}" hint-placeholder-val="{{true}}">
+            <div style="position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 15px;">Hidden</div>
+          </sc-if>
+          <sc-if value="{{cam.locked}}" hint-placeholder-val="{{false}}">
+            <div style="position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 15px;">Locked</div>
+          </sc-if>
+        </div>
+        <figcaption style="margin-top: 10px; font-size: 13px; color: var(--muted);">Side · USB webcam</figcaption>
+      </figure>
+    </div>
+    <p style="margin: 18px 0 0; font-size: 14px; color: var(--muted);">{{cam.note}}</p>
+
+    <h2 style="margin: 72px 0 0; font-size: 15px; font-weight: 600;">The Pi</h2>
+    <dl style="display: flex; flex-wrap: wrap; gap: 28px 64px; margin: 20px 0 0;">
+      <div style="min-width: 140px;"><dd style="margin: 0; font-family: 'Geist Mono', monospace; font-size: 36px; font-weight: 500; letter-spacing: -0.04em;">52°C</dd><div aria-hidden="true" style="position: relative; height: 4px; margin-top: 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 52%; border-radius: 999px; background: var(--work);"></span></div><dt style="margin-top: 8px; font-size: 13px; color: var(--muted);">Temperature</dt></div>
+      <div style="min-width: 140px;"><dd style="margin: 0; font-family: 'Geist Mono', monospace; font-size: 36px; font-weight: 500; letter-spacing: -0.04em;">31%</dd><div aria-hidden="true" style="position: relative; height: 4px; margin-top: 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 31%; border-radius: 999px; background: var(--ink2);"></span></div><dt style="margin-top: 8px; font-size: 13px; color: var(--muted);">CPU</dt></div>
+      <div style="min-width: 140px;"><dd style="margin: 0; font-family: 'Geist Mono', monospace; font-size: 36px; font-weight: 500; letter-spacing: -0.04em;">2.1 GB</dd><div aria-hidden="true" style="position: relative; height: 4px; margin-top: 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 26%; border-radius: 999px; background: var(--ink2);"></span></div><dt style="margin-top: 8px; font-size: 13px; color: var(--muted);">Memory of 8 GB</dt></div>
+      <div style="min-width: 140px;"><dd style="margin: 0; font-family: 'Geist Mono', monospace; font-size: 36px; font-weight: 500; letter-spacing: -0.04em;">6d 4h</dd><div aria-hidden="true" style="height: 4px; margin-top: 10px;"></div><dt style="margin-top: 8px; font-size: 13px; color: var(--muted);">Up for</dt></div>
+    </dl>
+    <p style="margin: 28px 0 0; font-size: 14px; color: var(--muted);">YOLO26n · one check a second · both cameras</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"camera":{"editor":"enum","options":["hidden","peeking","locked"],"default":"hidden","section":"Preview"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', warm: '#f5b83d' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', warm: '#8f5a06' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    const mode = st.camera || this.props.camera || 'hidden';
+    const peeking = mode === 'peeking';
+    const locked = mode === 'locked';
+    const video = 'radial-gradient(520px 300px at 72% 28%, rgba(159, 183, 255, 0.22), transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    return {
+      t: t,
+      cam: {
+        peeking: peeking,
+        hidden: mode === 'hidden',
+        locked: locked,
+        canToggle: !locked,
+        pressed: peeking ? 'true' : 'false',
+        buttonLabel: peeking ? 'Hide' : 'Peek',
+        tileBg: peeking ? video : 'var(--surface)',
+        toggle: () => this.setState({ camera: peeking ? 'hidden' : 'peeking' }),
+        note: locked
+          ? 'This browser isn’t one of your Tailscale devices, so the cameras stay closed.'
+          : (peeking ? 'person 0.94 · no phone · facing the screen' : 'The readings keep updating while the picture is hidden.')
+      },
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

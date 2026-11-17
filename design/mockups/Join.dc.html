@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Join the room · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.85; }
+input::placeholder { color: var(--muted); }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="min-height: 960px; display: flex; flex-direction: column; background: radial-gradient(900px 420px at 50% -12%, color-mix(in srgb, var(--work) 8%, transparent), transparent 65%), var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}};">
+
+  <header style="width: 100%; max-width: 1180px; box-sizing: border-box; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+      <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+      <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+    </button>
+  </header>
+
+  <main style="flex: 1; display: grid; place-items: center; padding: 24px 16px 120px;">
+    <div style="width: 100%; max-width: 380px; animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span style="display: flex; padding-left: 6px;" aria-hidden="true">
+          <span style="display: grid; place-items: center; width: 30px; height: 30px; margin-left: -6px; border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--work);">D</span>
+          <span style="display: grid; place-items: center; width: 30px; height: 30px; margin-left: -1px; border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--phone);">S</span>
+          <span style="display: grid; place-items: center; width: 30px; height: 30px; margin-left: -1px; border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--away);">A</span>
+        </span>
+        <p style="margin: 0; font-size: 14px; color: var(--muted);">Dayan, Sam and Alex are studying</p>
+      </div>
+
+      <sc-if value="{{v.showForm}}" hint-placeholder-val="{{true}}">
+        <form action="#">
+          <h1 style="margin: 28px 0 0; font-size: 34px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.05;">Dayan invited you</h1>
+          <p style="margin: 8px 0 0; font-size: 15px; color: var(--muted);">Pick a name. It’s what the room sees.</p>
+          <div style="display: flex; align-items: center; gap: 14px; margin-top: 28px;">
+            <span aria-hidden="true" style="display: grid; place-items: center; width: 60px; height: 60px; border-radius: 999px; background: var(--surface); font-size: 24px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--work);">R</span>
+            <span style="font-size: 14px; color: var(--muted);">Your seat</span>
+          </div>
+          <label for="join-name" style="display: block; margin-top: 24px; font-size: 13px; color: var(--muted);">Name</label>
+          <input id="join-name" type="text" value="Riley" style="display: block; width: 100%; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+          <label for="join-user" style="display: block; margin-top: 16px; font-size: 13px; color: var(--muted);">Username</label>
+          <input id="join-user" type="text" autocomplete="username" value="riley" style="display: block; width: 100%; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+          <label for="join-pass" style="display: block; margin-top: 16px; font-size: 13px; color: var(--muted);">Password</label>
+          <input id="join-pass" type="password" autocomplete="new-password" placeholder="At least 10 characters" style="display: block; width: 100%; height: 48px; box-sizing: border-box; margin-top: 8px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+          <a href="Room.dc.html" style="display: flex; align-items: center; justify-content: center; height: 48px; margin-top: 24px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">Join the room</a>
+        </form>
+      </sc-if>
+
+      <sc-if value="{{v.showExpired}}" hint-placeholder-val="{{false}}">
+        <h1 style="margin: 28px 0 0; font-size: 34px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.05;">This invite expired</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; color: var(--muted);">Invites work once and last a week. Ask Dayan for a new one.</p>
+        <a href="Login.dc.html" style="display: flex; align-items: center; justify-content: center; height: 48px; margin-top: 28px; border-radius: 999px; border: 1px solid var(--line2); color: var(--ink); font-size: 15px; font-weight: 600; text-decoration: none;">Back to sign in</a>
+      </sc-if>
+
+      <sc-if value="{{v.showFull}}" hint-placeholder-val="{{false}}">
+        <h1 style="margin: 28px 0 0; font-size: 34px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.05;">The room is full</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; color: var(--muted);">All 4 seats are taken. Ask Dayan to open one up.</p>
+        <a href="Login.dc.html" style="display: flex; align-items: center; justify-content: center; height: 48px; margin-top: 28px; border-radius: 999px; border: 1px solid var(--line2); color: var(--ink); font-size: 15px; font-weight: 600; text-decoration: none;">Back to sign in</a>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"variant":{"editor":"enum","options":["ready","expired","room full"],"default":"ready","section":"Preview"},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const variant = this.props.variant || 'ready';
+    return {
+      t: t,
+      v: { showForm: variant === 'ready', showExpired: variant === 'expired', showFull: variant === 'room full' },
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

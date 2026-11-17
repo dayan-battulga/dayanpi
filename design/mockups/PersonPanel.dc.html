@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seeing others · quick peek</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+@keyframes lamp {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent), 0 30px 90px -38px color-mix(in srgb, var(--lamp) 72%, transparent); }
+}
+@keyframes pop { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1120px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --hot: {{t.hot}}; --scrim: {{t.scrim}}; --lamp: var(--work);">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Room</a>
+      <a href="Desk.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="panel-total" style="max-width: 1180px; margin: 0 auto; padding: 64px 32px 0;">
+    <h1 id="panel-total" style="margin: 0; font-size: clamp(56px, 8vw, 104px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">7h 05m</h1>
+    <p style="margin: 12px 0 0; font-size: 16px; color: var(--muted);">focused together today</p>
+  </section>
+
+  <section aria-label="Seats" style="max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; display: flex; flex-wrap: wrap; gap: 20px;">
+    <article aria-label="Dayan, you" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: radial-gradient(520px 300px at 72% 28%, rgba(159, 183, 255, 0.22), transparent 70%), linear-gradient(180deg, #23262d, #121317); animation: lamp 6s ease-in-out infinite;">
+      <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;"><rect x="436" y="78" width="150" height="98" rx="8" fill="#252b38"></rect><circle cx="306" cy="170" r="48" fill="#474d59"></circle><path d="M192 360 C202 268 252 232 306 232 C360 232 410 268 420 360 Z" fill="#343945"></path></svg>
+      <div style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between; color: #ffffff;"><span style="font-size: 17px; font-weight: 600;">Dayan</span><span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--work);"></span>42:18</span></div>
+    </article>
+    <button type="button" aria-label="Peek at Sam" aria-haspopup="dialog" onClick="{{openSam}}" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; padding: 0; border: 0; border-radius: 28px; background: radial-gradient(480px 300px at 30% 30%, rgba(255, 200, 160, 0.16), transparent 70%), linear-gradient(180deg, #2a2522, #141211); --lamp: var(--phone); animation: lamp 2.4s ease-in-out infinite; text-align: left; font: inherit; color: #ffffff; cursor: pointer;">
+      <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;"><circle cx="330" cy="176" r="46" fill="#564b44"></circle><path d="M216 360 C226 270 276 236 330 236 C384 236 434 270 444 360 Z" fill="#433a35"></path><rect x="350" y="262" width="34" height="56" rx="7" fill="#ffd2b0" opacity="0.6"></rect></svg>
+      <span style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 17px; font-weight: 600;">Sam</span><span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--phone);"></span>06:05</span></span>
+    </button>
+    <button type="button" aria-label="Peek at Alex" aria-haspopup="dialog" onClick="{{openAlex}}" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; padding: 0; border: 0; border-radius: 28px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); text-align: left; font: inherit; color: var(--ink); cursor: pointer;">
+      <span style="position: absolute; inset: 0; display: grid; place-items: center;"><span style="display: grid; place-items: center; width: 84px; height: 84px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 32px; font-weight: 600;">A</span></span>
+      <span style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 17px; font-weight: 600;">Alex</span><span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px; color: var(--muted);"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--away);"></span>12:40</span></span>
+    </button>
+    <article aria-label="Open seat" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; box-sizing: border-box; display: grid; place-items: center; border-radius: 28px; border: 1px dashed var(--line2); color: var(--muted); font-size: 14px;">Invite</article>
+  </section>
+
+  <sc-if value="{{hasPanel}}" hint-placeholder-val="{{true}}">
+    <div aria-hidden="true" onClick="{{closePanel}}" style="position: absolute; inset: 0; z-index: 9; background: var(--scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fade 0.3s ease both;"></div>
+    <div style="position: absolute; inset: 0; z-index: 10; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+      <div role="dialog" aria-modal="true" aria-labelledby="peek-name" style="width: 100%; max-width: 720px; max-height: 100%; box-sizing: border-box; overflow-y: auto; padding: 26px 30px 28px; border-radius: 28px; background: radial-gradient(460px 170px at 50% -60px, color-mix(in srgb, {{c.color}} 14%, transparent), transparent 75%), var(--surface); border: 1px solid var(--line); box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.6); pointer-events: auto; animation: pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span aria-hidden="true" style="display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 999px; background: var(--sunken); font-size: 20px; font-weight: 600; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px {{c.color}};">{{c.initial}}</span>
+          <div style="flex: 1; min-width: 0;">
+            <h2 id="peek-name" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">{{c.name}}</h2>
+            <p style="margin: 2px 0 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted);"><span style="flex: none; width: 7px; height: 7px; border-radius: 999px; background: {{c.color}};"></span>{{c.stateWord}} · <span style="font-family: 'Geist Mono', monospace;">{{c.timer}}</span></p>
+          </div>
+          <button type="button" aria-label="Close" onClick="{{closePanel}}" style="display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </div>
+
+        <p style="margin: 32px 0 0; font-size: 13px; color: var(--muted);">Working on</p>
+        <p style="margin: 6px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1;">{{c.task}}</p>
+        <p style="margin: 8px 0 0; font-size: 14px; color: var(--muted);">{{c.taskMeta}} · {{c.app}}</p>
+
+        <div aria-hidden="true" style="position: relative; height: 8px; margin-top: 28px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent);">
+          <sc-for list="{{c.segments}}" as="seg" hint-placeholder-count="4"><span style="{{seg.style}}"></span></sc-for>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted);"><span>6 am</span><span>{{c.today}} focused</span><span>midnight</span></div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 28px 44px; margin-top: 30px;">
+          <div style="flex: 1 1 300px; min-width: 0;">
+            <p style="margin: 0 0 4px; font-size: 13px; color: var(--muted);">To-do · {{c.doneLabel}}</p>
+            <ul style="list-style: none; margin: 0; padding: 0;">
+              <sc-for list="{{c.todos}}" as="item" hint-placeholder-count="4">
+                <li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--line); font-size: 15px;"><span aria-hidden="true" style="{{item.marker}}"></span><span style="{{item.textStyle}}">{{item.text}}</span><span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{item.time}}</span></li>
+              </sc-for>
+            </ul>
+          </div>
+          <div style="flex: 1 1 220px; min-width: 0;">
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Apps today</p>
+            <sc-for list="{{c.apps}}" as="app" hint-placeholder-count="3">
+              <div style="margin-top: 14px;">
+                <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px;"><span>{{app.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{app.time}}</span></div>
+                <div aria-hidden="true" style="margin-top: 7px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);"><span style="{{app.barStyle}}"><span style="{{app.ytStyle}}"></span><span style="{{app.restStyle}}"></span></span></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 30px;">
+          <a href="{{c.href}}" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; color: var(--muted); text-decoration: none;">Open {{c.name}}’s desk →</a>
+          <sc-if value="{{c.canNudge}}" hint-placeholder-val="{{true}}">
+            <button type="button" style="height: 48px; padding: 0 28px; border: 0; border-radius: 999px; background: var(--phone); color: var(--bg); font: 600 15px 'Geist', sans-serif; cursor: pointer;">Nudge {{c.name}}</button>
+          </sc-if>
+          <sc-if value="{{c.cantNudge}}" hint-placeholder-val="{{false}}">
+            <p style="margin: 0; font-size: 14px; color: var(--muted);">{{c.footer}}</p>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"panel":{"editor":"enum","options":["Sam","Alex","closed"],"default":"Sam","section":"Preview"},"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', hot: '#ff5c7a', scrim: 'rgba(0, 0, 0, 0.5)' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', hot: '#be123c', scrim: 'rgba(17, 17, 19, 0.24)' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    const away55 = 'color-mix(in srgb, var(--away) 55%, transparent)';
+    const raw = [
+      {
+        name: 'Sam', initial: 'S', key: 'phone', stateWord: 'On the phone', timer: '06:05', task: 'Read chapter 7', taskMeta: '24m · paused', app: 'Chrome, docs.google.com', today: '1h 48m', done: 1, total: 4, canNudge: true, footer: '', href: 'TheirDesk.dc.html',
+        segments: [[16.67, 8.33, 'var(--work)'], [25, 1.3, 'var(--phone)'], [26.3, 44.81, away55], [71.11, 1.67, 'var(--work)'], [72.78, 0.6, 'var(--phone)']],
+        todos: [{ text: 'Read chapter 7', time: '24m', kind: 'current' }, { text: 'Essay outline', time: '—', kind: 'open' }, { text: 'Email advisor', time: '—', kind: 'open' }, { text: 'Vocab quiz', time: '35m', kind: 'done' }],
+        apps: [{ name: 'Chrome', time: '52m · 9m YouTube', width: 100, yt: 17 }, { name: 'Notion', time: '31m', width: 60, yt: 0 }, { name: 'Preview', time: '14m', width: 27, yt: 0 }]
+      },
+      {
+        name: 'Alex', initial: 'A', key: 'away', stateWord: 'Away', timer: '12:40', task: 'Flashcards, unit 4', taskMeta: '15m · paused', app: 'Anki', today: '2h 05m', done: 3, total: 5, canNudge: false, footer: 'Away for 12 minutes', href: '#',
+        segments: [[13.89, 8.33, 'var(--work)'], [22.22, 46.76, away55], [68.98, 3.24, 'var(--work)'], [72.22, 1.11, 'var(--away)']],
+        todos: [{ text: 'Flashcards, unit 4', time: '15m', kind: 'current' }, { text: 'Review slides', time: '—', kind: 'open' }, { text: 'Lab report draft', time: '48m', kind: 'done' }, { text: 'Stats homework', time: '40m', kind: 'done' }, { text: 'Reading notes', time: '22m', kind: 'done' }],
+        apps: [{ name: 'Anki', time: '48m', width: 100, yt: 0 }, { name: 'Chrome', time: '40m · 4m YouTube', width: 83, yt: 10 }, { name: 'Word', time: '22m', width: 46, yt: 0 }]
+      }
+    ];
+    const markers = {
+      done: { marker: 'flex: none; width: 14px; height: 14px; border-radius: 999px; background: var(--ink2);', textStyle: 'flex: 1; min-width: 0; color: var(--muted); text-decoration: line-through;' },
+      current: { marker: 'flex: none; width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--ink); box-shadow: inset 0 0 0 2px var(--surface), inset 0 0 0 7px var(--ink);', textStyle: 'flex: 1; min-width: 0; font-weight: 600;' },
+      open: { marker: 'flex: none; width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 1.5px solid var(--line2);', textStyle: 'flex: 1; min-width: 0;' }
+    };
+    const people = raw.map((p) => Object.assign({}, p, {
+      color: 'var(--' + p.key + ')',
+      cantNudge: !p.canNudge,
+      doneLabel: p.done + ' of ' + p.total + ' done',
+      segments: p.segments.map((s) => ({ style: 'position: absolute; top: 0; bottom: 0; left: ' + s[0] + '%; width: ' + s[1] + '%; background: ' + s[2] + ';' })),
+      todos: p.todos.map((x) => Object.assign({ text: x.text, time: x.time }, markers[x.kind])),
+      apps: p.apps.map((a) => ({
+        name: a.name,
+        time: a.time,
+        barStyle: 'display: flex; gap: 2px; width: ' + a.width + '%; height: 6px;',
+        ytStyle: a.yt ? 'flex: ' + a.yt + ' 1 0; border-radius: 999px; background: var(--hot);' : 'display: none;',
+        restStyle: 'flex: ' + (100 - a.yt) + ' 1 0; border-radius: 999px; background: var(--ink2);'
+      }))
+    }));
+    const chosen = st.panel !== undefined ? st.panel : (this.props.panel || 'Sam');
+    const panel = people.filter((p) => p.name === chosen)[0] || null;
+    return {
+      t: t,
+      hasPanel: panel !== null,
+      c: panel || people[0],
+      openSam: () => this.setState({ panel: 'Sam' }),
+      openAlex: () => this.setState({ panel: 'Alex' }),
+      closePanel: () => this.setState({ panel: 'closed' }),
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

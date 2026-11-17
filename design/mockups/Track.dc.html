@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Camera tracker · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+@keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--work) 55%, transparent); } 60% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--work) 0%, transparent); } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="min-height: 900px; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --hot: {{t.hot}};">
+
+  <header style="width: 100%; max-width: 1180px; box-sizing: border-box; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--muted); font-size: 14px; text-decoration: none;">Back to the room</a>
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+    </div>
+  </header>
+
+  <main style="flex: 1; display: grid; place-items: center; padding: 24px 16px 96px;">
+
+    <sc-if value="{{step.ask}}" hint-placeholder-val="{{false}}">
+      <div style="width: 100%; max-width: 420px; text-align: center; animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <span aria-hidden="true" style="display: inline-grid; place-items: center; width: 64px; height: 64px; border-radius: 999px; background: var(--sunken); color: var(--ink);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg></span>
+        <h1 style="margin: 24px 0 0; font-size: 32px; font-weight: 600; letter-spacing: -0.045em;">Turn on your camera</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; color: var(--muted);">Your video stays on this computer. Only the numbers go to the room.</p>
+        <button type="button" onClick="{{allow}}" style="width: 100%; height: 48px; margin-top: 28px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 15px 'Geist', sans-serif; cursor: pointer;">Allow camera</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{step.running}}" hint-placeholder-val="{{true}}">
+      <div style="width: 100%; max-width: 760px; animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 28px; background: radial-gradient(520px 300px at 30% 30%, rgba(255, 214, 170, 0.18), transparent 70%), linear-gradient(180deg, #2a2620, #14120f); box-shadow: 0 0 0 1px color-mix(in srgb, var(--work) 24%, transparent), 0 34px 80px -50px color-mix(in srgb, var(--work) 60%, transparent);">
+          <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+            <rect x="70" y="60" width="120" height="90" rx="6" fill="#3a332a"></rect>
+            <circle cx="330" cy="176" r="50" fill="#5b5046"></circle>
+            <path d="M210 360 C220 270 272 236 330 236 C388 236 440 270 450 360 Z" fill="#463d35"></path>
+          </svg>
+          <span style="position: absolute; left: 32%; top: 22%; width: 38%; height: 76%; box-sizing: border-box; border: 1.5px solid var(--work); border-radius: 12px;"></span>
+          <span style="position: absolute; top: 16px; left: 16px; display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.4); color: #ffffff; font-size: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);">Only you see this</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px;">
+          <p style="margin: 0; display: inline-flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 500;"><span style="width: 9px; height: 9px; border-radius: 999px; background: var(--work); animation: breathe 2.4s ease-in-out infinite;"></span>Focused <span style="font-family: 'Geist Mono', monospace; color: var(--work);">18:40</span></p>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 14px 'Geist', sans-serif; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"></path><rect x="12" y="13" width="10" height="7" rx="2"></rect></svg>Pop out</button>
+            <button type="button" onClick="{{stop}}" style="min-height: 44px; padding: 0 18px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 14px 'Geist', sans-serif; cursor: pointer;">Stop</button>
+          </div>
+        </div>
+        <p style="margin: 14px 0 0; font-size: 14px; color: var(--muted);">Keep this window open, or pop it out small.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{step.blocked}}" hint-placeholder-val="{{false}}">
+      <div style="width: 100%; max-width: 420px; text-align: center; animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <span aria-hidden="true" style="display: inline-grid; place-items: center; width: 64px; height: 64px; border-radius: 999px; background: color-mix(in srgb, var(--hot) 12%, transparent); color: var(--hot);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"></path><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"></path><path d="m2 2 20 20"></path></svg></span>
+        <h1 style="margin: 24px 0 0; font-size: 32px; font-weight: 600; letter-spacing: -0.045em;">Camera is blocked</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; color: var(--muted);">Click the camera icon in the address bar, allow it, then reload.</p>
+        <button type="button" onClick="{{allow}}" style="width: 100%; height: 48px; margin-top: 28px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 600 15px 'Geist', sans-serif; cursor: pointer;">Try again</button>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"step":{"editor":"enum","options":["ask","running","blocked"],"default":"running","section":"Preview"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', hot: '#ff5c7a' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', hot: '#be123c' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const current = st.step || this.props.step || 'running';
+    return {
+      t: t,
+      step: { ask: current === 'ask', running: current === 'running', blocked: current === 'blocked' },
+      allow: () => this.setState({ step: 'running' }),
+      stop: () => this.setState({ step: 'ask' }),
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

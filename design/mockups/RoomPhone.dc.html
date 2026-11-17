@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room on a phone · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.75; }
+@keyframes lamp {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 22px 44px -32px color-mix(in srgb, var(--lamp) 60%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent), 0 22px 56px -26px color-mix(in srgb, var(--lamp) 78%, transparent); }
+}
+@keyframes bar { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --glass: {{t.glass}}; --lamp: {{me.color}};">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 0;">
+    <span style="font-size: 18px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <button type="button" aria-label="Account: Dayan" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 15px 'Geist', sans-serif; cursor: pointer;">D</button>
+    </div>
+  </header>
+
+  <sc-if value="{{showPeace}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; top: 74px; left: 16px; right: 16px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 22px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.45); animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+      <span aria-hidden="true" style="display: flex; align-items: center; gap: 3px; flex: none; height: 14px;">
+        <span style="width: 3px; height: 14px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out infinite;"></span>
+        <span style="width: 3px; height: 14px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.3s infinite;"></span>
+        <span style="width: 3px; height: 14px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.6s infinite;"></span>
+      </span>
+      <p style="margin: 0; font-size: 13px;">3 things left, almost 5 hours before bed. You’ve got this.</p>
+    </div>
+  </sc-if>
+
+  <section aria-labelledby="phone-total" style="padding: 44px 20px 0;">
+    <h1 id="phone-total" style="margin: 0; font-size: 60px; font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">7h 05m</h1>
+    <p style="margin: 8px 0 0; font-size: 15px; color: var(--muted);">focused together today</p>
+  </section>
+
+  <section aria-label="Seats" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 30px 20px 0;">
+
+    <article aria-label="Dayan, you" style="position: relative; height: 196px; overflow: hidden; border-radius: 24px; background: {{me.tileBg}}; box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 22px 44px -32px color-mix(in srgb, var(--lamp) 60%, transparent); animation: {{me.glow}};">
+      <sc-if value="{{me.showVideo}}" hint-placeholder-val="{{true}}">
+        <svg viewBox="0 0 200 196" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+          <rect x="132" y="34" width="52" height="34" rx="4" fill="#2a3346"></rect>
+          <circle cx="98" cy="88" r="26" fill="#474d59"></circle>
+          <path d="M40 196 C46 146 72 124 98 124 C124 124 150 146 156 196 Z" fill="#343945"></path>
+        </svg>
+        <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);"></div>
+      </sc-if>
+      <sc-if value="{{me.away}}" hint-placeholder-val="{{false}}">
+        <div style="position: absolute; inset: 0; display: grid; place-items: center;"><span style="display: grid; place-items: center; width: 60px; height: 60px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 24px; font-weight: 600;">D</span></div>
+      </sc-if>
+      <span style="{{me.chip}}">3h 12m</span>
+      <div style="position: absolute; left: 14px; right: 14px; bottom: 15px; color: {{me.text}};">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 15px; font-weight: 600;">You</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 13px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--lamp);"></span>{{me.timer}}</span>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 12px; color: {{me.sub}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Problem set 3</p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {{me.track}};"><span style="display: block; width: 25%; height: 100%; background: var(--lamp);"></span></div>
+    </article>
+
+    <article aria-label="Sam, on the phone" style="position: relative; height: 196px; overflow: hidden; border-radius: 24px; background: var(--surface); --lamp: var(--phone); box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 24%, transparent); animation: lamp 2.4s ease-in-out infinite;">
+      <div style="position: absolute; inset: 0; display: grid; place-items: center;"><span style="display: grid; place-items: center; width: 60px; height: 60px; border-radius: 999px; background: var(--sunken); font-size: 24px; font-weight: 600;">S</span></div>
+      <span style="position: absolute; top: 10px; left: 10px; display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 11px;">1h 48m</span>
+      <div style="position: absolute; left: 14px; right: 14px; bottom: 15px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 15px; font-weight: 600;">Sam</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 13px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--phone);"></span>06:05</span>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Read chapter 7 · paused</p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="display: block; width: 25%; height: 100%; background: var(--phone);"></span></div>
+    </article>
+
+    <article aria-label="Alex, away" style="position: relative; height: 196px; overflow: hidden; border-radius: 24px; background: var(--surface); box-shadow: 0 0 0 1px var(--line);">
+      <div style="position: absolute; inset: 0; display: grid; place-items: center;"><span style="display: grid; place-items: center; width: 60px; height: 60px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 24px; font-weight: 600;">A</span></div>
+      <span style="position: absolute; top: 10px; left: 10px; display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 11px;">2h 05m</span>
+      <div style="position: absolute; left: 14px; right: 14px; bottom: 15px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 15px; font-weight: 600;">Alex</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--away);"></span>12:40</span>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Flashcards, unit 4 · paused</p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="display: block; width: 60%; height: 100%; background: color-mix(in srgb, var(--away) 70%, transparent);"></span></div>
+    </article>
+
+    <article aria-label="Open seat" style="position: relative; height: 196px; box-sizing: border-box; display: grid; place-items: center; border-radius: 24px; border: 1px dashed var(--line2);">
+      <button type="button" style="display: grid; justify-items: center; gap: 8px; padding: 12px 18px; border: 0; background: transparent; color: var(--muted); font: 500 13px 'Geist', sans-serif; cursor: pointer;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+        Invite
+      </button>
+    </article>
+  </section>
+
+  <nav aria-label="Pages" style="position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 20px 44px -24px rgba(0, 0, 0, 0.45);">
+    <a href="#" aria-current="page" aria-label="Room" style="display: grid; place-items: center; width: 52px; height: 48px; border-radius: 999px; background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>
+    </a>
+    <a href="#" aria-label="Desk" style="display: grid; place-items: center; width: 52px; height: 48px; border-radius: 999px; color: var(--muted);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+    </a>
+    <button type="button" aria-label="New to-do" style="display: grid; place-items: center; width: 48px; height: 48px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); cursor: pointer;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+    </button>
+    <a href="#" aria-label="Settings" style="display: grid; place-items: center; width: 52px; height: 48px; border-radius: 999px; color: var(--muted);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"myState":{"editor":"enum","options":["working","phone","away"],"default":"working","section":"Preview"},"moment":{"editor":"enum","options":["none","peace sign"],"default":"none","section":"Preview"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: {
+        bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)',
+        ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', glass: 'rgba(24, 24, 28, 0.74)'
+      },
+      light: {
+        bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)',
+        ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', glass: 'rgba(255, 255, 255, 0.78)'
+      }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const video = 'radial-gradient(240px 180px at 74% 24%, rgba(159, 183, 255, 0.24), transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    const states = {
+      working: { key: 'work', timer: '42:18', glow: 'lamp 6s ease-in-out infinite', showVideo: true, away: false, text: '#ffffff', tileBg: video },
+      phone: { key: 'phone', timer: '03:12', glow: 'lamp 2.4s ease-in-out infinite', showVideo: true, away: false, text: '#ffffff', tileBg: video },
+      away: { key: 'away', timer: '08:40', glow: 'none', showVideo: false, away: true, text: 'var(--ink)', tileBg: 'var(--surface)' }
+    };
+    const s = states[this.props.myState] ?? states.working;
+    const chipBase = 'position: absolute; top: 10px; left: 10px; display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px;';
+    const me = Object.assign({}, s, {
+      color: t[s.key],
+      chip: chipBase + (s.showVideo ? ' background: rgba(0, 0, 0, 0.35); color: #ffffff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);' : ' background: var(--sunken); color: var(--muted);'),
+      sub: s.showVideo ? 'rgba(255, 255, 255, 0.78)' : 'var(--muted)',
+      track: s.showVideo ? 'rgba(255, 255, 255, 0.14)' : 'color-mix(in srgb, var(--ink) 8%, transparent)'
+    });
+    return {
+      t: t,
+      me: me,
+      showPeace: (this.props.moment ?? 'none') === 'peace sign',
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

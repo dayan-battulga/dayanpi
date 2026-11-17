@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seeing others · bottom bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.85; }
+@keyframes shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes blink { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 900px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --glass: {{t.glass}};">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Room</a>
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: 40px 32px 160px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 32px;">
+      <h1 style="margin: 0; font-size: clamp(56px, 8vw, 112px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.92;">Focused</h1>
+      <p style="margin: 0; font-family: 'Geist Mono', monospace; font-size: clamp(40px, 5.6vw, 76px); font-weight: 500; letter-spacing: -0.045em; line-height: 1; color: var(--work);">42:18</p>
+    </div>
+    <div aria-label="Today, 6 am to midnight" style="position: relative; height: 10px; margin-top: 48px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent);">
+      <span style="position: absolute; top: 0; bottom: 0; left: 22.22%; width: 7.41%; border-radius: 999px 0 0 999px; background: var(--work);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 29.63%; width: 1.11%; background: var(--phone);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 30.74%; width: 4.63%; background: var(--work);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 35.37%; width: 9.07%; background: color-mix(in srgb, var(--away) 55%, transparent);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 44.44%; width: 1.85%; background: var(--work);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 46.30%; width: 1.11%; background: var(--phone);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 47.41%; width: 22.04%; background: color-mix(in srgb, var(--away) 55%, transparent);"></span>
+      <span style="position: absolute; top: 0; bottom: 0; left: 69.44%; width: 3.89%; overflow: hidden; border-radius: 0 999px 999px 0; background: var(--work);"><span style="position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent); animation: shine 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;"></span></span>
+      <span aria-hidden="true" style="position: absolute; top: -7px; left: 73.33%; width: 2px; height: 24px; margin-left: -1px; border-radius: 2px; background: var(--ink);"></span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: var(--muted);"><span>6 am</span><span>midnight</span></div>
+    <p style="margin: 22px 0 0; font-size: 15px; color: var(--muted);"><span style="color: var(--ink);">3h 12m</span> focused · <span style="color: var(--ink);">24m</span> on your phone · <span style="color: var(--ink);">2</span> pickups</p>
+
+    <h2 style="margin: 64px 0 0; font-size: 15px; font-weight: 600;">To-do</h2>
+    <ul style="list-style: none; display: grid; gap: 4px; max-width: 640px; margin: 12px 0 0; padding: 0;">
+      <li style="display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 8px 0 14px; border-radius: 16px; background: color-mix(in srgb, var(--work) 9%, transparent);">
+        <input type="checkbox" aria-label="Done: Problem set 3" style="flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--work);">
+        <span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600;">Problem set 3</span>
+        <span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--work);">38m</span>
+        <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--work); color: var(--bg); font: 600 13px 'Geist', sans-serif; cursor: pointer;"><span style="width: 7px; height: 7px; border-radius: 999px; background: currentColor; animation: blink 1.6s ease-in-out infinite;"></span>Working</button>
+      </li>
+      <li style="display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 8px 0 14px; border-radius: 16px;">
+        <input type="checkbox" aria-label="Done: Lab report outline" style="flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--work);">
+        <span style="flex: 1; min-width: 0; font-size: 15px;">Lab report outline</span>
+        <span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">12m</span>
+        <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>Start</button>
+      </li>
+    </ul>
+  </main>
+
+  <nav aria-label="The room" style="position: absolute; left: 50%; bottom: 26px; z-index: 5; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 32px); box-sizing: border-box; padding: 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, 0.5); transform: translateX(-50%);">
+    <sc-for list="{{people}}" as="p" hint-placeholder-count="2">
+      <a href="{{p.href}}" aria-label="Open {{p.name}}’s desk" style="display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 380px; min-height: 52px; padding: 0 18px 0 8px; border-radius: 999px; color: var(--ink); font-size: 14px; text-decoration: none;">
+        <span aria-hidden="true" style="display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 999px; background: var(--sunken); font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px {{p.color}};">{{p.initial}}</span>
+        <span style="flex: none; font-weight: 600;">{{p.name}}</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);"><span style="width: 7px; height: 7px; border-radius: 999px; background: {{p.color}};"></span>{{p.timer}}</span>
+        <span aria-hidden="true" style="flex: none; width: 1px; height: 18px; background: var(--line2);"></span>
+        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{p.task}}</span>
+        <span style="flex: none; color: var(--muted);">· {{p.app}}</span>
+      </a>
+    </sc-for>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 28px; margin: 0 4px; background: var(--line2);"></span>
+    <a href="Room.dc.html" aria-label="Open the room" style="display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 999px; color: var(--ink);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', glass: 'rgba(24, 24, 28, 0.78)' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', glass: 'rgba(255, 255, 255, 0.82)' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const people = [
+      { name: 'Sam', initial: 'S', color: 'var(--phone)', timer: '06:05', task: 'Read chapter 7', app: 'Chrome', href: 'TheirDesk.dc.html' },
+      { name: 'Alex', initial: 'A', color: 'var(--away)', timer: '12:40', task: 'Flashcards, unit 4', app: 'Anki', href: '#' }
+    ];
+    return {
+      t: t,
+      people: people,
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

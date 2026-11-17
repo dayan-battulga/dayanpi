@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seeing others · on the seats</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+@keyframes lamp {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent), 0 30px 90px -38px color-mix(in srgb, var(--lamp) 72%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1120px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --lamp: var(--work);">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Room</a>
+      <a href="Desk.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="seats-total" style="max-width: 1180px; margin: 0 auto; padding: 64px 32px 0;">
+    <h1 id="seats-total" style="margin: 0; font-size: clamp(56px, 8vw, 104px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">7h 05m</h1>
+    <p style="margin: 12px 0 0; font-size: 16px; color: var(--muted);">focused together today</p>
+  </section>
+
+  <section aria-label="Seats" style="max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; display: flex; flex-wrap: wrap; gap: 20px;">
+
+    <article aria-label="Dayan, you" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: radial-gradient(520px 300px at 72% 28%, rgba(159, 183, 255, 0.22), transparent 70%), linear-gradient(180deg, #23262d, #121317); animation: lamp 6s ease-in-out infinite;">
+      <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+        <rect x="436" y="78" width="150" height="98" rx="8" fill="#252b38"></rect>
+        <rect x="446" y="88" width="130" height="78" rx="4" fill="#3a4a6c" opacity="0.75"></rect>
+        <circle cx="306" cy="160" r="48" fill="#474d59"></circle>
+        <path d="M192 360 C202 258 252 222 306 222 C360 222 410 258 420 360 Z" fill="#343945"></path>
+      </svg>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);"></div>
+      <span style="position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #ffffff; font-size: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);">3h 12m today</span>
+      <div style="position: absolute; left: 22px; right: 22px; bottom: 20px; color: #ffffff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Dayan</span>
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--work);"></span>42:18</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.86);">Problem set 3 <span style="color: rgba(255, 255, 255, 0.62);">· VS Code</span></p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.14);"><span style="display: block; width: 25%; height: 100%; background: var(--work);"></span></div>
+    </article>
+
+    <article aria-label="Sam, on the phone" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: radial-gradient(480px 300px at 30% 30%, rgba(255, 200, 160, 0.16), transparent 70%), linear-gradient(180deg, #2a2522, #141211); --lamp: var(--phone); animation: lamp 2.4s ease-in-out infinite;">
+      <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+        <rect x="70" y="60" width="130" height="86" rx="6" fill="#3a332e"></rect>
+        <circle cx="330" cy="176" r="46" fill="#564b44"></circle>
+        <path d="M216 360 C226 270 276 236 330 236 C384 236 434 270 444 360 Z" fill="#433a35"></path>
+        <rect x="350" y="262" width="34" height="56" rx="7" fill="#ffd2b0" opacity="0.6"></rect>
+      </svg>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);"></div>
+      <span style="position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #ffffff; font-size: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);">1h 48m today</span>
+      <button type="button" aria-label="Nudge Sam" style="position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #ffffff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      </button>
+      <div style="position: absolute; left: 22px; right: 22px; bottom: 20px; color: #ffffff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Sam</span>
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--phone);"></span>06:05</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.86);">Read chapter 7 <span style="color: rgba(255, 255, 255, 0.62);">· paused · Chrome</span></p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.14);"><span style="display: block; width: 25%; height: 100%; background: var(--phone);"></span></div>
+    </article>
+
+    <article aria-label="Alex, away" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: var(--surface); box-shadow: 0 0 0 1px var(--line);">
+      <div style="position: absolute; inset: 0; display: grid; place-items: center;">
+        <span style="display: grid; place-items: center; width: 84px; height: 84px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 32px; font-weight: 600;">A</span>
+      </div>
+      <span style="position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 12px;">2h 05m today</span>
+      <div style="position: absolute; left: 22px; right: 22px; bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Alex</span>
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px; color: var(--muted);"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--away);"></span>12:40</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted);">Flashcards, unit 4 · paused · Anki</p>
+      </div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--ink) 8%, transparent);"><span style="display: block; width: 60%; height: 100%; background: color-mix(in srgb, var(--away) 70%, transparent);"></span></div>
+    </article>
+
+    <article aria-label="Open seat" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; box-sizing: border-box; display: grid; place-items: center; border-radius: 28px; border: 1px dashed var(--line2);">
+      <a href="Settings.dc.html" style="display: grid; justify-items: center; gap: 10px; padding: 16px 24px; color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+        Invite
+      </a>
+    </article>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    return {
+      t: t,
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+input::placeholder { color: var(--muted); }
+@keyframes lamp {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent), 0 30px 90px -38px color-mix(in srgb, var(--lamp) 72%, transparent); }
+}
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lamp) 55%, transparent); }
+  60% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--lamp) 0%, transparent); }
+}
+@keyframes ripple { from { transform: scale(0.7); opacity: 0.55; } to { transform: scale(2.6); opacity: 0; } }
+@keyframes bar { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+@keyframes blink { 50% { opacity: 0.3; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1120px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --warm: {{t.warm}}; --glass: {{t.glass}}; --scrim: {{t.scrim}}; --lamp: {{me.color}};">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="display: inline-flex; align-items: center; gap: 14px;">
+      <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+      <sc-if value="{{showReconnecting}}" hint-placeholder-val="{{false}}">
+        <span role="status" style="display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-radius: 999px; background: color-mix(in srgb, var(--warm) 12%, transparent); color: var(--warm); font-size: 12px; font-weight: 500;"><span style="width: 6px; height: 6px; border-radius: 999px; background: var(--warm); animation: blink 1s ease-in-out infinite;"></span>Reconnecting</span>
+      </sc-if>
+    </span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Room</a>
+      <a href="Desk.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="display: flex; align-items: center; padding-left: 6px; margin-right: 4px;">
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">{{room.hereLabel}}</span>
+        <span aria-hidden="true" style="display: grid; place-items: center; width: 26px; height: 26px; margin-left: -6px; border-radius: 999px; background: var(--surface); font-size: 11px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--lamp);">D</span>
+        <sc-if value="{{room.full}}" hint-placeholder-val="{{true}}">
+          <span aria-hidden="true" style="display: grid; place-items: center; width: 26px; height: 26px; margin-left: -1px; border-radius: 999px; background: var(--surface); font-size: 11px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--phone);">S</span>
+          <span aria-hidden="true" style="display: grid; place-items: center; width: 26px; height: 26px; margin-left: -1px; border-radius: 999px; background: var(--surface); font-size: 11px; font-weight: 600; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--away);">A</span>
+        </sc-if>
+      </div>
+      <button type="button" aria-label="Search and commands" style="display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font: 500 12px 'Geist Mono', monospace; cursor: pointer;">⌘K</button>
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <sc-if value="{{showPeace}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; top: 92px; left: 16px; right: 16px; z-index: 5; display: flex; justify-content: center; pointer-events: none;">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 20px 44px -26px rgba(0, 0, 0, 0.55); animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <span aria-hidden="true" style="display: flex; align-items: center; gap: 3px; height: 16px;">
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.3s infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.6s infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.15s infinite;"></span>
+        </span>
+        <p style="margin: 0; font-size: 14px;">3 things left, almost 5 hours before bed. You’ve got this.</p>
+      </div>
+    </div>
+  </sc-if>
+
+  <section aria-labelledby="room-total" style="max-width: 1180px; margin: 0 auto; padding: 64px 32px 0;">
+    <h1 id="room-total" style="margin: 0; font-size: clamp(56px, 8vw, 104px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">{{room.total}}</h1>
+    <p style="margin: 12px 0 0; font-size: 16px; color: var(--muted);">{{room.caption}}</p>
+  </section>
+
+  <section aria-label="Seats" style="max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; display: flex; flex-wrap: wrap; gap: 20px; opacity: {{seatsOpacity}};">
+
+    <article aria-label="Dayan, you" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: {{me.tileBg}}; box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 22%, transparent), 0 30px 70px -46px color-mix(in srgb, var(--lamp) 55%, transparent); animation: {{me.glow}};">
+      <sc-if value="{{me.showVideo}}" hint-placeholder-val="{{true}}">
+        <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+          <rect x="56" y="54" width="112" height="168" rx="6" fill="#1f2228"></rect>
+          <rect x="68" y="72" width="88" height="10" rx="2" fill="#2c3038"></rect>
+          <rect x="68" y="114" width="70" height="10" rx="2" fill="#2c3038"></rect>
+          <rect x="68" y="156" width="80" height="10" rx="2" fill="#2c3038"></rect>
+          <rect x="436" y="78" width="150" height="98" rx="8" fill="#252b38"></rect>
+          <rect x="446" y="88" width="130" height="78" rx="4" fill="#3a4a6c" opacity="0.75"></rect>
+          <circle cx="306" cy="170" r="48" fill="#474d59"></circle>
+          <path d="M192 360 C202 268 252 232 306 232 C360 232 410 268 420 360 Z" fill="#343945"></path>
+          <rect x="0" y="324" width="640" height="36" fill="#15171b"></rect>
+        </svg>
+        <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);"></div>
+      </sc-if>
+      <sc-if value="{{me.away}}" hint-placeholder-val="{{false}}">
+        <div style="position: absolute; inset: 0; display: grid; place-items: center;">
+          <span style="display: grid; place-items: center; width: 84px; height: 84px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 32px; font-weight: 600;">D</span>
+        </div>
+      </sc-if>
+      <button type="button" aria-pressed="true" aria-label="Hide my video" style="position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: {{me.btnBg}}; color: {{me.btnColor}}; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg>
+      </button>
+      <div style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: {{me.text}};">
+        <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Dayan</span>
+        <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px; font-weight: 500;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--lamp); animation: breathe 2.4s ease-in-out infinite;"></span>{{me.timer}}</span>
+      </div>
+    </article>
+
+    <sc-if value="{{room.full}}" hint-placeholder-val="{{true}}">
+      <article aria-label="Sam, on the phone" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: var(--surface); --lamp: var(--phone); box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp) 24%, transparent), 0 30px 70px -46px color-mix(in srgb, var(--lamp) 50%, transparent); animation: lamp 2.4s ease-in-out infinite;">
+        <div style="position: absolute; inset: 0; display: grid; place-items: center;">
+          <span style="position: relative; display: grid; place-items: center; width: 84px; height: 84px; border-radius: 999px; background: var(--sunken); font-size: 32px; font-weight: 600;">S
+            <sc-if value="{{showNudge}}" hint-placeholder-val="{{false}}">
+              <span aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; border: 2px solid var(--phone); animation: ripple 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;"></span>
+              <span aria-hidden="true" style="position: absolute; inset: 0; border-radius: 999px; border: 2px solid var(--phone); animation: ripple 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s infinite;"></span>
+            </sc-if>
+          </span>
+        </div>
+        <button type="button" aria-label="Nudge Sam" style="position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: {{nudge.bg}}; color: {{nudge.color}}; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+        </button>
+        <div style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Sam</span>
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px; font-weight: 500;"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--phone);"></span>06:05</span>
+        </div>
+      </article>
+
+      <article aria-label="Alex, away" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; overflow: hidden; border-radius: 28px; background: var(--surface); box-shadow: 0 0 0 1px var(--line);">
+        <div style="position: absolute; inset: 0; display: grid; place-items: center;">
+          <span style="display: grid; place-items: center; width: 84px; height: 84px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 32px; font-weight: 600;">A</span>
+        </div>
+        <div style="position: absolute; left: 22px; right: 22px; bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Alex</span>
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-family: 'Geist Mono', monospace; font-size: 16px; font-weight: 500; color: var(--muted);"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--away);"></span>12:40</span>
+        </div>
+      </article>
+
+      <article aria-label="Open seat" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; box-sizing: border-box; display: grid; place-items: center; border-radius: 28px; border: 1px dashed var(--line2);">
+        <a href="Settings.dc.html" style="display: grid; justify-items: center; gap: 10px; padding: 16px 24px; color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: none;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+          Invite
+        </a>
+      </article>
+    </sc-if>
+
+    <sc-if value="{{room.alone}}" hint-placeholder-val="{{false}}">
+      <article aria-label="Nobody else here" style="position: relative; flex: 1 1 480px; min-width: 0; height: 300px; box-sizing: border-box; display: grid; place-items: center; border-radius: 28px; border: 1px dashed var(--line2); text-align: center;">
+        <div style="display: grid; justify-items: center; gap: 14px;">
+          <p style="margin: 0; font-size: 17px; font-weight: 500;">Just you for now</p>
+          <a href="Settings.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--line2); color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none;">Invite someone</a>
+        </div>
+      </article>
+    </sc-if>
+  </section>
+
+  <sc-if value="{{showNudge}}" hint-placeholder-val="{{false}}">
+    <div role="status" style="position: absolute; right: 32px; bottom: 32px; display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 20px 44px -26px rgba(0, 0, 0, 0.55); font-size: 14px; animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--phone);"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      Nudged Sam <span style="color: var(--muted);">just now</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{showDetails}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0; z-index: 10; display: flex; justify-content: center; align-items: flex-start; padding: 170px 16px 0; background: var(--scrim); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);">
+      <div role="dialog" aria-label="Sam" style="width: 100%; max-width: 420px; box-sizing: border-box; padding: 24px; border-radius: 26px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.6); animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span aria-hidden="true" style="display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 999px; background: var(--sunken); font-size: 20px; font-weight: 600; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--phone);">S</span>
+          <div style="flex: 1; min-width: 0;">
+            <p style="margin: 0; font-size: 18px; font-weight: 600;">Sam</p>
+            <p style="margin: 2px 0 0; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted);"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--phone);"></span>On the phone · 06:05</p>
+          </div>
+          <button type="button" aria-label="Close" style="display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+        <div aria-label="Sam’s day" style="position: relative; height: 8px; margin-top: 24px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent);">
+          <span style="position: absolute; top: 0; bottom: 0; left: 16.67%; width: 8.33%; border-radius: 999px 0 0 999px; background: var(--work);"></span>
+          <span style="position: absolute; top: 0; bottom: 0; left: 25%; width: 1.3%; background: var(--phone);"></span>
+          <span style="position: absolute; top: 0; bottom: 0; left: 26.3%; width: 44.81%; background: color-mix(in srgb, var(--away) 55%, transparent);"></span>
+          <span style="position: absolute; top: 0; bottom: 0; left: 71.11%; width: 1.67%; background: var(--work);"></span>
+          <span style="position: absolute; top: 0; bottom: 0; left: 72.78%; width: 0.6%; border-radius: 0 999px 999px 0; background: var(--phone);"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted);"><span>6 am</span><span>midnight</span></div>
+        <dl style="margin: 18px 0 0;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px;"><dt style="color: var(--muted);">Today</dt><dd style="margin: 0; font-family: 'Geist Mono', monospace;">1h 48m</dd></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px;"><dt style="color: var(--muted);">Working on</dt><dd style="margin: 0;">Read chapter 7</dd></div>
+        </dl>
+        <button type="button" style="width: 100%; height: 48px; margin-top: 8px; border: 0; border-radius: 999px; background: var(--phone); color: var(--bg); font: 600 15px 'Geist', sans-serif; cursor: pointer;">Nudge Sam</button>
+        <p style="margin: 14px 0 0; text-align: center; font-size: 13px; color: var(--muted);">Sam keeps apps and video private.</p>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{showPalette}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0; z-index: 10; display: flex; justify-content: center; align-items: flex-start; padding: 150px 16px 0; background: var(--scrim); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);">
+      <div role="dialog" aria-label="Commands" style="width: 100%; max-width: 560px; overflow: hidden; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.6); animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--line);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted);"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <label for="room-command" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">Command</label>
+          <input id="room-command" type="text" placeholder="Type a command" style="flex: 1; min-width: 0; height: 58px; border: 0; background: transparent; color: var(--ink); font: 400 16px 'Geist', sans-serif;">
+          <kbd style="font: 500 11px 'Geist Mono', monospace; color: var(--muted);">esc</kbd>
+        </div>
+        <ul style="list-style: none; margin: 0; padding: 8px;">
+          <li><button type="button" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--sunken); color: var(--ink); font: 400 14px 'Geist', sans-serif; text-align: left; cursor: pointer;"><span style="flex: 1;">Add a to-do</span><kbd style="font: 500 11px 'Geist Mono', monospace; color: var(--muted);">N</kbd></button></li>
+          <li><button type="button" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: 400 14px 'Geist', sans-serif; text-align: left; cursor: pointer;"><span style="flex: 1;">Hide my video</span><kbd style="font: 500 11px 'Geist Mono', monospace; color: var(--muted);">V</kbd></button></li>
+          <li><button type="button" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: 400 14px 'Geist', sans-serif; text-align: left; cursor: pointer;"><span style="flex: 1;">Nudge Sam</span></button></li>
+          <li><button type="button" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: 400 14px 'Geist', sans-serif; text-align: left; cursor: pointer;"><span style="flex: 1;">Go to Desk</span><kbd style="font: 500 11px 'Geist Mono', monospace; color: var(--muted);">G D</kbd></button></li>
+          <li><button type="button" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: 400 14px 'Geist', sans-serif; text-align: left; cursor: pointer;"><span style="flex: 1;">Switch theme</span><kbd style="font: 500 11px 'Geist Mono', monospace; color: var(--muted);">T</kbd></button></li>
+        </ul>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"myState":{"editor":"enum","options":["working","phone","away"],"default":"working","section":"Preview"},"people":{"editor":"enum","options":["3 here","just you"],"default":"3 here","section":"Preview"},"moment":{"editor":"enum","options":["none","peace sign","nudge","seat details","command palette","reconnecting"],"default":"none","section":"Preview"},"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: {
+        bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)',
+        ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', warm: '#f5b83d',
+        glass: 'rgba(24, 24, 28, 0.74)', scrim: 'rgba(0, 0, 0, 0.5)'
+      },
+      light: {
+        bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)',
+        ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', warm: '#8f5a06',
+        glass: 'rgba(255, 255, 255, 0.76)', scrim: 'rgba(17, 17, 19, 0.24)'
+      }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    const video = 'radial-gradient(520px 300px at 72% 28%, rgba(159, 183, 255, 0.22), transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    const states = {
+      working: { key: 'work', timer: '42:18', glow: 'lamp 6s ease-in-out infinite', showVideo: true, away: false, text: '#ffffff', tileBg: video, btnBg: 'rgba(0, 0, 0, 0.32)', btnColor: '#ffffff' },
+      phone: { key: 'phone', timer: '03:12', glow: 'lamp 2.4s ease-in-out infinite', showVideo: true, away: false, text: '#ffffff', tileBg: video, btnBg: 'rgba(0, 0, 0, 0.32)', btnColor: '#ffffff' },
+      away: { key: 'away', timer: '08:40', glow: 'none', showVideo: false, away: true, text: 'var(--ink)', tileBg: 'var(--surface)', btnBg: 'var(--sunken)', btnColor: 'var(--ink)' }
+    };
+    const s = states[this.props.myState] || states.working;
+    const me = Object.assign({}, s, { color: t[s.key] });
+    const moment = this.props.moment || 'none';
+    const alone = this.props.people === 'just you';
+    const showNudge = moment === 'nudge' && !alone;
+    return {
+      t: t,
+      me: me,
+      room: alone
+        ? { full: false, alone: true, total: '3h 12m', caption: 'focused today', hereLabel: 'Here now: just you' }
+        : { full: true, alone: false, total: '7h 05m', caption: 'focused together today', hereLabel: 'Here now: Dayan, Sam and Alex' },
+      showPeace: moment === 'peace sign',
+      showNudge: showNudge,
+      showDetails: moment === 'seat details' && !alone,
+      showPalette: moment === 'command palette',
+      showReconnecting: moment === 'reconnecting',
+      seatsOpacity: moment === 'reconnecting' ? '0.55' : '1',
+      nudge: { bg: showNudge ? 'var(--phone)' : 'var(--sunken)', color: showNudge ? 'var(--bg)' : 'var(--muted)' },
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

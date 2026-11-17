@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Desk · calm</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: inherit; } a:hover { opacity: 0.8; }
+input::placeholder { color: var(--muted); }
+@keyframes shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes bar { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+@keyframes blink { 50% { opacity: 0.35; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes fall { 0% { transform: translateY(-20px) rotate(0deg); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(170px) rotate(320deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1440px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --hot: {{t.hot}}; --glass: {{t.glass}}; --scrim: {{t.scrim}}; --lamp: {{me.color}};">
+
+  <header style="max-width: 1180px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Room</a>
+      <a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Desk</a>
+      <a href="Pi.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Pi</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" aria-label="Search and commands" style="display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font: 500 12px 'Geist Mono', monospace; cursor: pointer;">⌘K</button>
+      <button type="button" aria-label="{{themeLabel}}" onClick="{{toggleTheme}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings and account" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none;">D</a>
+    </div>
+  </header>
+
+  <sc-if value="{{showPeace}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; top: 92px; left: 16px; right: 16px; z-index: 5; display: flex; justify-content: center; pointer-events: none;">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 20px 44px -26px rgba(0, 0, 0, 0.45); animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <span aria-hidden="true" style="display: flex; align-items: center; gap: 3px; height: 16px;">
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.3s infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.6s infinite;"></span>
+          <span style="width: 3px; height: 16px; border-radius: 2px; background: var(--work); animation: bar 0.9s ease-in-out -0.15s infinite;"></span>
+        </span>
+        <p style="margin: 0; font-size: 14px;">3 things left, almost 5 hours before bed. You’ve got this.</p>
+      </div>
+    </div>
+  </sc-if>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: 56px 32px 96px;">
+
+    <section aria-labelledby="desk-state">
+      <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 32px;">
+        <h1 id="desk-state" style="margin: 0; font-size: clamp(64px, 9vw, 120px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.92;">{{me.word}}</h1>
+        <p style="margin: 0; font-family: 'Geist Mono', monospace; font-size: clamp(44px, 6vw, 80px); font-weight: 500; letter-spacing: -0.045em; line-height: 1; color: var(--lamp);">{{me.timer}}</p>
+      </div>
+      <div aria-label="Today, 6 am to midnight" style="position: relative; height: 10px; margin-top: 52px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent);">
+        <span style="position: absolute; top: 0; bottom: 0; left: 22.22%; width: 7.41%; border-radius: 999px 0 0 999px; background: var(--work);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 29.63%; width: 1.11%; background: var(--phone);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 30.74%; width: 4.63%; background: var(--work);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 35.37%; width: 9.07%; background: color-mix(in srgb, var(--away) 55%, transparent);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 44.44%; width: 1.85%; background: var(--work);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 46.30%; width: 1.11%; background: var(--phone);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 47.41%; width: 22.04%; background: color-mix(in srgb, var(--away) 55%, transparent);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 69.44%; width: 3.89%; overflow: hidden; border-radius: 0 999px 999px 0; background: var(--lamp);"><span style="position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent); animation: shine 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;"></span></span>
+        <span aria-hidden="true" style="position: absolute; top: -7px; left: 73.33%; width: 2px; height: 24px; margin-left: -1px; border-radius: 2px; background: var(--ink);"></span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: var(--muted);"><span>6 am</span><span>midnight</span></div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 32px; min-height: 44px; margin-top: 14px;">
+        <p style="margin: 0; font-size: 15px; color: var(--muted);"><span style="color: var(--ink);">3h 12m</span> focused · <span style="color: var(--ink);">24m</span> on your phone · <span style="color: var(--ink);">2</span> pickups</p>
+        <p style="display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; font-size: 15px; color: var(--muted);">
+          <span style="white-space: nowrap;">{{mac.lead}}</span>
+          <sc-if value="{{mac.hasMain}}" hint-placeholder-val="{{true}}"><span style="min-width: 0; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{mac.main}}</span></sc-if>
+          <sc-if value="{{mac.hasTail}}" hint-placeholder-val="{{false}}"><span style="white-space: nowrap;">{{mac.tail}}</span></sc-if>
+          <sc-if value="{{mac.hasButton}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{mac.flip}}" aria-label="{{mac.buttonAria}}" style="flex: none; min-height: 44px; margin-left: 4px; padding: 0 4px; border: 0; background: transparent; color: var(--muted); font: 500 13px 'Geist', sans-serif; text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 4px; cursor: pointer;">{{mac.buttonLabel}}</button></sc-if>
+        </p>
+      </div>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 56px 80px; margin-top: 88px;">
+
+      <section aria-labelledby="todo-title" style="position: relative; flex: 1 1 460px; min-width: 0;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <h2 id="todo-title" style="margin: 0; font-size: 15px; font-weight: 600;">To-do</h2>
+          <span style="font-size: 13px; color: var(--muted);">{{todoHint}}</span>
+        </div>
+        <ul style="list-style: none; display: grid; gap: 4px; margin: 12px 0 0; padding: 0;">
+          <sc-for list="{{open}}" as="item" hint-placeholder-count="3">
+            <li style="display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 8px 0 14px; border-radius: 16px; background: {{item.rowBg}};">
+              <input type="checkbox" checked="{{item.checked}}" onChange="{{item.check}}" aria-label="Done: {{item.text}}" style="flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--work); cursor: pointer;">
+              <span style="flex: 1; min-width: 0; font-size: 15px; font-weight: {{item.weight}};">{{item.text}}</span>
+              <span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: {{item.timeColor}};">{{item.time}}</span>
+              <sc-if value="{{item.isCurrent}}" hint-placeholder-val="{{false}}">
+                <button type="button" aria-pressed="true" aria-label="Stop working on {{item.text}}" onClick="{{item.stop}}" style="display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: {{pill.bg}}; color: {{pill.color}}; font: 600 13px 'Geist', sans-serif; cursor: pointer;"><span style="width: 7px; height: 7px; border-radius: 999px; background: currentColor; animation: {{pill.anim}};"></span>{{pill.label}}</button>
+              </sc-if>
+              <sc-if value="{{item.notCurrent}}" hint-placeholder-val="{{true}}">
+                <button type="button" aria-pressed="false" aria-label="Work on {{item.text}}" onClick="{{item.start}}" style="display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>Start</button>
+              </sc-if>
+            </li>
+          </sc-for>
+        </ul>
+
+        <sc-if value="{{allDone}}" hint-placeholder-val="{{false}}">
+          <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 24px; height: 200px; pointer-events: none;">
+            <sc-for list="{{confetti}}" as="piece" hint-placeholder-count="16">
+              <span style="{{piece.style}}"></span>
+            </sc-for>
+          </div>
+          <p style="margin: 18px 14px 0; font-size: 15px; color: var(--work); animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;">All done. Nice.</p>
+        </sc-if>
+
+        <sc-if value="{{hasDone}}" hint-placeholder-val="{{true}}">
+          <p style="margin: 20px 14px 2px; font-size: 13px; color: var(--muted);">Done</p>
+          <ul style="list-style: none; margin: 0; padding: 0;">
+            <sc-for list="{{done}}" as="item" hint-placeholder-count="1">
+              <li style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px;">
+                <input type="checkbox" checked="{{item.checked}}" onChange="{{item.uncheck}}" aria-label="Not done: {{item.text}}" style="flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--work); cursor: pointer;">
+                <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--muted); text-decoration: line-through;">{{item.text}}</span>
+                <span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{item.time}}</span>
+              </li>
+            </sc-for>
+          </ul>
+        </sc-if>
+
+        <form action="#" style="margin: 10px 14px 0;">
+          <label for="desk-new-todo" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">New to-do</label>
+          <input id="desk-new-todo" type="text" placeholder="Add a to-do" style="width: 100%; height: 46px; box-sizing: border-box; padding: 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 400 15px 'Geist', sans-serif;">
+        </form>
+      </section>
+
+      <section aria-labelledby="apps-title" style="flex: 1 1 380px; min-width: 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <h2 id="apps-title" style="margin: 0; font-size: 15px; font-weight: 600;">Apps</h2>
+          <div style="display: flex; gap: 4px;">
+            <button type="button" aria-pressed="true" style="min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font: 500 13px 'Geist', sans-serif; cursor: pointer;">Today</button>
+            <button type="button" aria-pressed="false" style="min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--muted); font: 400 13px 'Geist', sans-serif; cursor: pointer;">Week</button>
+          </div>
+        </div>
+        <div style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px;"><span>VS Code</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">1h 34m</span></div>
+          <div style="position: relative; height: 6px; margin-top: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 999px; background: var(--ink2);"></span></div>
+        </div>
+        <div style="margin-top: 22px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px;"><span>Chrome</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">58m <span style="color: var(--hot);">· 11m YouTube</span></span></div>
+          <div style="position: relative; height: 6px; margin-top: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 11.7%; border-radius: 999px 0 0 999px; background: var(--hot);"></span><span style="position: absolute; left: 11.7%; top: 0; bottom: 0; width: 50%; border-radius: 0 999px 999px 0; background: var(--ink2);"></span></div>
+        </div>
+        <div style="margin-top: 22px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px;"><span>Notion</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">26m</span></div>
+          <div style="position: relative; height: 6px; margin-top: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 27.7%; border-radius: 999px; background: var(--ink2);"></span></div>
+        </div>
+        <div style="margin-top: 22px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px;"><span>Messages</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">6m</span></div>
+          <div style="position: relative; height: 6px; margin-top: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 6.4%; border-radius: 999px; background: var(--ink2);"></span></div>
+        </div>
+      </section>
+    </div>
+
+    <section aria-labelledby="calendar-title" style="margin-top: 88px;">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;">
+          <h2 id="calendar-title" style="margin: 0; font-size: 15px; font-weight: 600;">November</h2>
+          <span style="font-size: 13px; color: var(--muted);">41h 42m focused</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button type="button" aria-label="Previous month" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+          <button type="button" aria-label="Next month" disabled style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); opacity: 0.3; cursor: default;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+        </div>
+      </div>
+      <div aria-hidden="true" style="display: flex; gap: 6px; margin-top: 14px; font-size: 12px; color: var(--muted);">
+        <span style="flex: 1 1 0; padding-left: 10px;">Sun</span><span style="flex: 1 1 0; padding-left: 10px;">Mon</span><span style="flex: 1 1 0; padding-left: 10px;">Tue</span><span style="flex: 1 1 0; padding-left: 10px;">Wed</span><span style="flex: 1 1 0; padding-left: 10px;">Thu</span><span style="flex: 1 1 0; padding-left: 10px;">Fri</span><span style="flex: 1 1 0; padding-left: 10px;">Sat</span>
+      </div>
+      <sc-for list="{{weeks}}" as="week" hint-placeholder-count="5">
+        <div style="display: flex; gap: 6px; margin-top: 6px;">
+          <sc-for list="{{week.days}}" as="day" hint-placeholder-count="7">
+            <button type="button" onClick="{{day.open}}" disabled="{{day.disabled}}" aria-label="{{day.label}}" style="flex: 1 1 0; min-width: 0; height: 62px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 9px 10px; border: 0; border-radius: 12px; background: {{day.bg}}; box-shadow: {{day.ring}}; color: var(--ink); font: {{day.weight}} 13px 'Geist', sans-serif; text-align: left; cursor: {{day.cursor}}; opacity: {{day.opacity}};">
+              <span>{{day.date}}</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink2);">{{day.mins}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+  </main>
+
+  <sc-if value="{{dayOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0; z-index: 10; display: flex; justify-content: center; align-items: flex-start; padding: 220px 16px 0; background: var(--scrim); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);">
+      <div role="dialog" aria-label="{{picked.title}}" style="width: 100%; max-width: 460px; box-sizing: border-box; padding: 26px; border-radius: 26px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.6); animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.03em;">{{picked.title}}</h2>
+          <button type="button" aria-label="Close" onClick="{{closeDay}}" style="display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -10px -10px 0 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 15px; color: var(--muted);"><span style="color: var(--ink);">{{picked.focus}}</span> focused · <span style="color: var(--ink);">{{picked.phone}}</span> phone · <span style="color: var(--ink);">{{picked.away}}</span> away</p>
+        <p style="margin: 24px 0 6px; font-size: 13px; color: var(--muted);">Done</p>
+        <ul style="list-style: none; margin: 0; padding: 0; font-size: 15px;">
+          <li style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);"><span>Problem set 2</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">1h 40m</span></li>
+          <li style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);"><span>Lecture 17 notes</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">35m</span></li>
+          <li style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);"><span>Email the TA</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">10m</span></li>
+        </ul>
+        <p style="margin: 22px 0 6px; font-size: 13px; color: var(--muted);">Apps</p>
+        <p style="margin: 0; font-size: 15px;">VS Code 2h 05m <span style="color: var(--muted);">·</span> Chrome 1h 10m <span style="color: var(--muted);">·</span> Notion 30m</p>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"myState":{"editor":"enum","options":["working","phone","away"],"default":"working","section":"Preview"},"moment":{"editor":"enum","options":["none","peace sign","day page","all done"],"default":"none","section":"Preview"},"mac":{"editor":"enum","options":["app","site","paused","off"],"default":"app","section":"Preview"},"$preview":{"width":1440,"height":1440}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: {
+        bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)',
+        ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', hot: '#ff5c7a',
+        glass: 'rgba(24, 24, 28, 0.74)', scrim: 'rgba(0, 0, 0, 0.5)'
+      },
+      light: {
+        bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)',
+        ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', hot: '#be123c',
+        glass: 'rgba(255, 255, 255, 0.76)', scrim: 'rgba(17, 17, 19, 0.24)'
+      }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'light';
+    const t = themes[themeName] || themes.light;
+    const states = {
+      working: { key: 'work', word: 'Focused', timer: '42:18' },
+      phone: { key: 'phone', word: 'On your phone', timer: '03:12' },
+      away: { key: 'away', word: 'Away', timer: '08:40' }
+    };
+    const s = states[this.props.myState] || states.working;
+    const me = Object.assign({}, s, { color: t[s.key] });
+    const moment = this.props.moment || 'none';
+
+    const formatMinutes = (m) => (m === 0 ? '—' : m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : ''));
+    const items = [
+      { id: 'ps3', text: 'Problem set 3', minutes: 38 },
+      { id: 'lab', text: 'Lab report outline', minutes: 12 },
+      { id: 'ch7', text: 'Read chapter 7', minutes: 0 },
+      { id: 'l18', text: 'Review lecture 18 notes', minutes: 25 }
+    ];
+    const doneIds = st.doneIds || (moment === 'all done' ? ['ps3', 'lab', 'ch7', 'l18'] : ['l18']);
+    const chosen = st.currentId !== undefined ? st.currentId : 'ps3';
+    const currentId = doneIds.indexOf(chosen) >= 0 ? null : chosen;
+    const open = items.filter((x) => doneIds.indexOf(x.id) < 0).map((x) => {
+      const isCurrent = x.id === currentId;
+      return {
+        text: x.text,
+        time: formatMinutes(x.minutes),
+        checked: false,
+        isCurrent: isCurrent,
+        notCurrent: !isCurrent,
+        weight: isCurrent ? '600' : '400',
+        timeColor: isCurrent ? 'var(--lamp)' : 'var(--muted)',
+        rowBg: isCurrent ? 'color-mix(in srgb, var(--lamp) 9%, transparent)' : 'transparent',
+        start: () => this.setState({ currentId: x.id }),
+        stop: () => this.setState({ currentId: null }),
+        check: () => this.setState({ doneIds: doneIds.concat([x.id]) })
+      };
+    });
+    const done = items.filter((x) => doneIds.indexOf(x.id) >= 0).map((x) => ({
+      text: x.text,
+      time: formatMinutes(x.minutes),
+      checked: true,
+      uncheck: () => this.setState({ doneIds: doneIds.filter((id) => id !== x.id) })
+    }));
+    const focused = s.key === 'work';
+    const pill = focused
+      ? { label: 'Working', bg: 'var(--work)', color: 'var(--bg)', anim: 'blink 1.6s ease-in-out infinite' }
+      : { label: 'Paused', bg: 'color-mix(in srgb, var(--ink) 10%, transparent)', color: 'var(--ink)', anim: 'none' };
+
+    const colors = ['var(--work)', 'var(--phone)', 'var(--away)', 'var(--ink2)'];
+    const confetti = [];
+    for (let i = 0; i < 16; i++) {
+      const left = 4 + ((i * 37) % 90);
+      const width = i % 3 === 0 ? 6 : 8;
+      const height = i % 2 === 0 ? 12 : 8;
+      const duration = (1.6 + (i % 5) * 0.25).toFixed(2);
+      const delay = ((i % 6) * 0.12).toFixed(2);
+      confetti.push({
+        style: 'position: absolute; top: 0; left: ' + left + '%; width: ' + width + 'px; height: ' + height + 'px; border-radius: 2px; background: ' + colors[i % 4] + '; animation: fall ' + duration + 's cubic-bezier(0.2, 0.7, 0.3, 1) ' + delay + 's infinite;'
+      });
+    }
+
+    const focusByDate = { 1: 95, 2: 180, 3: 240, 4: 130, 5: 205, 6: 60, 7: 0, 8: 150, 9: 260, 10: 190, 11: 225, 12: 170, 13: 45, 14: 110, 15: 250, 16: 192 };
+    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shadeFor = (m) => (m >= 240 ? 60 : m >= 120 ? 40 : m >= 60 ? 25 : m >= 1 ? 12 : 0);
+    const pickedDate = st.pickedDate !== undefined ? st.pickedDate : (moment === 'day page' ? 15 : 0);
+    const weeks = [];
+    for (let r = 0; r < 5; r++) {
+      const days = [];
+      for (let c = 0; c < 7; c++) {
+        const date = r * 7 + c + 1;
+        if (date > 30) {
+          days.push({ date: String(date - 30), mins: '', bg: 'transparent', ring: 'none', weight: '400', cursor: 'default', opacity: '0.3', disabled: true, label: 'December ' + (date - 30), open: () => {} });
+        } else {
+          const minutes = focusByDate[date];
+          const isToday = date === 16;
+          const isFuture = date > 16;
+          const shade = minutes ? shadeFor(minutes) : 0;
+          days.push({
+            date: String(date),
+            mins: minutes ? formatMinutes(minutes) : '',
+            bg: isFuture ? 'transparent' : (shade ? 'color-mix(in srgb, var(--work) ' + shade + '%, transparent)' : 'color-mix(in srgb, var(--ink) 4%, transparent)'),
+            ring: date === pickedDate ? '0 0 0 2px var(--ink)' : (isToday ? 'inset 0 0 0 1.5px var(--ink)' : 'none'),
+            weight: isToday ? '600' : '400',
+            cursor: isFuture ? 'default' : 'pointer',
+            opacity: isFuture ? '0.4' : '1',
+            disabled: isFuture,
+            label: 'November ' + date + (minutes ? ', ' + formatMinutes(minutes) + ' focused' : ''),
+            open: () => this.setState({ pickedDate: date })
+          });
+        }
+      }
+      weeks.push({ days: days });
+    }
+    const pickedMinutes = focusByDate[pickedDate] || 0;
+    const picked = {
+      title: pickedDate ? weekdayNames[(pickedDate - 1) % 7] + ', November ' + pickedDate : '',
+      focus: formatMinutes(pickedMinutes || 0) === '—' ? '0m' : formatMinutes(pickedMinutes),
+      phone: Math.max(4, Math.round(pickedMinutes * 0.12)) + 'm',
+      away: '2h 05m'
+    };
+
+    const macModes = {
+      app: { lead: 'On the Mac ·', main: 'VS Code', tail: '', button: 'Pause', aria: 'Pause Mac tracking' },
+      site: { lead: 'On the Mac ·', main: 'youtube.com', tail: 'in Chrome', button: 'Pause', aria: 'Pause Mac tracking' },
+      paused: { lead: 'Mac tracking paused', main: '', tail: '', button: 'Resume', aria: 'Resume Mac tracking' },
+      off: { lead: 'The Mac isn’t reporting', main: '', tail: '', button: '', aria: '' }
+    };
+    const macStart = this.props.mac || 'app';
+    const macMode = st.mac || macStart;
+    const macNow = macModes[macMode] || macModes.app;
+    const mac = {
+      lead: macNow.lead,
+      main: macNow.main,
+      tail: macNow.tail,
+      hasMain: macNow.main !== '',
+      hasTail: macNow.tail !== '',
+      hasButton: macNow.button !== '',
+      buttonLabel: macNow.button,
+      buttonAria: macNow.aria,
+      flip: () => this.setState({ mac: macMode === 'paused' ? (macStart === 'paused' ? 'app' : macStart) : 'paused' })
+    };
+    return {
+      t: t,
+      me: me,
+      mac: mac,
+      showPeace: moment === 'peace sign',
+      open: open,
+      done: done,
+      hasDone: done.length > 0,
+      allDone: open.length === 0,
+      todoHint: currentId ? open.length + ' open' : (open.length ? 'Start one to collect its time' : ''),
+      pill: pill,
+      confetti: confetti,
+      weeks: weeks,
+      dayOpen: pickedDate > 0,
+      picked: picked,
+      closeDay: () => this.setState({ pickedDate: 0 }),
+      isDark: themeName === 'dark',
+      isLight: themeName !== 'dark',
+      themeLabel: themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>
