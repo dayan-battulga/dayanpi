@@ -50,15 +50,25 @@ export function readShade(minutes: number): number {
   return shade;
 }
 
-export function formatMonthLabel(month: string): string {
+// "November", or "November 2025" for another year's.
+export function formatMonthLabel(month: string, thisMonth: string): string {
   const { year, index } = readMonthParts(month);
-  const label = new Date(year, index, 1).toLocaleDateString([], { month: "long", year: "numeric" });
+  const options: Intl.DateTimeFormatOptions = month.slice(0, 4) === thisMonth.slice(0, 4) ? { month: "long" } : { month: "long", year: "numeric" };
+  const label = new Date(year, index, 1).toLocaleDateString([], options);
   return label;
 }
 
-// Short enough for a calendar cell on a phone: "45m", "2h05".
+// A YYYY-MM-DD in words: "November 15", or "Sunday, November 15" with the weekday asked for.
+export function formatDayLabel(day: string, options: Intl.DateTimeFormatOptions): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const label = new Date(year, month - 1, date).toLocaleDateString([], options);
+  return label;
+}
+
+// The calendar's durations: "45m", "3h", "1h 35m".
 export function formatCompactMinutes(minutes: number): string {
   const hours = Math.floor(minutes / 60);
-  const text = hours > 0 ? `${hours}h${pad(minutes % 60)}` : `${minutes}m`;
+  const rest = minutes % 60;
+  const text = hours === 0 ? `${rest}m` : rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
   return text;
 }

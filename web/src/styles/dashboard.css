@@ -131,7 +131,7 @@ ol {
 .shell {
   max-width: var(--page-width);
   margin: 0 auto;
-  padding: 0 32px 56px;
+  padding: 0 32px 96px;
 }
 
 .card {
@@ -1312,6 +1312,326 @@ button.todo-pill:active,
 .todo-add-input:focus-visible {
   outline: none;
   border-bottom-color: var(--ink);
+}
+
+/* ---------- Apps (components/apps/AppsCard.tsx): Desk's, next to the to-dos ---------- */
+
+.apps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.apps-range {
+  display: flex;
+  gap: 4px;
+}
+
+/* Two quiet text buttons, no pill: the picked one turns ink. */
+.apps-range button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 400 13px var(--font-ui);
+  cursor: pointer;
+  transition: color 0.3s var(--ease);
+}
+
+.apps-range button[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.apps-empty {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.app-list {
+  display: grid;
+  gap: 22px;
+  margin-top: 14px;
+}
+
+.app-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.app-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-time {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-youtube {
+  color: var(--hot);
+}
+
+.app-track {
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+/* One rounded bar with the YouTube part inside it, so the two pieces share its ends. It grows in when the rows
+   mount (load, or a new range) and glides when a refresh changes it. */
+.app-bar {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ink-2);
+  animation: grow 0.6s var(--ease) both;
+  transition: width 0.6s var(--ease);
+}
+
+.app-bar-youtube {
+  display: block;
+  height: 100%;
+  background: var(--hot);
+}
+
+@keyframes grow {
+  from {
+    width: 0;
+  }
+}
+
+/* ---------- the calendar (components/calendar/CalendarCard.tsx): Desk's November ---------- */
+
+.calendar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.calendar-total {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.calendar-nav button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.calendar-nav button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.calendar-weekday {
+  padding-left: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* The font shorthand resets line-height to normal, like the mockup's buttons. */
+.day {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 62px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--ink);
+  font: 400 13px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease);
+}
+
+.day:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* More green for more focus: any, 1 h, 2 h, 4 h and up (lib/calendar's SHADE_STARTS). */
+.day[data-shade="1"] {
+  background: color-mix(in srgb, var(--work) 12%, transparent);
+}
+
+.day[data-shade="2"] {
+  background: color-mix(in srgb, var(--work) 25%, transparent);
+}
+
+.day[data-shade="3"] {
+  background: color-mix(in srgb, var(--work) 40%, transparent);
+}
+
+.day[data-shade="4"] {
+  background: color-mix(in srgb, var(--work) 60%, transparent);
+}
+
+.day[data-today] {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  font-weight: 600;
+}
+
+.day[data-picked] {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.day:disabled {
+  background: transparent;
+  opacity: 0.4;
+  cursor: default;
+}
+
+.day-outside {
+  background: transparent;
+  opacity: 0.3;
+  cursor: default;
+}
+
+.day-minutes {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* The day page: a solid card over the scrim, like ⌘K. Centered with margins, since Motion owns the transform. */
+.day-dialog {
+  position: fixed;
+  top: 220px;
+  left: 0;
+  right: 0;
+  z-index: 51;
+  width: calc(100% - 32px);
+  max-width: 460px;
+  max-height: calc(100dvh - 236px);
+  margin: 0 auto;
+  padding: 26px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 60%);
+}
+
+.day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.day-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.day-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -10px -10px 0 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.day-totals {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.day-totals span {
+  color: var(--ink);
+}
+
+.day-note {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.day-label {
+  margin: 24px 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.day-label-apps {
+  margin-top: 22px;
+}
+
+.day-todos li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.day-time {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.day-apps {
+  font-size: 15px;
+}
+
+.day-dot {
+  color: var(--muted);
 }
 
 /* ---------- Pi ---------- */

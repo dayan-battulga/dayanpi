@@ -238,6 +238,8 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
     await page.keyboard.press(keys);
     await page.waitForTimeout(SETTLE_MS);
   }
+  // A click scrolls its target into view even when it's already showing, and fixed things (dialogs) follow the scroll.
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: file, fullPage: true, animations: "disabled" });
   await context.close();
 }

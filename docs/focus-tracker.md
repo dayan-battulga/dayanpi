@@ -198,7 +198,7 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 
 | Page | Who | What's on it |
 | --- | --- | --- |
-| **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then apps, to-dos and the calendar. `/` takes you here until the room exists. |
+| **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. `/` takes you here until the room exists. |
 | **Pi** (`/pi`) | you | The camera card and the Pi's own numbers (temp, CPU, memory, disk, power, voice). The red **Undervoltage** warning shows up here when the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
 | **Settings** (`/settings`) | everyone | Your name, password and Mac tokens, plus invites and accounts for you. |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
@@ -282,11 +282,11 @@ cat data/todos.json
 grep '"todo"' data/focus_log/$(date +%F).jsonl
 ```
 
-## Apps card
+## Apps
 
-A bar chart of how long each Mac app was in front, right under the top of the desk. App names run down the left with the longest on top, and the time runs along the bottom in minutes (or hours once the longest bar passes 2 h). The **Today / This week** buttons pick the range (This week is the last 7 days including today), and the page remembers your pick. It refreshes every minute while the page is open. With nothing to show (or the Mac helper isn't running) it just says "Nothing from the Mac yet today".
+Next to the to-do list (under it on a phone): one row per Mac app with how long it was in front, longest first, and a thin bar under each one. The longest app's bar is full width and the rest are their share of it. A browser's bar starts with its YouTube time in red, and its time says so too, like "58m · 11m YouTube". It's the top 8 apps, plus "Other apps" for everything else. The bars grow in when the page loads and when you switch ranges.
 
-A browser's bar has two pieces, YouTube and Other sites, so you can see how much of the browser was YouTube. Every other app is one solid bar. Hover or tap a bar for the exact time of each piece; each bar's total sits at its right end. Long app names get cut off with "..." on the chart, and the tooltip has the full name.
+**Today** and **Week** pick the range (Week is the last 7 days including today), and the page remembers your pick. It refreshes every minute while the page is open. With nothing to show (or the Mac helper isn't running) it just says "Nothing from the Mac yet today".
 
 It counts the same way as the day page: from the 30-second sample lines, only while you're working or on your phone, the Mac isn't locked, and Mac tracking isn't switched off. Both share one counter in `focus/days.py`.
 
@@ -300,7 +300,7 @@ curl -s -b ~/.dayanpi-cookies "localhost:8000/api/apps?range=week" | python3 -m 
 
 Every finished day gets its own page: `data/days/YYYY-MM-DD.md` on the Pi (or in `DAYANPI_DATA_DIR`). It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
 
-- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos. Obsidian shows these as properties, and the calendar card reads them back.
+- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos. Obsidian shows these as properties, and the calendar reads them back.
 - **Totals:** the same numbers, readable.
 - Pages written back when there were work blocks still have a **Focus blocks** section and a `blocks` number. Pages are never rewritten, so they just stay that way.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
@@ -310,7 +310,9 @@ It's all built from that day's focus log (the to-dos come from its `todo` lines)
 
 **When pages get written.** Once when the service starts, for every past day that has a log and no page yet (that's how the old days get filled in the first time), then again a few seconds after each local midnight for the day that just ended. Like the focus checks, it waits for the network clock first. A page is never written over, so if you edit one, your edits stay. Today never gets a file; asking for today builds its page live from the log.
 
-**The calendar card** sits under the to-do list and Apps. Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. Click a day to read its page under the calendar, and click it again to close it. Today's page refreshes every minute while it's open. The arrows move between months, and the top line adds up the month's focus. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
+**The calendar** sits under the to-do list and Apps, with the month's name and its total focus on top ("November · 41h 42m focused"). Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. The arrows move between months. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
+
+Click a day and its page opens in a popup: the totals (focused, phone, away), the to-dos you finished that day with their time, and the apps. Esc, the ×, or a click outside closes it. Today works too, built live, and it refreshes every minute while it's open.
 
 The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown"}`. The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from `data/days`. A day with no page is a 404.
 

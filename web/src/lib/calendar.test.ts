@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthWeeks, formatCompactMinutes, readShade, shiftMonth } from "@/lib/calendar";
-import { parseDayPage } from "@/lib/markdown";
+import { buildMonthWeeks, formatCompactMinutes, formatMonthLabel, readShade, shiftMonth } from "@/lib/calendar";
+import { parseDayPage, readDayPage } from "@/lib/markdown";
 
 describe("buildMonthWeeks", () => {
   it("starts on Sunday and pads with the neighbouring months", () => {
@@ -39,8 +39,13 @@ it("shades by focus minutes", () => {
   expect([0, 1, 59, 60, 119, 120, 239, 240, 600].map(readShade)).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4]);
 });
 
-it("keeps cell numbers short", () => {
-  expect([0, 45, 60, 125].map(formatCompactMinutes)).toEqual(["0m", "45m", "1h00", "2h05"]);
+it("spells durations like the mockup", () => {
+  expect([0, 45, 60, 125, 2502].map(formatCompactMinutes)).toEqual(["0m", "45m", "1h", "2h 5m", "41h 42m"]);
+});
+
+it("adds the year only to another year's month", () => {
+  expect(formatMonthLabel("2026-10", "2026-11")).toBe("October");
+  expect(formatMonthLabel("2025-12", "2026-11")).toBe("December 2025");
 });
 
 it("reads a day page's headings, lists and lines, and skips the frontmatter", () => {
@@ -55,4 +60,21 @@ it("reads a day page's headings, lists and lines, and skips the frontmatter", ()
     { kind: "paragraph", text: "---" },
     { kind: "paragraph", text: "no end" },
   ]);
+});
+
+it("splits a day page into totals, to-dos, apps and notes", () => {
+  const page = "---\n---\n# Friday\n\n## Totals\n- Focus: 2h05\n- Pickups: 3\n\n## To-dos done\n- Read: ch. 7 (notes) (45s)\n- No time\n\n## Apps\nPaused for 5m.\n- None\n";
+  expect(readDayPage(page)).toEqual({
+    totals: [
+      { name: "Focus", time: "2h 05m" },
+      { name: "Pickups", time: "3" },
+    ],
+    todos: [
+      { name: "Read: ch. 7 (notes)", time: "45s" },
+      { name: "No time", time: "" },
+    ],
+    apps: [],
+    notes: ["Paused for 5m."],
+  });
+  expect(readDayPage("---\n---\n# Friday\n\nNothing was logged on this day.\n")).toEqual({ totals: [], todos: [], apps: [], notes: ["Nothing was logged on this day."] });
 });

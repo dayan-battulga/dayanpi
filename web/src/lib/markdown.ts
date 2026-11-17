@@ -27,3 +27,50 @@ export function parseDayPage(markdown: string): PageBlock[] {
   }
   return blocks;
 }
+
+export interface NamedTime {
+  name: string;
+  time: string; // "" when the line had none
+}
+
+export interface DayPageParts {
+  totals: NamedTime[]; // "Focus" → "4h 10m", and the rest of the Totals list
+  todos: NamedTime[]; // the to-dos done, with their time
+  apps: NamedTime[];
+  notes: string[]; // plain lines, like "Nothing was logged on this day." or how long Mac tracking was paused
+}
+
+// The page writes "1h05"; the dialog says "1h 05m" like the rest of the desk.
+function spellTime(time: string): string {
+  const spelled = time.replace(/^(\d+)h(\d\d)$/, "$1h $2m");
+  return spelled;
+}
+
+// "Problem set 2 (1h40)" or "Focus: 1h40". The parentheses win, since a to-do's own text can have a colon.
+function splitItem(item: string): NamedTime {
+  const inParens = /^(.*) \(([^()]*)\)$/.exec(item);
+  const colon = item.lastIndexOf(": ");
+  const named = inParens ? { name: inParens[1], time: inParens[2] } : colon > 0 ? { name: item.slice(0, colon), time: item.slice(colon + 2) } : { name: item, time: "" };
+  return { name: named.name, time: spellTime(named.time) };
+}
+
+// A day page (focus/days.py's build_day_page) in the pieces the day dialog lays out. A section's "- None" is no items.
+export function readDayPage(markdown: string): DayPageParts {
+  const parts: DayPageParts = { totals: [], todos: [], apps: [], notes: [] };
+  const lists = new Map([
+    ["Totals", parts.totals],
+    ["To-dos done", parts.todos],
+    ["Apps", parts.apps],
+  ]);
+  let section = "";
+  for (const block of parseDayPage(markdown)) {
+    if (block.kind === "heading") {
+      section = block.text;
+    } else if (block.kind === "paragraph") {
+      parts.notes.push(block.text);
+    } else {
+      lists.get(section)?.push(...block.items.filter((item) => item !== "None").map(splitItem));
+    }
+  }
+  return parts;
+}
