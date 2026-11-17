@@ -1,5 +1,5 @@
 import { ArrowLeftRight, EyeOff, Lock } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { Feed } from "@/components/camera/Feed";
 import { riseDelay } from "@/components/shared/rise";
 import { readStored, writeStored } from "@/lib/storage";
@@ -10,6 +10,7 @@ const FEEDS = [
   { name: "side", src: "/video/side", caption: "Side", alt: "Live side camera feed", overlayKey: "side_overlay" },
 ] as const;
 const PHONE_MIN = 0.5; // focus/tracker.py's: a weaker phone doesn't count
+const FALLBACK_RATIO = 640 / 480; // the webcam's, until the camera's overlay or picture says its own shape
 const HIDDEN_NOTE = "The readings keep updating while the picture is hidden.";
 const LOCKED_NOTE = "This browser isn’t one of your Tailscale devices, so the cameras stay closed.";
 
@@ -30,6 +31,10 @@ function describeReadings(focus: FocusStatus | undefined): string {
 export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
   const [peeking, setPeeking] = useState(() => readStored("peek", "0") === "1");
   const [view, setView] = useState(() => (readStored("camera", "front") === "side" ? "side" : "front"));
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const reportRatio = useCallback((name: string, ratio: number) => {
+    setRatios((current) => (current[name] === ratio ? current : { ...current, [name]: ratio }));
+  }, []);
   // The feeds wait for the first status, which says whether /video will answer this viewer at all.
   const open = (focus?.camera_access ?? "open") === "open";
   const canFlip = open && focus?.side_camera === true;
@@ -66,19 +71,21 @@ export function CameraCard({ focus }: { focus: FocusStatus | undefined }) {
         )}
       </div>
       <figure className="cam">
-        <div className="cam-tile" data-peeking={(open && peeking) || undefined}>
+        <div className="cam-tile" data-peeking={(open && peeking) || undefined} style={{ "--ratio": ratios[shown.name] ?? FALLBACK_RATIO } as CSSProperties}>
           {/* Both stay mounted: the one not showing swaps to a blank image, which is what closes its stream. */}
           {open &&
             focus != null &&
             FEEDS.slice(0, canFlip ? 2 : 1).map((feed) => (
               <Feed
                 key={feed.name}
+                name={feed.name}
                 src={feed.src}
                 alt={feed.alt}
                 overlay={focus[feed.overlayKey]}
                 cameraOk={focus.camera_ok}
                 wanted={peeking && feed === shown}
                 hidden={feed !== shown}
+                onRatio={reportRatio}
               />
             ))}
           <div className="cam-veil">

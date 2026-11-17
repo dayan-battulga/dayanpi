@@ -970,15 +970,17 @@ number-flow-react {
   margin-top: 28px;
 }
 
-/* One camera at a time, the whole width. A size container, so the picture inside can fit itself to it (.cam-picture). */
+/* The camera's own shape (--ratio, width over height, from CameraCard), so the whole picture fills it with no bars;
+   as wide as the page allows, but never taller than 520 px. Switching cameras glides it to the other shape. */
 .cam-tile {
   position: relative;
-  height: clamp(260px, 36vw, 440px);
+  width: min(100%, 520px * var(--ratio));
+  aspect-ratio: var(--ratio);
   overflow: hidden;
-  container-type: size;
   border-radius: 28px;
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--line);
+  transition: width 0.45s var(--ease);
 }
 
 /* While peeking, a video's dark around the picture, the same in both themes (the mockup's stand-in for the feed). */
@@ -988,15 +990,10 @@ number-flow-react {
     linear-gradient(180deg, #23262d, #121317);
 }
 
-/* The whole frame in the camera's own shape (--ratio, width over height), as big as the tile allows and centered,
-   so the boxes, which are fractions of the frame, sit on the picture. */
+/* The picture fills the tile, which already has its shape, so the boxes (fractions of the frame) sit on it. */
 .cam-picture {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(100cqw, 100cqh * var(--ratio));
-  height: min(100cqh, 100cqw / var(--ratio));
-  transform: translate(-50%, -50%);
+  inset: 0;
 }
 
 .cam-picture img {

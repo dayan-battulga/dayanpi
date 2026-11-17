@@ -365,6 +365,19 @@ it("shows one camera at a time; the switch flips it, remembered, and only the sh
   expect(feedSources()).toEqual([expect.stringMatching(/^data:/), expect.stringMatching(/^data:/)]);
 });
 
+it("fits the tile to each camera's own shape, so there are no bars", async () => {
+  const user = userEvent.setup();
+  const cameras = await openPi();
+  const tileRatio = () => (cameras.querySelector(".cam-tile") as HTMLElement).style.getPropertyValue("--ratio");
+  const focus = makeFocus({ side_camera: true });
+  FakeEventSource.latest?.send(makeSnapshot(focus));
+  expect(tileRatio()).toBe(String(768 / 432)); // the front overlay's frame
+  await user.click(within(cameras).getByRole("button", { name: "Show the side camera" }));
+  expect(tileRatio()).toBe(String(640 / 480)); // nothing from the side camera yet: the webcam's 4:3
+  FakeEventSource.latest?.send(makeSnapshot({ ...focus, side_overlay: focus.overlay && { ...focus.overlay, frame_width: 1280, frame_height: 720 } }));
+  expect(tileRatio()).toBe(String(1280 / 720));
+});
+
 it("has no switch without a side camera, and starts on the side camera when that was the pick", async () => {
   window.localStorage.setItem("dayanpi.camera", "side");
   const cameras = await openPi();

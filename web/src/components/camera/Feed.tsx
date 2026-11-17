@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type SyntheticEvent } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { useOverlayBoxes } from "@/hooks/useOverlayBoxes";
 import { isOverlayFresh } from "@/lib/boxes";
 import type { Overlay } from "@/lib/types";
@@ -6,25 +6,25 @@ import type { Overlay } from "@/lib/types";
 type FeedState = "off" | "connecting" | "live" | "retrying";
 
 const FEED_RETRY_MS = 2000;
-const FALLBACK_RATIO = 640 / 480; // until the overlay or the picture says the camera's shape
 // Swapping the src for a blank image is what actually closes the MJPEG connection.
 const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 
 interface FeedProps {
+  name: string;
   src: string;
   alt: string;
   overlay: Overlay | null | undefined;
   cameraOk: boolean;
   wanted: boolean; // peeking at this camera: only then does it stream
   hidden: boolean; // the other camera is the one showing
+  onRatio: (name: string, ratio: number) => void; // the camera's shape, width over height, so the tile can take it
 }
 
-// One camera's picture with its boxes. The tile is a fixed size, so the picture is fitted whole inside it in the
-// camera's own shape (dashboard.css .cam-picture): the boxes are fractions of the whole frame and stay on it.
-export function Feed({ src, alt, overlay, cameraOk, wanted, hidden }: FeedProps) {
+// One camera's picture with its boxes, filling the tile. The tile takes the camera's shape (onRatio), so the whole
+// frame shows with no bars, and the boxes, fractions of the frame, sit on it.
+export function Feed({ name, src, alt, overlay, cameraOk, wanted, hidden, onRatio }: FeedProps) {
   const [state, setState] = useState<FeedState>("off");
   const [stamp, setStamp] = useState(0);
-  const [ratio, setRatio] = useState(FALLBACK_RATIO);
   const boxes = useOverlayBoxes(overlay, cameraOk);
   const fresh = isOverlayFresh(overlay, cameraOk);
   const frameWidth = overlay?.frame_width;
@@ -42,16 +42,16 @@ export function Feed({ src, alt, overlay, cameraOk, wanted, hidden }: FeedProps)
 
   useEffect(() => {
     if (fresh && frameWidth != null && frameHeight != null && frameHeight > 0) {
-      setRatio(frameWidth / frameHeight);
+      onRatio(name, frameWidth / frameHeight);
     }
-  }, [fresh, frameWidth, frameHeight]);
+  }, [fresh, frameWidth, frameHeight, name, onRatio]);
 
   const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     if (state !== "off") {
       setState("live");
       if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-        setRatio(image.naturalWidth / image.naturalHeight);
+        onRatio(name, image.naturalWidth / image.naturalHeight);
       }
     }
   };
@@ -62,7 +62,7 @@ export function Feed({ src, alt, overlay, cameraOk, wanted, hidden }: FeedProps)
   };
 
   return (
-    <div className={state === "live" ? "cam-picture is-live" : "cam-picture"} hidden={hidden} style={{ "--ratio": ratio } as CSSProperties}>
+    <div className={state === "live" ? "cam-picture is-live" : "cam-picture"} hidden={hidden}>
       <img alt={alt} width="640" height="480" src={wanted ? `${src}?t=${stamp}` : BLANK_IMAGE} onLoad={handleLoad} onError={handleError} />
       <div className="overlay" aria-hidden="true">
         {boxes.map((box) => (
