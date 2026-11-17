@@ -49,6 +49,8 @@
       "app": "Google Chrome",
       "site": "youtube.com",
       "mac_tracking": true,
+      "camera_source": "pi",
+      "camera_paused": false,
       "camera_ok": true,
       "last_check": {
         "person": 0.93,
@@ -122,6 +124,8 @@
       "app": "Google Chrome",
       "site": "youtube.com",
       "mac_tracking": true,
+      "camera_source": "pi",
+      "camera_paused": false,
       "camera_ok": true,
       "last_check": {
         "person": 0.93,

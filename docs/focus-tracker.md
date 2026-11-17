@@ -389,7 +389,7 @@ If the camera's blocked, missing or busy in another app, the page says which and
 **Speed**, one line per way of running the models:
 
 - **WebGPU** runs them on the graphics chip. **WASM, N threads** on N processor cores at once (that needs the page's special headers, so "isolated: yes" on the second line). **WASM, 1 thread** on one core: the slowest, but it works everywhere.
-- **median / slowest**: how long one whole check took (grabbing the frame, YOLO on the whole frame, the zoomed phone pass, the palm model and a hand model per palm), counted after 3 warm-up checks. **first scan** is the very first one, with WebGPU's setup in it.
+- **median / slowest**: how long one whole check took (grabbing the frame, YOLO on the whole frame, then with someone there the zoomed phone pass, the palm model and a hand model per palm), counted after 3 warm-up checks. **first scan** is the very first one, with WebGPU's setup in it.
 - **late N of 60**: checks that started over 1.25 s after the one before. A check that takes longer than a second pushes the next one back.
 - **no frame**: checks where the camera hadn't sent a new picture. The very first check is often one (the camera's still waking up); more than that means the camera stalls.
 - **person seen**: how often it saw someone at 0.5 or more. They sat there the whole time, so it should be close to 100%. If one way says much less than the others, that way computes something wrong; don't use it.
@@ -418,7 +418,7 @@ What we're looking for: one of the two timers holding about 1 s everywhere, with
 
 In rough order of how cheap they are:
 
-1. **Run the hand models less.** They run on every check today (the palm model, then a hand model per palm), but phones only need them when the zoomed pass found a phone, and the peace sign survives one missed check. Running them only then, or every other check, takes out most of a check.
+1. **Run the hand models less.** They run on every check that sees someone (the palm model, then a hand model per palm), but phones only need them when the zoomed pass found a phone, and the peace sign survives one missed check. Running them only then, or every other check, takes out most of a check.
 2. **Check every 2 seconds.** The rules count checks, so the phone rule would need 3 of the last 5 to mean 10 s instead of 5. Still fine for a study tracker.
 3. **Smaller models**: YOLO at 320x240, or the models quantized to int8 for WASM. Both mean re-measuring accuracy on real desk frames first, like step 1 did.
 4. If only the background part fails: the real tracker uses whichever timer held up. If frames stop while hidden, the pop-out window (or a pinned tab in front) becomes part of the setup.
@@ -427,6 +427,63 @@ In rough order of how cheap they are:
 
 - `GET /api/models/<name>` serves the four ONNX files in `models/` (signed in, read-only, cached for a year). Nothing else in that folder is reachable. A changed model needs a new file name, because browsers keep the old one.
 - The `/track/` pages get `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which is what gives WASM its threads. Files under `/assets/` get the embedder header too, because a worker inside an isolated page only starts when its own script says so; other pages ignore it there. An isolated page refuses anything from another site, which is fine: everything it loads comes off the Pi.
-- The browser runs the same pipeline as the Pi, ported to TypeScript in `web/src/lib/vision/`: `detector.ts`, `hands.ts`, `gestures.ts`, and `worker.ts` (the per-frame part of `focus/worker.py`), with `image.ts` standing in for the few OpenCV calls. Same constants, same steps. The face model isn't ported: the tracker only logs its turn and tilt, and nothing reads them. ONNX Runtime Web runs the models, from npm, with its WASM file in `dayanpi/static/assets/`, and only the camera test's worker loads it.
+- The browser runs the same pipeline as the Pi, ported to TypeScript in `web/src/lib/vision/`: `detector.ts`, `hands.ts`, `gestures.ts`, and `worker.ts` (the per-frame part of `focus/worker.py`), with `image.ts` standing in for the few OpenCV calls. Same constants, same steps. The face model isn't ported: the tracker only logs its turn and tilt, and nothing reads them. ONNX Runtime Web runs the models, from npm (pinned to one exact version, so the 29.5 MB WASM file in `dayanpi/static/assets/` only changes when we upgrade on purpose), and only the workers load it, never a page.
 - **The port is checked against the Pi's code.** `.venv/bin/python -m dayanpi.vision.export_fixture` runs made-up model outputs, boxes and hands through the Python and saves what comes out to `web/src/lib/vision/python-fixture.json`; the TypeScript tests (`npm test`) run the same inputs and have to match. Change anything in `dayanpi/vision/` and `tests/test_vision_fixture.py` fails until you re-run the export, and then `npm test` tells you what the TypeScript side needs.
 - Each way of running the models gets its own worker (ONNX Runtime fixes its thread count once it starts). Camera frames get to the workers through Chrome's `MediaStreamTrackProcessor`, and like the Pi, a frame is never scanned twice.
+
+## The tracker (study room step 4, part 2)
+
+`/track` is the real thing: a member's laptop camera feeds their own desk the same way the Pi's cameras feed yours. Their state, today's totals, the timeline, the to-do time, the calendar and the day pages all work exactly like yours, because the Pi runs their numbers through the same tracker.
+
+**Only numbers leave the laptop.** The video stays in the browser (the preview says "Only you see this"). Each check sends the Pi what the tracker reads from a check: how sure it is there's a person, the best phone near a hand, the hand sign it saw (or none) and how long the check took. That's `POST /api/track/reading`, about once a second, for the sender's own desk only.
+
+### How someone starts tracking
+
+[MANUAL.md](MANUAL.md#a-friends-camera-the-tracker) has the steps to send them. In short: Chrome, **https://dayoon.tail279594.ts.net/track**, **Allow camera**, keep the tab open. Their desk's line under the stats says "No camera yet... Open the tracker" with a link until the first readings arrive.
+
+### Where a desk's checks come from
+
+Settings → **Camera**: "This desk's Pi cameras" or "This browser's camera".
+
+- Only your desk can pick the Pi's cameras. A member's is always the browser (the Pi radio is greyed out, and the route says 403 if they try anyway).
+- Your desk starts on the Pi's cameras. Pick the browser and the Pi's worker stops scanning (no detector runs at all) and your desk takes `/track`'s readings instead, from any computer. Pick the Pi again and it's back.
+- Readings only count for a desk set to the browser. Your desk on the Pi gets a 409 ("this desk uses the Pi's cameras"), and `/track` says so, with a button to Settings.
+- The pick is saved in each desk's folder as `camera_source.json`.
+
+### What the Pi does with a reading
+
+- It turns the numbers into the same reading its own cameras make (a person and a phone at those confidences) and runs it through that desk's tracker. Same rules, same log lines, same to-do time. `tests/test_browser_camera.py` checks that a run of browser readings and the same run of Pi readings end in the same states, segments and totals.
+- **The hand sign hold is the Pi's**, one per desk, so the page sends the sign it saw and the Pi decides when it fires (held 1 s, like yours). A peace sign on a member's desk is a `gesture` line in their log, and the pill shows on their own page with the to-do message (the template one). Nobody hears it yet: the speaker is in your room, so saying it out loud comes in step 5.
+- **Nothing coming in for 30 s means "unknown"**, like a stuck camera: once a second the Pi gives every browser desk that heard nothing for 1.5 s a check without a frame. A closed laptop or a closed tab ends up there.
+- **Pause** on `/track` stops the camera and the models, and tells the Pi. The desk goes to "unknown" right away (not after 30 s) and says "Tracking is paused on the tracker page" until the next reading.
+- **Every value is checked.** Person and phone must be 0 to 1, the time 0 to 60,000 ms, the sign one the Pi knows, and any other field (a picture, say) is a 422. More than about one a second is a 429: it allows one a second in the long run and two close together, so one late reading and the next on-time one both get through.
+
+### Keeping it light
+
+It runs for hours on someone's laptop, so it does as little as it can:
+
+- **WebGPU** when the laptop has it (part 1's fastest), otherwise WASM on 2 threads. One session per model, made once.
+- **Nobody there:** once nobody's been seen for 10 s it checks every 3 s, and goes back to every second on the first check that sees someone. The zoomed phone pass and the hand models only run on checks that see someone (with nobody there there's no phone to keep and no sign to read).
+- **Struggling:** if at least half the checks over a minute took over 600 ms or started late, or the battery is under 20% and unplugged, it checks every 2 s, and goes back after a good minute. The tracker's rules cope with gaps that size (a gap counts up to 5 s).
+- The line under the preview says what it's doing: time per check, memory, which way it runs the models, and why it's checking less often when it is.
+- **In the background**, part 1 showed the timer in a worker kept one check a second in a hidden tab, minimized and popped out, while a timer on the page fell to every 2 s when hidden. So the checks run on the worker's own timer, and the worker sends the readings itself. There's no Pop out button: the worker didn't need it.
+
+### What it costs (measured)
+
+A 30-minute run on a Mac (M2 Pro) in headless Chrome, with a fake camera looping 40 s at the desk, 25 s away and 15 s on the phone:
+
+| | |
+| --- | --- |
+| time per check | about 100 to 130 ms with someone there (WebGPU), 40 to 65 ms with nobody (just the one YOLO pass) |
+| checks | 1,535 in 30 min, every one answered; gaps: median 1.00 s, 9 in 10 under 1.03 s, the longest 3.2 s (nobody there) |
+| memory | 52 MB at the start, 45 MB at the end, never over 52 MB: no leak |
+| CPU | about half of one core for all of Chrome, the preview and the video decoding included |
+
+The `/track/test` results this was built on (127 ms a check with WebGPU) say a laptop like that comes out about the same; run the test on a new laptop first. Headless Chrome counts every tab as in front, so the hidden-tab part of this run proves nothing; part 1's real Chrome run (the worker's timer held 1.00 s hidden, minimized and popped out) is the evidence for that.
+
+### How it works (for changing it)
+
+- Page: `web/src/components/track/TrackPage.tsx` (Track.dc.html's ask, running and blocked steps, plus paused and the other camera problems). Worker: `tracker.worker.ts`, which shares the frame reader and the model sessions with the camera test's worker through `workerKit.ts`. The pace rules are `web/src/lib/trackPace.ts`, the messages and the load line `web/src/lib/track.ts`.
+- Pi: `dayanpi/focus/browser_camera.py` (the rate limit, the pause, the desk's own sign hold, and the ticks), `dayanpi/focus/camera_source.py` (the saved pick), and the routes in `app.py`: `POST /api/track/reading`, `POST /api/track/pause` and `POST /api/track/source`, all in `MEMBER_WRITES`.
+- `/track` gets the same isolation headers as `/track/test`.
+

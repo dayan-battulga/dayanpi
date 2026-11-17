@@ -194,10 +194,18 @@ it("gives a member Pause/Resume for their own desk's Mac tracking", async () => 
   expect(screen.getByRole("button", { name: "Resume Mac tracking" })).toBeInTheDocument();
 });
 
-it("says a member's desk has no camera yet, instead of a broken detector", async () => {
+it("sends a desk on a browser's camera to the tracker while nothing's coming in, instead of a broken detector", async () => {
   serveDesk(MEMBER);
-  openDesk({ state: "unknown", enabled: false, camera_ok: false, last_check: null, voice: null, camera_access: "owner_only" });
+  openDesk({ state: "unknown", enabled: true, camera_ok: false, last_check: null, voice: null, camera_access: "owner_only", camera_source: "browser", camera_paused: false });
   await screen.findByRole("button", { name: "Account: Sam" });
-  expect(screen.getByText("No camera on your desk yet, so time isn't counted")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open the tracker" })).toHaveAttribute("href", "/track");
   expect(screen.queryByText(/detector/)).toBeNull();
+});
+
+it("says a paused tracker is paused, with no link", async () => {
+  serveDesk(MEMBER);
+  openDesk({ state: "unknown", enabled: true, camera_ok: false, last_check: null, voice: null, camera_access: "owner_only", camera_source: "browser", camera_paused: true });
+  await screen.findByRole("button", { name: "Account: Sam" });
+  expect(screen.getByText("Tracking is paused on the tracker page")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Open the tracker" })).toBeNull();
 });

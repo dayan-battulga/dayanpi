@@ -48,13 +48,29 @@ it("finds the median of odd and even counts", () => {
   expect([findMedian([3, 1, 2]), findMedian([4, 1, 3, 2]), findMedian([])]).toEqual([2, 2.5, 0]);
 });
 
+it("asks for the wait again after every check", async () => {
+  vi.useFakeTimers();
+  const starts: number[] = [];
+  const waits = [3000, 1000, 2000];
+  const stop = startLoop(
+    async () => {
+      starts.push(performance.now());
+    },
+    () => waits[starts.length - 1] ?? 1000,
+  );
+  await vi.advanceTimersByTimeAsync(6500);
+  stop();
+  const gaps = starts.slice(1).map((start, index) => start - starts[index]);
+  expect(gaps).toEqual([3000, 1000, 2000]);
+});
+
 it("starts a check every second from each start, waits out a slow one, and stops", async () => {
   vi.useFakeTimers();
   const starts: number[] = [];
   const stop = startLoop(async () => {
     starts.push(performance.now());
     await new Promise((resolve) => setTimeout(resolve, starts.length === 2 ? 1500 : 200));
-  }, 1000);
+  }, () => 1000);
   await vi.advanceTimersByTimeAsync(4200);
   stop();
   await vi.advanceTimersByTimeAsync(3000);

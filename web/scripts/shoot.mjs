@@ -112,12 +112,15 @@ function buildQuery(values) {
 }
 
 // Your installed Chrome first (the Mac), then playwright-core's own Chromium if one is there, then a
-// globally installed playwright (Claude Code cloud sessions come with one).
+// globally installed playwright (Claude Code cloud sessions come with one). Chrome's fake camera (a test pattern)
+// stands in for /track's; a fixture's "permissions" decides whether the page may have it.
+const CHROME_ARGS = ["--use-fake-device-for-media-stream"];
+
 async function openBrowser() {
   const launchers = [
-    async () => (await import("playwright-core")).chromium.launch({ channel: process.env.SHOTS_CHANNEL ?? "chrome" }),
-    async () => (await import("playwright-core")).chromium.launch(),
-    async () => createRequire(import.meta.url)("playwright").chromium.launch(),
+    async () => (await import("playwright-core")).chromium.launch({ channel: process.env.SHOTS_CHANNEL ?? "chrome", args: CHROME_ARGS }),
+    async () => (await import("playwright-core")).chromium.launch({ args: CHROME_ARGS }),
+    async () => createRequire(import.meta.url)("playwright").chromium.launch({ args: CHROME_ARGS }),
   ];
   const problems = [];
   let browser = null;
@@ -186,10 +189,20 @@ function serveFixtures(fixture) {
         } else if (pathOnly.startsWith("/api/") || pathOnly.startsWith("/video")) {
           const routes = fixture.routes ?? {};
           const body = routes[`${request.method} ${url}`] ?? routes[url] ?? routes[`${request.method} ${pathOnly}`] ?? routes[pathOnly];
-          // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}.
+          // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}, and
+          // {"$file": "models/x.onnx"} is that file from the repo's models/ (the tracker's models), nothing else.
           const status = body?.$status ?? 200;
+          const file = body?.$file === undefined ? null : path.resolve(repoDir, body.$file);
           if (body === undefined) {
             response.writeHead(404, { "content-type": "application/json" }).end("{}");
+          } else if (file !== null) {
+            const inModels = file.startsWith(path.join(repoDir, "models") + path.sep) && existsSync(file);
+            if (inModels) {
+              response.writeHead(200, { "content-type": "application/octet-stream" });
+              createReadStream(file).pipe(response);
+            } else {
+              response.writeHead(404).end();
+            }
           } else {
             response.writeHead(status, { "content-type": "application/json", ...body?.$headers }).end(JSON.stringify(body?.$status === undefined ? body : body.body));
           }
@@ -222,6 +235,9 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
     timezoneId: fixture.timezone ?? "America/Chicago",
     reducedMotion: "no-preference",
   });
+  if (fixture.permissions) {
+    await context.grantPermissions(fixture.permissions);
+  }
   if (fixture.storage) {
     await context.addInitScript((entries) => {
       Object.entries(entries).forEach(([key, value]) => window.localStorage.setItem(key, value));

@@ -86,16 +86,16 @@ export interface TestReport {
   background: { choice: BackendChoice; segments: PlaceSegment[] } | null;
 }
 
-// Once every intervalMs counted from each check's start, never two at once, like the Pi's LoopThread: a slow
-// check pushes the next one back. Returns the stop.
-export function startLoop(runCheck: () => Promise<void>, intervalMs: number): () => void {
+// Each check waits findIntervalMs() (asked after the one before), counted from that one's start, and never two at
+// once, like the Pi's LoopThread: a slow check pushes the next one back. Returns the stop.
+export function startLoop(runCheck: () => Promise<void>, findIntervalMs: () => number): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const step = async () => {
     const started = performance.now();
     await runCheck();
     if (!stopped) {
-      timer = setTimeout(step, Math.max(0, intervalMs - (performance.now() - started)));
+      timer = setTimeout(step, Math.max(0, findIntervalMs() - (performance.now() - started)));
     }
   };
   void step();

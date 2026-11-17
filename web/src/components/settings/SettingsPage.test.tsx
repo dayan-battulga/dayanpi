@@ -58,7 +58,7 @@ it("starts on Profile, and the list picks a section, marked, rising in fresh", a
   serveSettings(OWNER);
   const user = renderSettings();
   expect(await screen.findByRole("region", { name: "Profile" })).toBeInTheDocument();
-  expect(sectionNames()).toEqual(["Profile", "Mac helper", "Room and invites"]);
+  expect(sectionNames()).toEqual(["Profile", "Camera", "Mac helper", "Room and invites"]);
   expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByLabelText("Name")).toHaveValue("Dayan");
   const before = document.querySelector(".settings-section");
@@ -86,7 +86,7 @@ it("shows a member only their own things, and never asks for the owner's lists",
   const sent = serveSettings(MEMBER);
   const user = renderSettings();
   await screen.findByRole("region", { name: "Profile" });
-  expect(sectionNames()).toEqual(["Profile", "Mac helper"]);
+  expect(sectionNames()).toEqual(["Profile", "Camera", "Mac helper"]);
   const mac = await openSection(user, "Mac helper");
   expect(await mac.findByText("MacBook")).toBeInTheDocument();
   expect(mac.getByRole("switch", { name: "Track apps and sites" })).toBeInTheDocument(); // their own desk's
@@ -106,6 +106,42 @@ it("flips Mac tracking from its switch, with the same POST as the Mac line", asy
 
   expect(toggle).toHaveAttribute("aria-checked", "false");
   await waitFor(() => expect(sent.filter((request) => request.path === "/api/mac/tracking").map((request) => [request.method, request.body])).toEqual([["POST", { enabled: false }]]));
+});
+
+it("lets the owner switch the desk from the Pi's cameras to this browser's", async () => {
+  const sent = serveSettings(OWNER, undefined, { "POST /api/track/source": answer({ source: "browser" }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi" })));
+  const camera = await openSection(user, "Camera");
+  expect(camera.getByRole("radio", { name: "This desk’s Pi cameras" })).toBeChecked();
+
+  await user.click(camera.getByRole("radio", { name: "This browser’s camera" }));
+
+  expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  expect(camera.getByRole("link", { name: "the tracker" })).toHaveAttribute("href", "/track");
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/track/source").map((request) => [request.method, request.body])).toEqual([["POST", { source: "browser" }]]));
+});
+
+it("never lets a member pick the Pi's cameras", async () => {
+  const sent = serveSettings(MEMBER);
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "browser" })));
+  const camera = await openSection(user, "Camera");
+  const pi = camera.getByRole("radio", { name: "This desk’s Pi cameras" });
+  expect(pi).toBeDisabled();
+  expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  await user.click(pi);
+  expect(sent.map((request) => request.path)).not.toContain("/api/track/source");
+});
+
+it("puts the pick back and says so when the Pi refuses it", async () => {
+  serveSettings(OWNER, undefined, { "POST /api/track/source": answer({ detail: "only the owner's desk has the Pi's cameras" }, 403) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "browser" })));
+  const camera = await openSection(user, "Camera");
+  await user.click(camera.getByRole("radio", { name: "This desk’s Pi cameras" }));
+  expect(await camera.findByRole("alert")).toHaveTextContent("only the owner's desk has the Pi's cameras");
+  expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
 });
 
 it("shows a new token's secret once, and revokes a token with a JSON DELETE", async () => {

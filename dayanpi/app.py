@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketClose
-from pydantic import BaseModel, Field, StrictBool, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
 from typing import Annotated, Literal
 
@@ -25,15 +25,18 @@ from dayanpi.hardware import collector
 from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
+from dayanpi.focus.browser_camera import BrowserCheck
+from dayanpi.focus.camera_source import SOURCES
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
-from dayanpi.focus.coach import TodoCoach, read_bedtime
+from dayanpi.focus.coach import TodoCoach, collect_facts, describe_todos, read_bedtime
 from dayanpi.focus.todos import TEXT_MAX
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
 from dayanpi.vision import detector, hands
+from dayanpi.vision.gestures import HAND_SIGNS
 
 # uvicorn only configures its own loggers; without this the app's INFO lines
 # ("focus tracker running", "voice off, would say ...") never reach journalctl.
@@ -47,6 +50,7 @@ VIDEO_MAX_CONCURRENT = 2
 STREAM_MAX_CONCURRENT = 5  # per account
 FEED_SESSION_CHECK_S = 1.0  # an open camera feed checks its viewer is still signed in this often
 AFTER_MIDNIGHT_S = 5.0  # the day pages get written this long after local midnight
+READING_MS_MAX = 60_000  # a browser check that took longer than this is a broken one
 # The biggest write body. FastAPI reads a whole body before any max_length runs, and the sign-in is public.
 MAX_BODY_BYTES = 64 * 1024
 
@@ -68,6 +72,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
+    r"|POST /api/track/(reading|pause|source)"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -82,10 +87,9 @@ side_stream = create_side_stream()
 latest_snapshot: dict | None = None  # the Pi's numbers, which only the owner gets
 latest_focus: dict[str, dict] = {}  # every desk's focus status by username, made once a second
 desks = Desks(find_data_dir())
-owner_desk: Desk | None = None  # the desk the Pi's cameras, the voice and the peace sign feed; opened at startup
+owner_desk: Desk | None = None  # the desk the Pi's cameras and the voice can feed; opened at startup
 worker: FocusWorker | None = None
 voice = VoiceAnnouncer()
-last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill
 LLM_MODEL = read_llm_model()
 coach: TodoCoach | None = None  # it reads the owner's to-dos, so it's made at startup
 
@@ -116,30 +120,45 @@ def stamp_age(event: dict | None, now: float) -> dict | None:
     return stamped
 
 
-# A desk the Pi's cameras don't watch: everyone's but the owner's, until each desk gets its own camera.
-NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None, "spoken": None, "voice": None}
+# A desk the Pi's cameras and voice don't reach: everyone's but the owner's.
+NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None, "voice": None}
 
 
 def build_camera_status(now: float) -> dict:
     """The owner's desk's parts that come off the Pi's cameras and voice."""
     running = worker
-    spoken = last_spoken
     camera = {
         "enabled": running is not None and running.running,
         "side_camera": side_stream is not None,
         "overlay": stamp_age(None if running is None else running.last_overlay, now),
         "side_overlay": stamp_age(None if running is None else running.last_side_overlay, now),
         "gesture": stamp_age(None if running is None else running.last_gesture, now),
-        "spoken": None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])},
         "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem},
     }
     return camera
 
 
+def find_camera_source(desk: Desk) -> str:
+    """"pi" or "browser". Only the owner's desk can have the Pi's cameras, and has them until the owner picks a browser."""
+    source = "pi" if desk is owner_desk and desk.camera_source.source != "browser" else "browser"
+    return source
+
+
 def build_desk_status(desk: Desk, now: float) -> dict:
     """One desk's focus status, for the API and the stats stream."""
-    status = desk.tracker.status(now) | {"todos": desk.todos.snapshot(now), "mac_tracking": desk.mac_tracking.enabled}
+    source = find_camera_source(desk)
+    spoken = desk.last_spoken
+    status = desk.tracker.status(now) | {
+        "todos": desk.todos.snapshot(now),
+        "mac_tracking": desk.mac_tracking.enabled,
+        "camera_source": source,
+        "camera_paused": source == "browser" and desk.browser.paused,
+        "spoken": None if spoken is None else {**stamp_age(spoken, now), "speaking": voice.is_saying(spoken["text"])},
+    }
     status |= build_camera_status(now) if desk is owner_desk else NO_CAMERA
+    if source == "browser":
+        # The tracker takes /track's readings whenever they come, and its hand signs are the desk's own.
+        status |= {"enabled": True, "gesture": stamp_age(desk.browser.last_gesture, now)}
     return status
 
 
@@ -189,24 +208,31 @@ def shape_snapshot(request: Request) -> dict | None:
     return shaped
 
 
-def handle_focus_update(update: FocusUpdate, now: float) -> None:
-    """Runs on the worker thread after every check. Callouts go to the journal, and to the speaker when they speak."""
+def handle_focus_update(desk: Desk, update: FocusUpdate, now: float) -> None:
+    """After every check on a desk, from the worker or /track. Callouts go to the journal, and only mine to the
+    speaker, which is in my room."""
     for callout in update.callouts:
-        logger.info("focus callout %s: %s", callout.name, callout.text)
-        if callout.speak:
+        logger.info("focus callout for %s, %s: %s", desk.username, callout.name, callout.text)
+        if callout.speak and desk is owner_desk:
             voice.say(callout.text)
-    owner_desk.todos.track(update.state == "working", now)
+    desk.todos.track(update.state == "working", now)
 
 
-def say_todos(now: float) -> dict:
-    """Speaks the coach's message and returns which kind it was, for the gesture's log line.
-    The text goes to the page (last_spoken), which shows it while the voice says it; it's never logged."""
-    global last_spoken
-    message = coach.pick(now)
-    logger.info("peace sign: speaking the %s message", message.source)
-    voice.say(message.text)
-    last_spoken = {"text": message.text, "at": round(now, 3)}
-    return {"spoken": message.source}
+def say_todos(desk: Desk, now: float) -> dict:
+    """Mine: the coach's message, out loud, and which kind it was for the gesture's log line. Anyone else's: the
+    template over their own to-dos, on their page only (saying it out loud comes later). The text goes to the page
+    (desk.last_spoken), which shows it while the voice says it; it's never logged."""
+    details = {}
+    if desk is owner_desk:
+        message = coach.pick(now)
+        logger.info("peace sign: speaking the %s message", message.source)
+        voice.say(message.text)
+        text = message.text
+        details = {"spoken": message.source}
+    else:
+        text = describe_todos(collect_facts(desk.todos.snapshot(now), now, read_bedtime()))
+    desk.last_spoken = {"text": text, "at": round(now, 3)}
+    return details
 
 
 # What each hand sign does when it fires. Its finger rule lives in vision/gestures.py (HAND_SIGNS).
@@ -214,10 +240,10 @@ def say_todos(now: float) -> dict:
 SIGN_ACTIONS = {"peace": say_todos}
 
 
-def handle_gesture(name: str, now: float) -> None:
-    """Runs on the worker thread when a hand sign fires."""
-    details = SIGN_ACTIONS[name](now) if name in SIGN_ACTIONS else {}
-    owner_desk.tracker.record_gesture(name, now, **details)
+def handle_gesture(desk: Desk, name: str, now: float) -> None:
+    """When a hand sign fires on a desk, from the worker or /track."""
+    details = SIGN_ACTIONS[name](desk, now) if name in SIGN_ACTIONS else {}
+    desk.tracker.record_gesture(name, now, **details)
 
 
 def start_focus_worker(desk: Desk) -> FocusWorker | None:
@@ -233,24 +259,40 @@ def start_focus_worker(desk: Desk) -> FocusWorker | None:
             stream,
             scanner,
             desk.tracker,
-            on_update=handle_focus_update,
-            on_gesture=handle_gesture,
+            on_update=lambda update, now: handle_focus_update(desk, update, now),
+            on_gesture=lambda name, now: handle_gesture(desk, name, now),
             wait_for_clock_first=True,
             side_stream=side_stream,
             hand_scanner=focus_worker.build_hand_scanner(),
+            is_feeding=lambda: find_camera_source(desk) == "pi",
         )
         started.start()
         logger.info("focus tracker running; log in %s", desk.log.directory)
     return started
 
 
+def tick_browser_desks(now: float) -> None:
+    """Every desk on a browser's camera that heard nothing new gets a check without a frame, so a closed laptop is
+    "unknown" after 30 s, like a stuck camera. One desk's trouble doesn't stop the others'."""
+    for desk in desks.list():
+        if find_camera_source(desk) == "browser":
+            try:
+                update = desk.browser.tick(now)
+                if update is not None:
+                    handle_focus_update(desk, update, now)
+            except Exception:
+                logger.exception("browser camera tick failed for %s", desk.username)
+
+
 async def snapshot_producer() -> None:
-    """One owner of the sampler, and every desk's status once a second; SSE clients only read what it made."""
+    """One owner of the sampler, the browser desks' ticks, and every desk's status once a second; SSE clients only
+    read what it made."""
     global latest_snapshot, latest_focus
     while True:
         try:
             snapshot = collector.snapshot(sampler)
             now = time.time()
+            await asyncio.to_thread(tick_browser_desks, now)
             latest_focus = {desk.username: build_desk_status(desk, now) for desk in desks.list()}
             latest_snapshot = snapshot
         except Exception:
@@ -471,9 +513,10 @@ async def session_middleware(request: Request, call_next):
     # The tracker pages run the models on threads, which only an isolated page gets. Their workers load from /assets/,
     # and a worker in an isolated page only starts if its own script says COEP too; any other page ignores it there.
     path = request.scope["path"]
-    if path.startswith("/track/"):
+    is_tracker_page = path == "/track" or path.startswith("/track/")
+    if is_tracker_page:
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    if path.startswith(("/track/", "/assets/")):
+    if is_tracker_page or path.startswith("/assets/"):
         response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     return response
 
@@ -669,6 +712,71 @@ def set_mac_tracking(request: Request, change: MacTrackingChange):
     return {"enabled": desk.mac_tracking.enabled}
 
 
+class TrackReading(BaseModel):
+    """One check from /track: what the tracker reads from it and how long it took. Never a picture, and nothing
+    else: an extra field is a 422."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    person: float = Field(ge=0, le=1)
+    phone: float = Field(ge=0, le=1)  # the best phone near a hand
+    sign: Literal[tuple(HAND_SIGNS)] | None = None  # the hand sign this check saw; the Pi does the hold
+    elapsed_ms: float = Field(ge=0, le=READING_MS_MAX)
+
+
+class TrackSource(BaseModel):
+    source: Literal[SOURCES]
+
+
+def require_browser_source(desk: Desk) -> None:
+    if find_camera_source(desk) != "browser":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="this desk uses the Pi's cameras")
+
+
+def describe_tracking(desk: Desk, now: float) -> dict:
+    """What /track shows under the preview, from the Pi's own clock."""
+    focus = desk.tracker.status(now)
+    described = {"state": focus["state"], "seconds_in_state": focus["seconds_in_state"], "paused": desk.browser.paused}
+    return described
+
+
+@app.post("/api/track/reading")
+def track_reading(request: Request, reading: TrackReading):
+    """A browser's check, for the sender's own desk, about one a second (faster is a 429)."""
+    desk = find_desk(request)
+    require_browser_source(desk)
+    now = time.time()
+    taken = desk.browser.take(BrowserCheck(reading.person, reading.phone, reading.sign, reading.elapsed_ms), now)
+    if taken is None:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="one reading a second")
+    handle_focus_update(desk, taken.update, now)
+    if taken.gesture is not None:
+        logger.info("gesture on %s's desk: %s", desk.username, taken.gesture)
+        handle_gesture(desk, taken.gesture, now)
+    return describe_tracking(desk, now)
+
+
+@app.post("/api/track/pause")
+def pause_tracking(request: Request):
+    """/track's Pause: the desk says paused, not broken, until its next reading."""
+    desk = find_desk(request)
+    require_browser_source(desk)
+    now = time.time()
+    handle_focus_update(desk, desk.browser.pause(now), now)
+    return describe_tracking(desk, now)
+
+
+@app.post("/api/track/source")
+def set_camera_source(request: Request, change: TrackSource):
+    """Settings → Camera. Only the owner's desk can have the Pi's cameras."""
+    desk = find_desk(request)
+    if change.source == "pi" and auth_routes.read_viewer(request).user.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the owner's desk has the Pi's cameras")
+    if desk.camera_source.set(change.source):
+        logger.info("%s's desk now takes its checks from the %s", desk.username, "Pi's cameras" if change.source == "pi" else "browser")
+    return {"source": find_camera_source(desk)}
+
+
 class SlotResponse(StreamingResponse):
     """A stream on a capped route, which gives its slot back the moment it ends, however it ends.
 
@@ -758,6 +866,7 @@ def model_file(name: str):
 @app.get("/settings")
 @app.get("/me")
 @app.get("/pi")
+@app.get("/track")
 @app.get("/track/test")
 def page():
     """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""

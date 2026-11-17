@@ -104,6 +104,7 @@ class FocusWorker(LoopThread):
         wait_for_clock_first: bool = False,
         side_stream: CameraStream | None = None,
         hand_scanner=None,
+        is_feeding: Callable[[], bool] = lambda: True,
     ) -> None:
         super().__init__(name="focus-worker", interval_s=interval_s)
         self.front = CameraFeed("front", stream)
@@ -115,6 +116,7 @@ class FocusWorker(LoopThread):
         self._on_update = on_update
         self._on_gesture = on_gesture
         self._wait_for_clock_first = wait_for_clock_first
+        self._is_feeding = is_feeding
         self.signs = GestureTracker()
         self.hand_failures = 0
         self.checks = 0
@@ -222,4 +224,6 @@ class FocusWorker(LoopThread):
                 logger.warning("no clock sync after %.0f s, focus checks starting anyway", CLOCK_WAIT_S)
 
     def tick(self) -> None:
-        self.run_once(self._clock())
+        # Off while the desk takes a browser's camera instead (Settings → Camera): no scans, so no stale numbers either.
+        if self._is_feeding():
+            self.run_once(self._clock())

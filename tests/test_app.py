@@ -235,14 +235,14 @@ def test_focus_status_reports_the_voice():
 def test_callouts_reach_the_voice(monkeypatch):
     from dayanpi.focus import tracker as focus
 
-    use_owner_desk(monkeypatch)
+    desk = use_owner_desk(monkeypatch)
     said = []
     monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
     update = focus.FocusUpdate(
         state="phone",
         callouts=[focus.Callout("instant_pickup", "Already?"), focus.Callout("quiet", "Only for the log.", speak=False)],
     )
-    app.handle_focus_update(update, time.time())
+    app.handle_focus_update(desk, update, time.time())
     assert said == ["Already?"]
 
 
@@ -267,7 +267,7 @@ def test_peace_speaks_the_coachs_message_and_logs_which_kind(monkeypatch, tmp_pa
     todos.add("reply to emails", now)
     todos.change(laundry, now, done=True)
 
-    app.handle_gesture("peace", now)
+    app.handle_gesture(desk, "peace", now)
 
     assert len(said) == 1
     assert "You have 2 things to do: finish the report and reply to emails. Done today: do laundry." in said[0]
@@ -303,10 +303,9 @@ def test_the_status_says_what_the_peace_sign_is_saying_until_aplay_finishes(monk
         piper_installed=lambda: True,
     )
     monkeypatch.setattr(app, "voice", speaker)
-    monkeypatch.setattr(app, "last_spoken", None)
     with open_client() as client:
         assert client.get("/api/focus").json()["spoken"] is None
-        app.handle_gesture("peace", time.time())
+        app.handle_gesture(app.owner_desk, "peace", time.time())
         assert aplay.playing.wait(timeout=5)
         playing = client.get("/api/focus").json()["spoken"]
         aplay.release.set()
@@ -326,12 +325,11 @@ def test_the_spoken_text_is_never_logged(monkeypatch, caplog):
     desk = use_owner_desk(monkeypatch)
     log = desk.log
     monkeypatch.setattr(app, "coach", TodoCoach(desk.todos, 0, None))
-    monkeypatch.setattr(app, "last_spoken", None)
     monkeypatch.setattr(app.voice, "say", lambda text: True)
     now = time.time()
     with caplog.at_level(logging.INFO):
-        app.handle_gesture("peace", now)
-    text = app.last_spoken["text"]
+        app.handle_gesture(desk, "peace", now)
+    text = desk.last_spoken["text"]
     assert text not in caplog.text
     assert text not in json.dumps(log.read_day(format_day(now)))
 
@@ -387,14 +385,15 @@ def test_todo_routes_add_edit_check_current_and_delete():
 def test_working_counts_time_for_the_current_todo(monkeypatch):
     from dayanpi.focus.tracker import FocusUpdate
 
-    todos = use_owner_desk(monkeypatch).todos
+    desk = use_owner_desk(monkeypatch)
+    todos = desk.todos
     now = time.time()
     item_id = todos.add("hook test", now)["id"]
     todos.change(item_id, now, current=True)
     for second in range(4):
-        app.handle_focus_update(FocusUpdate(state="working"), now + second)
+        app.handle_focus_update(desk, FocusUpdate(state="working"), now + second)
     for second in range(4, 8):
-        app.handle_focus_update(FocusUpdate(state="phone"), now + second)
+        app.handle_focus_update(desk, FocusUpdate(state="phone"), now + second)
     open_items = todos.snapshot(now + 8)["open"]
     assert [item["seconds"] for item in open_items if item["id"] == item_id] == [4]
 
@@ -1186,6 +1185,9 @@ ACCESS = {
     ("POST", "/api/mac/app"): ("/api/mac/app", {"app": ""}, 401, 422, 422),
     ("GET", "/api/mac/tracking"): ("/api/mac/tracking", None, 401, 200, 200),
     ("POST", "/api/mac/tracking"): ("/api/mac/tracking", {"enabled": "maybe"}, 401, 422, 422),
+    ("POST", "/api/track/reading"): ("/api/track/reading", {"person": 2, "phone": 0, "elapsed_ms": 1}, 401, 422, 422),
+    ("POST", "/api/track/pause"): ("/api/track/pause", {}, 401, 200, 200),  # no startup here, so my desk is on a browser too
+    ("POST", "/api/track/source"): ("/api/track/source", {"source": "webcam"}, 401, 422, 422),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
     ("GET", "/video"): ("/video", None, 401, 404, 200),
     ("GET", "/video/side"): ("/video/side", None, 401, 404, 200),
@@ -1194,6 +1196,7 @@ ACCESS = {
     ("GET", "/settings"): ("/settings", None, 303, 200, 200),
     ("GET", "/me"): ("/me", None, 303, 200, 200),
     ("GET", "/pi"): ("/pi", None, 303, 200, 200),  # members get the page too; it sends them on to /me
+    ("GET", "/track"): ("/track", None, 303, 200, 200),
     ("GET", "/track/test"): ("/track/test", None, 303, 200, 200),
     ("GET", "/api/models/{name}"): ("/api/models/palm_detection_mediapipe_2023feb.onnx", None, 401, 200, 200),
     ("GET", "/"): ("/", None, 303, 200, 200),  # the static mount: the dashboard and its files
@@ -1227,12 +1230,12 @@ def test_the_owner_only_reads_turn_a_member_away():
         assert (reply.status_code, reply.json()) == (403, {"detail": "only the owner can do that"}), path
 
 
-@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track/test"])
+@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track", "/track/test"])
 def test_the_page_routes_serve_the_page(path):
     signed_in = let_in(stranger(), find_owner()).get(path)
     signed_out = stranger().get(path, follow_redirects=False)
     assert (signed_in.status_code, signed_in.text) == (200, app.INDEX_PAGE.read_text())
-    if path in ("/settings", "/me", "/pi", "/track/test"):
+    if path in ("/settings", "/me", "/pi", "/track", "/track/test"):
         assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=" + quote(path, safe=""))
     else:
         assert (signed_out.status_code, signed_out.text) == (200, app.INDEX_PAGE.read_text())
@@ -1264,12 +1267,13 @@ def test_only_the_tracker_pages_are_cross_origin_isolated():
     client = let_in(stranger(), find_owner())
     page = client.get("/track/test")
     asset = next(path for path in re.findall(r'src="([^"]+\.js)"', page.text))
-    isolated = {path: client.get(path).headers for path in ("/track/test", asset, "/me", "/", "/login", "/api/focus", "/api/models/yolo26n_480x640.onnx")}
+    paths = ("/track", "/track/test", asset, "/me", "/", "/login", "/trackers", "/api/focus", "/api/track/pause", "/api/models/yolo26n_480x640.onnx")
+    isolated = {path: client.get(path).headers for path in paths}
     coop = {path: headers.get("cross-origin-opener-policy") for path, headers in isolated.items()}
     coep = {path: headers.get("cross-origin-embedder-policy") for path, headers in isolated.items()}
-    assert coop == {path: "same-origin" if path == "/track/test" else None for path in isolated}
+    assert coop == {path: "same-origin" if path in ("/track", "/track/test") else None for path in isolated}
     # A worker in an isolated page only starts when its own script says COEP too; the other pages ignore it on an asset.
-    assert coep == {path: "require-corp" if path in ("/track/test", asset) else None for path in isolated}
+    assert coep == {path: "require-corp" if path in ("/track", "/track/test", asset) else None for path in isolated}
 
 
 def test_without_a_session_pages_go_to_the_sign_in_and_the_api_says_401():
@@ -1537,8 +1541,8 @@ def test_the_cameras_and_the_peace_sign_only_touch_my_desk(monkeypatch):
         item = desk.todos.add("counting", now)["id"]
         desk.todos.change(item, now, current=True)
     for second in range(3):
-        app.handle_focus_update(FocusUpdate(state="working"), now + second)
-    app.handle_gesture("peace", now + 3)
+        app.handle_focus_update(mine, FocusUpdate(state="working"), now + second)
+    app.handle_gesture(mine, "peace", now + 3)
     seconds = {desk.username: [item["seconds"] for item in desk.todos.snapshot(now + 4)["open"]] for desk in (mine, theirs)}
     assert seconds == {mine.username: [2], theirs.username: [0]}, "three checks a second apart are two seconds"
     gestures = {desk.username: [line["event"] for line in desk.log.read_day(format_day(now)) if line["event"] == "gesture"] for desk in (mine, theirs)}
@@ -1555,12 +1559,13 @@ def test_the_worker_feeds_my_desk(monkeypatch):
         assert app.worker._tracker is desk_of(find_owner()).tracker
 
 
-def test_a_members_desk_has_no_camera_yet_and_says_so(monkeypatch):
-    monkeypatch.setattr(app, "last_spoken", {"text": "my peace sign", "at": time.time()})
+def test_a_members_desk_waits_for_a_browsers_camera_and_gets_none_of_mine():
     with open_client("member") as member:
+        app.owner_desk.last_spoken = {"text": "my peace sign", "at": time.time()}
         status = member.get("/api/focus").json()
     camera_parts = {key: status[key] for key in ("enabled", "side_camera", "overlay", "side_overlay", "gesture", "spoken", "voice", "camera_access")}
-    assert camera_parts == {**app.NO_CAMERA, "camera_access": "owner_only"}
+    assert camera_parts == {**app.NO_CAMERA, "enabled": True, "spoken": None, "camera_access": "owner_only"}
+    assert (status["camera_source"], status["camera_paused"]) == ("browser", False)
     assert (status["state"], status["camera_ok"], status["last_check"]) == ("unknown", False, None)
 
 
@@ -1569,7 +1574,131 @@ def test_the_status_carries_my_cameras_and_voice_and_theirs_none(monkeypatch):
     now = time.time()
     statuses = {desk.username: app.build_desk_status(desk, now) for desk in (mine, theirs)}
     assert statuses[mine.username]["voice"] == {"enabled": app.voice.enabled, "backend": app.voice.backend, "problem": app.voice.problem}
-    assert {key: statuses[theirs.username][key] for key in app.NO_CAMERA} == app.NO_CAMERA
+    assert {key: statuses[theirs.username][key] for key in app.NO_CAMERA} == {**app.NO_CAMERA, "enabled": True}
+    assert (statuses[mine.username]["camera_source"], statuses[theirs.username]["camera_source"]) == ("pi", "browser")
+
+
+SEEN = {"person": 0.91, "phone": 0.0, "elapsed_ms": 140.5}
+
+
+def test_a_browser_reading_feeds_the_senders_own_desk_about_once_a_second():
+    from dayanpi.focus.tracker import format_day
+
+    with open_client("member") as member:
+        replies = [member.post("/api/track/reading", json=SEEN) for _ in range(3)]
+        theirs = member.get("/api/focus").json()
+        mine = let_in(stranger(), find_owner()).get("/api/focus").json()
+        signed_out = stranger().post("/api/track/reading", json=SEEN)
+        member_desk = app.desks.open("bo", time.time())
+    assert [reply.status_code for reply in replies] == [200, 200, 429], "two close together, then one a second"
+    assert replies[1].json() == {"state": "working", "seconds_in_state": 0.0, "paused": False}
+    assert replies[2].json() == {"detail": "one reading a second"}
+    assert (theirs["state"], theirs["camera_ok"], theirs["last_check"]["person"], theirs["last_check"]["elapsed_ms"]) == ("working", True, 0.91, 140.5)
+    assert (mine["state"], mine["last_check"]) == ("unknown", None)
+    assert signed_out.status_code == 401
+    states = [line["state"] for line in member_desk.log.read_day(format_day(time.time())) if line["event"] == "state"]
+    assert states == ["working"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {**SEEN, "person": 1.01},
+        {**SEEN, "phone": -0.1},
+        {**SEEN, "elapsed_ms": 60_001},
+        {**SEEN, "sign": "fist"},
+        {**SEEN, "picture": "data:image/jpeg;base64,AAAA"},
+        {"person": 0.9, "phone": 0.0},
+        {**SEEN, "person": "0.9x"},
+    ],
+)
+def test_a_browser_reading_is_checked_and_bounded(body):
+    with open_client("member") as member:
+        reply = member.post("/api/track/reading", json=body)
+        nan = member.post("/api/track/reading", content=b'{"person": NaN, "phone": 0, "elapsed_ms": 1}', headers={"Content-Type": "application/json"})
+        state = member.get("/api/focus").json()["last_check"]
+    assert (reply.status_code, nan.status_code, state) == (422, 422, None)
+
+
+def test_readings_only_count_for_a_desk_on_the_browser_and_only_my_desk_can_pick_the_pi():
+    with open_client() as client, open_client("member") as member:
+        on_the_pi = client.post("/api/track/reading", json=SEEN)
+        paused_on_the_pi = client.post("/api/track/pause", json={})
+        member_pi = member.post("/api/track/source", json={"source": "pi"})
+        member_browser = member.post("/api/track/source", json={"source": "browser"})
+        feeding_before = app.worker._is_feeding() if app.worker else None
+        picked = client.post("/api/track/source", json={"source": "browser"})
+        source_after = client.get("/api/focus").json()["camera_source"]
+        on_the_browser = client.post("/api/track/reading", json=SEEN)
+        back = client.post("/api/track/source", json={"source": "pi"}).json()
+    assert (on_the_pi.status_code, on_the_pi.json()) == (409, {"detail": "this desk uses the Pi's cameras"})
+    assert paused_on_the_pi.status_code == 409
+    assert (member_pi.status_code, member_pi.json()) == (403, {"detail": "only the owner's desk has the Pi's cameras"})
+    assert (member_browser.status_code, member_browser.json()) == (200, {"source": "browser"})
+    assert (picked.json(), source_after, on_the_browser.status_code, back) == ({"source": "browser"}, "browser", 200, {"source": "pi"})
+    assert feeding_before is None, "no models in the tests, so no worker"
+
+
+def test_the_pi_worker_only_feeds_my_desk_while_i_have_the_pi_cameras_picked(monkeypatch):
+    class FakeScanner:
+        def scan(self, image):
+            raise AssertionError("no frames here")
+
+    monkeypatch.setattr(focus_worker, "build_scanner", lambda: FakeScanner())
+    with open_client() as client:
+        feeding = [app.worker._is_feeding()]
+        client.post("/api/track/source", json={"source": "browser"})
+        feeding.append(app.worker._is_feeding())
+        client.post("/api/track/source", json={"source": "pi"})
+        feeding.append(app.worker._is_feeding())
+    assert feeding == [True, False, True]
+
+
+def test_pause_says_paused_until_the_next_reading():
+    with open_client("member") as member:
+        member.post("/api/track/reading", json=SEEN)
+        member.post("/api/track/reading", json=SEEN)
+        paused = member.post("/api/track/pause", json={}).json()
+        status = member.get("/api/focus").json()
+        time.sleep(1.05)
+        resumed = member.post("/api/track/reading", json=SEEN).json()
+    assert paused == {"state": "unknown", "seconds_in_state": 0.0, "paused": True}
+    assert (status["camera_paused"], status["camera_ok"]) == (True, False)
+    assert resumed["paused"] is False
+
+
+def test_a_quiet_browser_desk_goes_unknown_but_my_pi_desk_isnt_ticked(monkeypatch):
+    with open_client("member") as member:
+        member.post("/api/track/reading", json=SEEN)
+        member.post("/api/track/reading", json=SEEN)
+        theirs = app.desks.open("bo", time.time())
+        mine = app.owner_desk
+        my_last_update = mine.tracker._last_update_at
+        app.tick_browser_desks(time.time() + 31)
+        their_state = theirs.tracker.status(time.time() + 31)["state"]
+    assert their_state == "unknown"
+    assert mine.tracker._last_update_at == my_last_update, "the Pi's worker feeds my desk, not the ticks"
+
+
+def test_a_peace_sign_from_the_browser_is_on_their_desk_and_their_pill_only(monkeypatch):
+    from dayanpi.focus.tracker import format_day
+
+    said = []
+    monkeypatch.setattr(app.voice, "say", lambda text: said.append(text) or True)
+    with open_client("member") as member:
+        theirs = app.desks.open("bo", time.time())
+        theirs.todos.add("read chapter 3", time.time())
+        member.post("/api/track/reading", json={**SEEN, "sign": "peace"})
+        time.sleep(1.05)
+        member.post("/api/track/reading", json={**SEEN, "sign": "peace"})
+        status = member.get("/api/focus").json()
+        mine = let_in(stranger(), find_owner()).get("/api/focus").json()
+    gestures = [line for line in theirs.log.read_day(format_day(time.time())) if line["event"] == "gesture"]
+    mine_logged = [line for line in app.owner_desk.log.read_day(format_day(time.time())) if line["event"] == "gesture"]
+    assert [line["name"] for line in gestures] == ["peace"] and mine_logged == []
+    assert status["gesture"]["name"] == "peace"
+    assert "read chapter 3" in status["spoken"]["text"] and status["spoken"]["speaking"] is False
+    assert (mine["gesture"], mine["spoken"], said) == (None, None, [])
 
 
 def test_day_pages_are_written_for_every_desk():

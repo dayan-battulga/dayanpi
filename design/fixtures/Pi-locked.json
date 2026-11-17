@@ -95,7 +95,9 @@
       },
       "gesture": null,
       "spoken": null,
-      "camera_access": "tailscale_only"
+      "camera_access": "tailscale_only",
+      "camera_source": "pi",
+      "camera_paused": false
     }
   },
   "routes": {

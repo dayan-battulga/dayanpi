@@ -1,0 +1,41 @@
+{
+  "about": "For comparing /track to design/mockups/Track.dc.html: a member's desk on this browser's camera, 18:40 into a focused stretch. Chrome's fake camera stands in for hers, and the models come from models/ ($file), so the worker really runs. Ask is the page as it opens; running is after --click=\"text=Allow camera\".",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {
+    "step": "ask"
+  },
+  "permissions": [
+    "camera"
+  ],
+  "routes": {
+    "/api/focus": {
+      "state": "working",
+      "since": 1779067218.0,
+      "seconds_in_state": 1120.0,
+      "camera_ok": true,
+      "enabled": true,
+      "camera_source": "browser",
+      "camera_paused": false
+    },
+    "POST /api/track/reading": {
+      "state": "working",
+      "seconds_in_state": 1120.0,
+      "paused": false
+    },
+    "POST /api/track/pause": {
+      "state": "unknown",
+      "seconds_in_state": 0.0,
+      "paused": true
+    },
+    "/api/models/yolo26n_480x640.onnx": {
+      "$file": "models/yolo26n_480x640.onnx"
+    },
+    "/api/models/palm_detection_mediapipe_2023feb.onnx": {
+      "$file": "models/palm_detection_mediapipe_2023feb.onnx"
+    },
+    "/api/models/handpose_estimation_mediapipe_2023feb.onnx": {
+      "$file": "models/handpose_estimation_mediapipe_2023feb.onnx"
+    }
+  }
+}

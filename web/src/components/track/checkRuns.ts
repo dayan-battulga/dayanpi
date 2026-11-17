@@ -73,7 +73,7 @@ export async function describeDevice(track: MediaStreamTrack, gpu: string): Prom
 }
 
 // The page, the workers and their wasm, not the GPU. Chrome answers at its next garbage collection, within ~20 s.
-async function measureMemory(): Promise<number | null> {
+export async function measureMemory(): Promise<number | null> {
   let bytes: number | null = null;
   try {
     bytes = (await performance.measureUserAgentSpecificMemory?.())?.bytes ?? null;
@@ -99,7 +99,7 @@ export function startCheckWorker(track: MediaStreamTrack, choice: BackendChoice,
   worker.onmessage = (event: MessageEvent<WorkerReply>) => {
     const reply = event.data;
     if (reply.type === "ready" && loop === "page") {
-      stopLoop = startLoop(askForCheck, CHECK_INTERVAL_MS);
+      stopLoop = startLoop(askForCheck, () => CHECK_INTERVAL_MS);
     }
     if (reply.type !== "ready") {
       answer?.();

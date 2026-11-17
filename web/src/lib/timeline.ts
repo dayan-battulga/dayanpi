@@ -87,12 +87,20 @@ export function describeStartHour(hour: number): string {
   return `${hour % 12 || 12} ${hour < 12 ? "am" : "pm"}`;
 }
 
+// A desk on a browser's camera that hears nothing from one, and isn't paused: the Desk links to /track instead.
+export function isWaitingForTracker(focus: FocusStatus): boolean {
+  const waiting = focus.camera_source === "browser" && !focus.camera_paused && !focus.camera_ok;
+  return waiting;
+}
+
 // What's wrong that the Desk should mention under its stats, quietly; "" when nothing is.
 export function describeProblems(focus: FocusStatus): string {
   const problems: string[] = [];
-  // Only the owner's desk has the Pi's cameras for now; everyone else's says so instead of looking broken.
-  if (focus.camera_access === "owner_only") {
-    problems.push("No camera on your desk yet, so time isn't counted");
+  // /track's checks have their own words: paused, or isWaitingForTracker's link.
+  if (focus.camera_source === "browser") {
+    if (focus.camera_paused) {
+      problems.push("Tracking is paused on the tracker page");
+    }
   } else if (!focus.enabled) {
     problems.push("The detector isn't running on the Pi");
   } else if (!focus.camera_ok) {

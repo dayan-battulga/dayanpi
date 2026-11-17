@@ -336,6 +336,16 @@ class FocusTracker:
             update = self._update_locked(reading, now)
         return update
 
+    def stop_seeing(self, now: float) -> FocusUpdate:
+        """The camera was turned off on purpose (/track's Pause): unknown now, not after NO_FRAME_UNKNOWN_S, and
+        whoever comes back has to be seen RETURN_CHECKS times again."""
+        with self._lock:
+            self._last_frame_at = None
+            self._consecutive_person = 0
+            self._phone_hits.clear()
+            update = self._update_locked(None, now)
+        return update
+
     def record_app(self, app: str, now: float, site: str | None = None) -> bool:
         """The Mac's front app, and the site when it's a browser. A line in the log when either changes.
 

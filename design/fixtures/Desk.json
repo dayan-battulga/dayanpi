@@ -47,6 +47,8 @@
       "app": "Code",
       "site": null,
       "mac_tracking": true,
+      "camera_source": "pi",
+      "camera_paused": false,
       "camera_ok": true,
       "last_check": {
         "person": 0.93,
@@ -120,6 +122,8 @@
       "app": "Code",
       "site": null,
       "mac_tracking": true,
+      "camera_source": "pi",
+      "camera_paused": false,
       "camera_ok": true,
       "last_check": {
         "person": 0.93,

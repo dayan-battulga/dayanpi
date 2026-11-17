@@ -33,8 +33,9 @@ A fixture is one JSON file per mockup:
 | `timezone` | Like `"America/Chicago"` |
 | `mockupOptions` | Options for the mockup side, like `{ "moment": "none" }` |
 | `storage` | Optional localStorage entries to set before the page loads |
+| `permissions` | Optional browser permissions to grant, like `["camera"]` for /track. Chrome's fake camera (a test pattern) stands in for a real one; leave it out and the camera is blocked |
 | `stream` | The one snapshot `/api/stream` sends. The stream stays open, like the Pi's |
-| `routes` | Replies by URL. A key can be `"POST /api/todos"`, `"/api/apps?range=today"` or `"/api/focus"`, and the first match wins. A reply that isn't a 200 is `{"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}` (`$headers` optional) |
+| `routes` | Replies by URL. A key can be `"POST /api/todos"`, `"/api/apps?range=today"` or `"/api/focus"`, and the first match wins. A reply that isn't a 200 is `{"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}` (`$headers` optional). `{"$file": "models/<name>.onnx"}` answers with that file from the repo's `models/` (nothing else), so /track's worker really runs |
 
 Anything not listed gets a 404, so the page shows its empty state. Fixtures follow the real API: when an API changes, its fixtures change in the same commit. `Desk.json` is the mockup's day (Monday Nov 16, 7:12 pm) in the API as it is after study room step 2 (signed in as the owner).
 

@@ -1,4 +1,4 @@
-// The Chrome-only pieces the camera test uses that TypeScript's DOM types don't have yet. Each may be missing at
+// The Chrome-only pieces the camera test and the tracker use that TypeScript's DOM types don't have yet. Each may be missing at
 // run time, so each is optional.
 
 declare var MediaStreamTrackProcessor: (new (init: { track: MediaStreamTrack }) => { readonly readable: ReadableStream<VideoFrame> }) | undefined;
@@ -12,7 +12,14 @@ interface Performance {
   measureUserAgentSpecificMemory?(): Promise<{ bytes: number }>;
 }
 
+interface BatteryManager extends EventTarget {
+  readonly charging: boolean;
+  readonly level: number; // 0 to 1
+  onlevelchange: (() => void) | null;
+  onchargingchange: (() => void) | null;
+}
+
 interface Navigator {
   deviceMemory?: number;
-  getBattery?(): Promise<{ charging: boolean }>;
+  getBattery?(): Promise<BatteryManager>;
 }

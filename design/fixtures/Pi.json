@@ -127,7 +127,9 @@
       },
       "gesture": null,
       "spoken": null,
-      "camera_access": "open"
+      "camera_access": "open",
+      "camera_source": "pi",
+      "camera_paused": false
     }
   },
   "routes": {

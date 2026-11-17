@@ -67,6 +67,8 @@ export interface FocusStatus {
   enabled: boolean;
   side_camera: boolean;
   camera_access?: CameraAccess;
+  camera_source?: "pi" | "browser"; // where the desk's checks come from: the Pi's cameras (mine only) or /track
+  camera_paused?: boolean; // /track's Pause, until its next reading
   overlay: Overlay | null;
   side_overlay: Overlay | null;
   voice: { enabled: boolean; backend: string; problem: string | null } | null;

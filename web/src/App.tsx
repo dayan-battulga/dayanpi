@@ -10,16 +10,18 @@ const LoginPage = lazy(() => import("@/components/auth/LoginPage").then((module)
 const JoinPage = lazy(() => import("@/components/auth/JoinPage").then((module) => ({ default: module.JoinPage })));
 // Its worker brings ONNX Runtime, which no other page loads.
 const TrackTestPage = lazy(() => import("@/components/track/TrackTestPage").then((module) => ({ default: module.TrackTestPage })));
+const TrackPage = lazy(() => import("@/components/track/TrackPage").then((module) => ({ default: module.TrackPage })));
 
-// The Pi serves index.html at /, /me, /pi, /settings, /track/test, /login and /join/<code>. Sign-in and join have
-// their own small frame (no stream, no /api/me: you aren't signed in yet), and so does the camera test, so nothing
-// else runs on the page while it times itself. Everything else is inside Frame.
+// The Pi serves index.html at /, /me, /pi, /settings, /track, /track/test, /login and /join/<code>. Sign-in and join
+// have their own small frame (no stream, no /api/me: you aren't signed in yet), and so do the tracker and its camera
+// test, so nothing else runs on the page next to the models. Everything else is inside Frame.
 export function App() {
   return (
     <Suspense fallback={null}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/join/:code" element={<JoinPage />} />
+        <Route path="/track" element={<TrackPage />} />
         <Route path="/track/test" element={<TrackTestPage />} />
         <Route element={<Frame />}>
           <Route path="/me" element={<DeskPage />} />

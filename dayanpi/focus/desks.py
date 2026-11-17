@@ -1,10 +1,11 @@
-"""Everyone's own desk: a focus log, a tracker, a to-do list, a Mac tracking setting and day pages per account.
+"""Everyone's own desk: a focus log, a tracker, a to-do list, a Mac tracking setting, a camera source and day pages
+per account.
 
 A desk lives in data/users/<username>/ (DAYANPI_DATA_DIR overrides data/), with focus_log/, todos.json,
-days/ and mac_tracking.json in it. Usernames can't change, so neither does the folder. A removed account's
-folder moves to data/users/removed/<username>-<date>/ and stays there until someone deletes it by hand, so
-whoever picks that username next starts empty. The classes in tracker.py, todos.py and mac_tracking.py
-don't know about desks; they just get their paths from here.
+days/, mac_tracking.json and camera_source.json in it. Usernames can't change, so neither does the folder.
+A removed account's folder moves to data/users/removed/<username>-<date>/ and stays there until someone
+deletes it by hand, so whoever picks that username next starts empty. The classes in tracker.py, todos.py,
+mac_tracking.py and camera_source.py don't know about desks; they just get their paths from here.
 """
 
 import logging
@@ -13,6 +14,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from dayanpi.focus.browser_camera import BrowserCamera
+from dayanpi.focus.camera_source import CAMERA_SOURCE_FILE, CameraSourceSetting
 from dayanpi.focus.days import DAYS_DIR_NAME
 from dayanpi.focus.mac_tracking import MAC_TRACKING_FILE, MacTrackingSetting
 from dayanpi.focus.todos import TODO_FILE, TodoList
@@ -36,6 +39,9 @@ class Desk:
     tracker: FocusTracker
     todos: TodoList
     mac_tracking: MacTrackingSetting
+    camera_source: CameraSourceSetting
+    browser: BrowserCamera  # /track's checks, for a desk on a browser's camera
+    last_spoken: dict | None = None  # {"text", "at"}: what the peace sign said last, for the page's pill; never logged
 
     @property
     def days_dir(self) -> Path:
@@ -49,7 +55,8 @@ def open_desk(folder: Path, username: str, now: float) -> Desk:
     if not mac_tracking.enabled:
         tracker.set_mac_tracking(False, now)
         logger.info("Mac tracking is paused for %s (switched off on the dashboard)", username)
-    desk = Desk(username, folder, log, tracker, TodoList(folder / TODO_FILE, log), mac_tracking)
+    todos = TodoList(folder / TODO_FILE, log)
+    desk = Desk(username, folder, log, tracker, todos, mac_tracking, CameraSourceSetting(folder / CAMERA_SOURCE_FILE), BrowserCamera(tracker))
     return desk
 
 

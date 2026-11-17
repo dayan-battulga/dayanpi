@@ -5,7 +5,7 @@ import { MacLine } from "@/components/mac/MacLine";
 import type { MacTracking } from "@/hooks/useMacTracking";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SPRINGS } from "@/lib/motion";
-import { STATE_COPY, describeProblems } from "@/lib/timeline";
+import { STATE_COPY, describeProblems, isWaitingForTracker } from "@/lib/timeline";
 import type { FocusStatus, Segment } from "@/lib/types";
 
 const TWO_DIGITS = { minimumIntegerDigits: 2 };
@@ -103,6 +103,12 @@ export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macT
         {focus != null && <StatsLine today={focus.today} />}
         <MacLine focus={focus} macTracking={macTracking} />
       </div>
+      {focus != null && isWaitingForTracker(focus) && (
+        <p className="focus-note">
+          {/* A full page load: the tracker needs its own headers. */}
+          No camera yet, so time isn't counted. <a href="/track">Open the tracker</a> in Chrome on your laptop to start.
+        </p>
+      )}
       {problems && <p className="focus-note">{problems}</p>}
     </section>
   );
