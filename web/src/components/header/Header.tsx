@@ -10,7 +10,10 @@ interface HeaderProps {
   connection: Connection;
   user: User | null;
   phone: boolean;
+  onOpenPalette: () => void;
 }
+
+const PALETTE_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
 
 interface PillLinkProps {
   to: string;
@@ -33,8 +36,9 @@ export function PillLink({ to, kind, label, children }: PillLinkProps) {
   );
 }
 
-// The top bar on every signed-in page: the wordmark, the pages (in the dock instead on a phone), the theme and you.
-export function Header({ connection, user, phone }: HeaderProps) {
+// The top bar on every signed-in page: the wordmark, the pages (in the dock instead on a phone), ⌘K (not on a phone,
+// like RoomPhone), the theme and you.
+export function Header({ connection, user, phone, onOpenPalette }: HeaderProps) {
   return (
     <header className="topbar">
       <span className="brand">
@@ -58,6 +62,11 @@ export function Header({ connection, user, phone }: HeaderProps) {
         </nav>
       )}
       <div className="topbar-end">
+        {!phone && (
+          <button type="button" className="command-button" aria-label="Search and commands" aria-keyshortcuts="Meta+K Control+K" onClick={onOpenPalette}>
+            {PALETTE_KEY}
+          </button>
+        )}
         <ThemeToggle />
         {user != null && <AccountMenu user={user} />}
       </div>

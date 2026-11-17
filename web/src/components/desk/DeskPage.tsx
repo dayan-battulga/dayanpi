@@ -12,7 +12,7 @@ import { focusNewTodo } from "@/lib/todos";
 
 // My desk, at /me: today's cards.
 export function DeskPage() {
-  const { snapshot, receivedAt, now, user } = useFrame();
+  const { snapshot, receivedAt, now, user, macTracking } = useFrame();
   const focus = snapshot?.focus;
   const { segments, loaded } = useFocusSegments(focus?.state);
   const midnight = readLocalMidnight(now);
@@ -29,7 +29,7 @@ export function DeskPage() {
 
   return (
     <div className="live">
-      <MacCard focus={focus} now={now} readOnly={readOnly} />
+      <MacCard focus={focus} macTracking={macTracking} readOnly={readOnly} />
       <FocusCard focus={focus} segments={segments} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} />
       <AppsCard now={now} />
       <div className="row">

@@ -1,8 +1,10 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
+import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "@/App";
+import { showToast } from "@/components/ui/toaster";
 import { ME_RETRY_MS } from "@/hooks/useMe";
 import { PHONE_QUERY } from "@/hooks/useMediaQuery";
 import { STREAM_RETRY_MS } from "@/hooks/useSnapshot";
@@ -63,6 +65,9 @@ afterEach(() => {
   vi.mocked(loadPage).mockClear();
   window.localStorage.clear();
   window.matchMedia = realMatchMedia;
+  document.documentElement.dataset.theme = "light";
+  // Sonner hands every toast that was never dismissed to the next Toaster that mounts, so the next test's page.
+  toast.dismiss();
 });
 
 it("draws today's cards on /me from one stream", async () => {
@@ -171,6 +176,7 @@ it("puts the pages in a dock on a phone, with a + that jumps to a new to-do", as
   const dock = within(screen.getByRole("navigation", { name: "Pages" }));
   expect(dock.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   expect(document.querySelector(".tabs")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Search and commands" })).toBeNull(); // RoomPhone has no ⌘K
 
   await user.click(await dock.findByRole("button", { name: "New to-do" }));
 
@@ -196,14 +202,41 @@ it("has no + in a member's dock: they can't add to the owner's list", async () =
   expect(screen.queryByRole("button", { name: "New to-do" })).toBeNull();
 });
 
-it("shows the last gesture or hand sign for a few seconds", () => {
+// Every toast Sonner has on screen or waiting, newest first.
+function readToasts() {
+  const toasts = Array.from(document.querySelectorAll("[data-sonner-toast]"), (toast) => ({ text: toast.textContent, visible: toast.getAttribute("data-visible") === "true" }));
+  return toasts;
+}
+
+it("puts each hand sign in a toast once, though every snapshot repeats it", async () => {
   renderApp();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.6 } })));
-  expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Peace sign: reading your to-dos");
+  expect(await screen.findByText("✌️ Peace sign: reading your to-dos")).toBeInTheDocument();
 
-  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 4.5 } })));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 1.6 } })));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 0.3 } }))); // made again
 
-  expect(screen.getByRole("status", { name: "" })).toBeEmptyDOMElement();
+  await waitFor(() => expect(readToasts()).toHaveLength(2));
+});
+
+it("has no toast for a hand sign that's already old when the page opens", async () => {
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ gesture: { name: "peace", age_s: 30 } })));
+  await screen.findByRole("button", { name: "Account: Dayan" });
+  expect(readToasts()).toEqual([]);
+});
+
+it("shows one toast at a time, the newest", async () => {
+  renderApp();
+  act(() => {
+    showToast("Nudged Sam");
+    showToast("Nudged Alex");
+  });
+  await screen.findByText("Nudged Alex");
+  expect(readToasts()).toEqual([
+    { text: "Nudged Alex", visible: true },
+    { text: "Nudged Sam", visible: false },
+  ]);
 });
 
 it("drops the boxes once the overlay is more than 3 s old", async () => {
@@ -271,6 +304,7 @@ it("puts the switch back when the Pi doesn't take it", async () => {
   await user.click(await screen.findByRole("switch", { name: "Mac tracking" }));
   await waitFor(() => expect(screen.getByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "true"));
   expect(document.getElementById("mac")).toHaveTextContent(/^Code$/);
+  expect(await screen.findByText("Couldn't pause Mac tracking")).toBeInTheDocument();
 });
 
 it("says Paused when the Pi says the switch is off", async () => {
@@ -360,4 +394,113 @@ it("reopens the stream a few seconds after the Pi turns it away with a 502 or 50
   expect(FakeEventSource.latest).not.toBe(first);
   FakeEventSource.latest?.send(makeSnapshot());
   expect(screen.queryByText("Reconnecting")).toBeNull();
+});
+
+// The desk once /api/me said who you are (the palette's list depends on it).
+async function openDesk(me: User = OWNER) {
+  servePi(me);
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot());
+  await screen.findByRole("button", { name: `Account: ${me.display_name}` });
+}
+
+function readCommands(dialog: HTMLElement) {
+  const labels = within(dialog)
+    .getAllByRole("option")
+    .map((option) => option.querySelector(".palette-label")?.textContent);
+  return labels;
+}
+
+it.each(["{Meta>}k{/Meta}", "{Control>}k{/Control}"])("opens ⌘K with %s, filters as you type, and closes on Esc", async (keys) => {
+  const user = userEvent.setup();
+  await openDesk();
+
+  await user.keyboard(keys);
+
+  const dialog = await screen.findByRole("dialog", { name: "Commands" });
+  const search = within(dialog).getByRole("combobox", { name: "Command" });
+  expect(search).toHaveFocus();
+  expect(readCommands(dialog)).toEqual(["Add a to-do", "Go to Desk", "Go to Pi", "Go to Settings", "Switch theme", "Pause Mac tracking"]);
+  const first = within(dialog).getByRole("option", { selected: true });
+  expect(first.querySelector(".palette-label")).toHaveTextContent("Add a to-do");
+  expect(first.querySelector(".palette-key")).toHaveTextContent("N");
+  expect(dialog.querySelectorAll(".palette-highlight")).toHaveLength(1);
+  expect(first.querySelector(".palette-highlight")).not.toBeNull();
+
+  await user.type(search, "theme");
+  expect(readCommands(dialog)).toEqual(["Switch theme"]);
+
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("runs the highlighted command on Enter and closes", async () => {
+  const user = userEvent.setup();
+  await openDesk();
+  await user.click(screen.getByRole("button", { name: "Search and commands" }));
+
+  await user.type(await screen.findByRole("combobox", { name: "Command" }), "go to pi");
+  await user.keyboard("{Enter}");
+
+  await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/pi"));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("gives a member only the commands that are theirs", async () => {
+  const user = userEvent.setup();
+  await openDesk(MEMBER);
+  await user.keyboard("{Control>}k{/Control}");
+  expect(readCommands(await screen.findByRole("dialog", { name: "Commands" }))).toEqual(["Go to Desk", "Go to Settings", "Switch theme"]);
+});
+
+it("pauses Mac tracking from ⌘K, and the card's switch follows", async () => {
+  const user = userEvent.setup();
+  const sent = servePi(OWNER, { "POST /api/mac/tracking": answer({ enabled: false }) });
+  renderApp();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ mac_tracking: true })));
+  await screen.findByRole("button", { name: "Account: Dayan" });
+
+  await user.keyboard("{Control>}k{/Control}");
+  await user.click(await screen.findByRole("option", { name: "Pause Mac tracking" }));
+
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/mac/tracking").map((request) => request.body)).toEqual([{ enabled: false }]));
+  expect(await screen.findByRole("switch", { name: "Mac tracking" })).toHaveAttribute("aria-checked", "false");
+  await user.keyboard("{Control>}k{/Control}");
+  expect(await screen.findByRole("option", { name: "Resume Mac tracking" })).toBeInTheDocument();
+});
+
+it("ignores single-key shortcuts while you're typing in a field", async () => {
+  const user = userEvent.setup();
+  await openDesk();
+  const box = screen.getByRole("textbox", { name: "New to-do" });
+
+  await user.type(box, "ntgp");
+
+  expect(box).toHaveValue("ntgp");
+  expect(document.documentElement.dataset.theme).not.toBe("dark");
+  expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/me");
+});
+
+it("jumps to a new to-do with N from another page, typing nothing into it", async () => {
+  const user = userEvent.setup();
+  renderApp("/settings");
+  await screen.findByRole("textbox", { name: "Display name" });
+
+  await user.keyboard("n");
+
+  const box = await screen.findByRole("textbox", { name: "New to-do" });
+  await waitFor(() => expect(box).toHaveFocus());
+  expect(box).toHaveValue("");
+});
+
+it("goes to a page with G then a letter, and flips the theme with T", async () => {
+  const user = userEvent.setup();
+  await openDesk();
+
+  await user.keyboard("gp");
+  await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent("/pi"));
+  await user.keyboard("t");
+
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
 });

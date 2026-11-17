@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { readStored, writeStored } from "@/lib/storage";
 
 type Theme = "light" | "dark";
@@ -10,20 +10,32 @@ export interface ThemeControl {
   toggleTheme: () => void;
 }
 
-// index.html sets data-theme before the first paint; this keeps it, follows the device until
-// you pick one, and fades the colors only while switching so live updates never pay for it.
-export function useTheme(): ThemeControl {
-  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
-  const fadeTimer = useRef<number | undefined>(undefined);
+// data-theme on <html> is the only copy, so the top bar's button and ⌘K's command never disagree.
+const themeListeners = new Set<() => void>();
+let fadeTimer: number | undefined;
 
-  const applyTheme = useCallback((next: Theme) => {
-    const root = document.documentElement;
-    root.classList.add("theme-fade");
-    window.clearTimeout(fadeTimer.current);
-    fadeTimer.current = window.setTimeout(() => root.classList.remove("theme-fade"), THEME_FADE_MS);
-    root.dataset.theme = next;
-    setTheme(next);
-  }, []);
+function readTheme(): Theme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function watchTheme(onChange: () => void): () => void {
+  themeListeners.add(onChange);
+  return () => themeListeners.delete(onChange);
+}
+
+// Fades the colors only while switching, so live updates never pay for it.
+function applyTheme(next: Theme): void {
+  const root = document.documentElement;
+  root.classList.add("theme-fade");
+  window.clearTimeout(fadeTimer);
+  fadeTimer = window.setTimeout(() => root.classList.remove("theme-fade"), THEME_FADE_MS);
+  root.dataset.theme = next;
+  themeListeners.forEach((listener) => listener());
+}
+
+// index.html sets data-theme before the first paint; this keeps it, and follows the device until you pick one.
+export function useTheme(): ThemeControl {
+  const theme = useSyncExternalStore(watchTheme, readTheme);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -34,10 +46,10 @@ export function useTheme(): ThemeControl {
     };
     media.addEventListener("change", followDevice);
     return () => media.removeEventListener("change", followDevice);
-  }, [applyTheme]);
+  }, []);
 
   const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
+    const next = readTheme() === "dark" ? "light" : "dark";
     writeStored("theme", next);
     applyTheme(next);
   };

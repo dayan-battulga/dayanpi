@@ -1,3 +1,4 @@
+import type { NavigateFunction } from "react-router";
 import { request } from "@/lib/http";
 import type { Todos } from "@/lib/types";
 
@@ -10,6 +11,14 @@ export function focusNewTodo(): boolean {
   input?.scrollIntoView({ block: "center" });
   input?.focus({ preventScroll: true });
   return input != null;
+}
+
+// The dock's + and ⌘K's N. On the Desk the box is right there, and focusing it inside the tap is what opens a phone's
+// keyboard; from another page the Desk focuses it once it's drawn (DeskPage reads state.addTodo).
+export function openNewTodo(navigate: NavigateFunction): void {
+  if (!focusNewTodo()) {
+    void navigate("/me", { state: { addTodo: Date.now() } });
+  }
 }
 
 export interface TodoChange {

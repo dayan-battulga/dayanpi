@@ -1,17 +1,12 @@
 import { Plus, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { PillLink } from "@/components/header/Header";
-import { focusNewTodo } from "@/lib/todos";
+import { openNewTodo } from "@/lib/todos";
 
 // On a phone the pages sit in a frosted dock at the bottom (RoomPhone), with a + for a new to-do.
 export function Dock({ canAdd }: { canAdd: boolean }) {
   const navigate = useNavigate();
-  // On the Desk the box is right there, and focusing it inside the tap is what opens a phone's keyboard.
-  const addTodo = () => {
-    if (!focusNewTodo()) {
-      navigate("/me", { state: { addTodo: Date.now() } });
-    }
-  };
+  const addTodo = () => openNewTodo(navigate);
   return (
     <nav className="dock" aria-label="Pages">
       <PillLink to="/me" kind="dock" label="Desk">

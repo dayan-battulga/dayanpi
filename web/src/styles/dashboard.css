@@ -344,6 +344,25 @@ ol {
   color: var(--ink);
 }
 
+.command-button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 12px var(--font-mono);
+  cursor: pointer;
+  transition: transform 0.25s var(--ease);
+}
+
+.command-button:active {
+  transform: scale(0.97);
+}
+
 .icon-button svg {
   grid-area: 1 / 1;
   transition:
@@ -404,6 +423,146 @@ ol {
 .dock-add {
   width: 48px;
   height: 48px;
+}
+
+/* ---------- ⌘K (components/ui/command.tsx): a solid card over the scrim ---------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* Centered with margins, not a translate: Motion owns this element's transform for the pop. */
+.palette {
+  position: fixed;
+  top: 150px;
+  left: 0;
+  right: 0;
+  z-index: 51;
+  width: calc(100% - 32px);
+  max-width: 560px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 60%);
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.palette-input {
+  flex: 1;
+  min-width: 0;
+  height: 60px; /* the mockup's 58 px plus the 1 px padding a content-box input gets */
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 16px var(--font-ui);
+}
+
+.palette-input::placeholder {
+  color: var(--muted);
+}
+
+/* The caret and the highlight already show where you are. */
+.palette-input:focus-visible {
+  outline: none;
+}
+
+.palette-list {
+  padding: 8px;
+}
+
+.palette-row {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.palette-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 12px;
+  background: var(--sunken);
+}
+
+.palette-label {
+  flex: 1;
+}
+
+.palette-key {
+  font: 500 11px var(--font-mono);
+  color: var(--muted);
+}
+
+.palette-empty {
+  padding: 14px 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- toasts (components/ui/toaster.tsx): Room's "Nudged Sam" pill ---------- */
+/* Sonner adds its own sheet after this one, so every rule here repeats a class to outrank it. */
+
+.toaster.toaster[data-sonner-toaster] {
+  font-family: var(--font-ui);
+}
+
+.toaster .toast.toast[data-sonner-toast] {
+  --y: translateY(10px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 20px 44px -26px rgb(0 0 0 / 55%);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+  filter: blur(4px);
+  transition:
+    transform 0.6s var(--ease),
+    opacity 0.6s var(--ease),
+    filter 0.6s var(--ease);
+}
+
+.toaster .toast.toast[data-sonner-toast][data-mounted="true"] {
+  --y: none;
+  filter: none;
+}
+
+.toaster .toast.toast[data-sonner-toast][data-removed="true"] {
+  --y: none;
+  opacity: 0;
+  filter: none;
+  transition: opacity 0.2s ease-in;
 }
 
 /* ---------- focus card ---------- */
@@ -1437,6 +1596,21 @@ ol {
   .shell {
     padding: 16px 16px 120px;
   }
+
+  /* Centered, 12 px above the dock (26 px up, 62 px tall). */
+  .toaster.toaster[data-sonner-toaster][data-x-position] {
+    left: 16px;
+    right: 16px;
+    bottom: 100px;
+    width: auto;
+    transform: none;
+  }
+
+  .toaster .toast.toast[data-sonner-toast] {
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+  }
 }
 
 /* Page changes (React's <ViewTransition> in Frame): the old page fades, the new one rises in a little.
@@ -1462,6 +1636,13 @@ ol {
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-new(.page) {
     animation-name: fade-in;
+  }
+
+  /* Toasts just fade: this outranks both the line below and Sonner's own reduced-motion "transition: none". */
+  .toaster .toast.toast[data-sonner-toast] {
+    --y: none;
+    filter: none;
+    transition: opacity 0.3s ease !important;
   }
 
   *,

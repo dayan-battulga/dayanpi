@@ -196,11 +196,27 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 
 The frame around them:
 
-- **The top bar:** the wordmark, the Desk / Pi tabs (the white pill slides over to the one you pick), the sun/moon button for the theme, and a round button with your initial that opens Settings and Sign out. It gets a teal ring while you're in Settings.
+- **The top bar:** the wordmark, the Desk / Pi tabs (the white pill slides over to the one you pick), the **⌘K** button (see below), the sun/moon button for the theme, and a round button with your initial that opens Settings and Sign out. It gets a teal ring while you're in Settings.
 - **On a phone** (under 640 px wide) the tabs move into a frosted dock at the bottom: Desk, a **+** that jumps straight to the new to-do box (from any page), and Settings. The Pi page isn't in the dock yet, so on a phone open `/pi` yourself.
 - **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages dim until it's back. The old Live badge is gone: no chip means it's live.
 - **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
-- **Only the Desk downloads up front.** Settings, the Pi page, sign-in and join load the first time you open them.
+- **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign fires, and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
+- **Only the Desk downloads up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
+
+### ⌘K and the keyboard
+
+Press **⌘K** (or **Ctrl+K** on Windows and Linux) anywhere, even while you're typing, or click the ⌘K button in the top bar. A box opens: start typing to narrow the list, use ↑ and ↓ to pick, **Enter** to run it, **Esc** to close. Pressing ⌘K again closes it too.
+
+| Command | Key | Who |
+| --- | --- | --- |
+| Add a to-do (puts the cursor in the new to-do box on the Desk, from any page) | **N** | you |
+| Go to Desk | **G** then **D** | everyone |
+| Go to Pi | **G** then **P** | you |
+| Go to Settings | **G** then **S** | everyone |
+| Switch theme | **T** | everyone |
+| Pause Mac tracking, or Resume when it's paused (same as the switch on the Mac card) | | you |
+
+The single keys only work when you're not typing in a box, so typing "n" into a to-do never jumps anywhere. For the **G** ones, press the second key within a second. A phone has no ⌘K button (it has the dock instead), but a keyboard plugged into it still opens the box.
 
 ## With both cameras
 
@@ -317,7 +333,7 @@ grep '"gesture"' data/focus_log/$(date +%F).jsonl
 
 ### Adding a sign
 
-Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (which fingers have to be open or folded; leave a finger out to ignore it), a hold time in `HOLD_SECONDS` in the same file, and what it does in `SIGN_ACTIONS` in `dayanpi/app.py`. Add a line for the page's note in `web/src/components/shared/GestureToast.tsx` if you want nicer text than the sign's name.
+Three lines. A finger rule in `HAND_SIGNS` in `dayanpi/vision/gestures.py` (which fingers have to be open or folded; leave a finger out to ignore it), a hold time in `HOLD_SECONDS` in the same file, and what it does in `SIGN_ACTIONS` in `dayanpi/app.py`. Add a line for the page's toast in `web/src/hooks/useGestureToast.ts` if you want nicer text than the sign's name.
 
 ### Tuning
 

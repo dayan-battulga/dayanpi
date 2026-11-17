@@ -13,7 +13,7 @@ vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 function renderHeader(user: User | null) {
   render(
     <MemoryRouter initialEntries={["/me"]}>
-      <Header connection="connected" user={user} phone={false} />
+      <Header connection="connected" user={user} phone={false} onOpenPalette={() => {}} />
     </MemoryRouter>,
   );
   const clicker = userEvent.setup();
