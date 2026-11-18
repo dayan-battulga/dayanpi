@@ -325,12 +325,17 @@ def test_the_spoken_text_is_never_logged(monkeypatch, caplog):
 
     desk = use_owner_desk(monkeypatch)
     log = desk.log
-    monkeypatch.setattr(app.voice, "say", lambda text: True)
+    desk.todos.add("call the dentist", time.time())
     now = time.time()
+    assert app.voice.enabled is False, "the real voice, off: it used to log what it would have said"
     with caplog.at_level(logging.INFO):
         app.handle_gesture(desk, "peace", now)
-    text = desk.last_spoken["text"]
-    assert text not in caplog.text
+        text = desk.last_spoken["text"]
+        app.speak_to(desk, app.nudge_line("Sam"), now, kind="nudge")
+    assert "call the dentist" in text
+    assert "would say" in caplog.text
+    for said in (text, "call the dentist", app.nudge_line("Sam")):
+        assert said not in caplog.text
     assert text not in json.dumps(log.read_day(format_day(now)))
 
 
@@ -380,6 +385,14 @@ def test_todo_routes_add_edit_check_current_and_delete():
         assert client.post("/api/todos", json={"text": "   "}).status_code == 422
         assert client.post("/api/todos", json={"text": "x" * 201}).status_code == 422
         assert client.patch(path, json={"text": ""}).status_code == 422
+
+
+def test_a_full_to_do_list_is_a_409(monkeypatch):
+    monkeypatch.setattr("dayanpi.focus.todos.TODOS_MAX", 2)
+    client = let_in(stranger(), add_member())
+    added = [client.post("/api/todos", json={"text": f"item {index}"}).status_code for index in range(3)]
+    assert added == [200, 200, 409]
+    assert len(client.get("/api/todos").json()["open"]) == 2
 
 
 def test_working_counts_time_for_the_current_todo(monkeypatch):
@@ -1266,8 +1279,8 @@ ACCESS = {
     ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
-    ("GET", "/api/people/{username}"): ("/api/people/nobody", None, 401, 404, 404),
-    ("GET", "/api/people/{username}/picture"): ("/api/people/nobody/picture", None, 401, 404, 404),
+    ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
+    ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
     ("GET", "/people/{username}"): ("/people/sam", None, 303, 200, 200),  # the voice is off in the tests, so nothing plays
     ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
@@ -2208,6 +2221,21 @@ def test_anything_but_a_small_jpeg_is_dropped_and_the_reading_still_counts(sent)
     reply = read_with_picture(client, sent)
     assert reply["seconds_in_state"] is not None
     assert desk.picture is None
+
+
+def test_a_picture_claiming_a_huge_size_is_dropped_before_anything_decodes_it(monkeypatch):
+    from dayanpi.focus import pictures
+
+    real = make_jpeg(320, 180)
+    sof = real.index(b"\xff\xc0")
+    huge = real[: sof + 5] + (30000).to_bytes(2, "big") * 2 + real[sof + 9 :]  # height, then width
+    assert pictures.read_jpeg_size(real) == {"width": 320, "height": 180}
+    assert pictures.read_jpeg_size(huge) == {"width": 30000, "height": 30000}
+    decoded = []
+    monkeypatch.setattr(pictures.cv2, "imdecode", lambda *args: decoded.append(args) or None)
+    for sent in (huge, b"\xff\xd8" + b"\x00" * 64, b"\xff\xd8\xff\xe0\x00\x00"):
+        assert pictures.read_browser_picture(as_base64(sent)) is None
+    assert decoded == [], "cv2 never saw them"
 
 
 def test_pictures_never_touch_the_disk(tmp_path, monkeypatch):

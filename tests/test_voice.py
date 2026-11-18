@@ -144,7 +144,8 @@ def test_off_only_logs_and_runs_nothing(make_voice, caplog):
     assert rig.announcer.enabled is False
     assert rig.announcer.backend == "off"
     assert rig.announcer.problem is None
-    assert "would say: 'Phone down.'" in caplog.text
+    assert "voice off, would say something (11 characters)" in caplog.text
+    assert "Phone down" not in caplog.text, "never the words"
     assert rig.runner.jobs == []
 
 
@@ -256,7 +257,8 @@ def test_failures_are_logged_and_the_worker_keeps_going(make_voice, caplog):
     assert len(errors) == 3
     assert "Device or resource busy" in errors[0]
     assert "was killed" in errors[1]
-    assert "'surprise'" in errors[2]
+    assert errors[2] == "voice broke while saying a phrase, carrying on"
+    assert "'surprise'" not in caplog.text, "never the words"
     assert rig.runner.list_phrases() == ["busy", "stuck", "surprise", "fine"]
 
 
@@ -274,7 +276,8 @@ def test_missing_piper_voice_falls_back_to_off_with_one_error(make_voice, caplog
     assert str(missing) in errors[0]
     assert rig.announcer.enabled is False
     assert rig.announcer.backend == "off"
-    assert "would say: 'Phone down.'" in caplog.text
+    assert "voice off, would say something (11 characters)" in caplog.text
+    assert "Phone down" not in caplog.text, "never the words"
     assert rig.runner.jobs == []
 
 

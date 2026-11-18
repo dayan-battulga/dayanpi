@@ -48,7 +48,7 @@ Always use the **`main`** branch on both machines.
 | `/api/focus` | Focus state, today's totals, timeline, and the last hand sign (`gesture`) |
 | `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name). While Mac tracking is off it's dropped, still a 200, with `"enabled": false` |
 | `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
-| `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`) |
+| `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`; at most 100, open and done together, 409 past that) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
@@ -276,7 +276,7 @@ Open the site and it sends you to `/login`. Sign in with your username and passw
 - **Changing your password:** Settings → Profile. Type a new one (at least 10 characters) and it asks for the current one too, then **Save**. A wrong current one counts as a sign-in miss, and after 5 wrong ones in a row it says **too many tries, wait a bit** (30 seconds, doubling each time up to 15 minutes). It signs you out on every other device and keeps this one signed in. After that, the password in `/etc/dayanpi.env` doesn't work any more. It only comes back if `data/accounts.db` is gone (see [Forgot your password?](#forgot-your-password)).
 - **Your name:** Settings → Profile → Name, then **Save**. That's what the header shows.
 
-Settings has a list of sections on the left (a row of pills at the top on a phone): **Profile**, **Mac helper** (the **Track apps and sites** switch, the same one as the Mac line's Pause/Resume, plus the helper's tokens; members get the tokens only), and for you **Room and invites**. The sections for sharing with the room, the camera, and voice and bedtime come with the study room.
+Settings has a list of sections on the left (a row of pills at the top on a phone): **Profile**, **Sharing** (what the room sees of you), **Camera** (where your desk's checks come from), **Voice and bedtime**, **Mac helper** (the **Track apps and sites** switch, the same one as the Mac line's Pause/Resume, plus the helper's tokens), and for you **Room and invites**.
 
 All of it lives in `data/accounts.db` on the Pi (or in `DAYANPI_DATA_DIR`): accounts, sign-ins, invites and Mac helper tokens. Passwords are stored scrambled (scrypt with a salt), and sign-ins, invites and tokens only as a fingerprint (sha256), so the file holds nothing you could sign in with. None of them ever show up in the journal either.
 
@@ -290,7 +290,7 @@ Up to 4 accounts in all: you (the owner) plus 3 members.
 
 A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). A link that's used up or past its week shows **This invite expired** instead of the form, and a full room shows **The room is full**, both with a way back to sign in. Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
 
-**Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras and the voice only feed yours; their desk gets its checks from their own laptop's camera instead, through the tracker ([below](#a-friends-camera-the-tracker)). Until that's running their desk says "No camera yet" with a link to it, and their time and apps don't count. They can't see anyone else's desk yet either.
+**Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras and the voice only feed yours; their desk gets its checks from their own laptop's camera instead, through the tracker ([below](#a-friends-camera-the-tracker)). Until that's running their desk says "No camera yet" with a link to it, and their time and apps don't count. Of everyone else they only see what each person shares ([What members see of each other](#what-members-see-of-each-other)).
 
 **What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
 
@@ -429,11 +429,13 @@ journalctl -u dayanpi -b --no-pager | grep -i tailscale
 
 The journal line says the camera is locked to your login. Without the variable it warns "camera not locked to Tailscale, don't turn on Funnel" instead, and the camera works for you from anywhere, like before.
 
-**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, take your phone, switch Tailscale and Wi-Fi off, open the site, sign in, open the Pi page, and the cameras say **Only on your own devices**.
+**Check it worked:** on your Mac with Tailscale on, Peek shows the camera like always. Once Funnel is on, do the phone test in [Check it's safe](#check-its-safe).
 
 ### Funnel (the public internet)
 
-Only after the camera lock is set. Funnel lets anyone on the internet reach the site. They still have to sign in, nobody gets an account without an invite, and the camera stays yours. It's also how someone who isn't on your tailnet opens an invite link.
+Funnel lets anyone on the internet reach the site, which is how friends who aren't on your tailnet get in. They still have to sign in, nobody gets an account without an invite, and your camera stays yours. **Only turn it on after the [camera lock](#camera-lock) is set.**
+
+**Turning it on:**
 
 ```bash
 journalctl -u dayanpi -b --no-pager | grep -i tailscale   # says locked? don't skip this
@@ -441,15 +443,60 @@ sudo tailscale funnel --bg 8000
 tailscale funnel status
 ```
 
-`funnel status` should show `https://dayoon.tail279594.ts.net (Funnel on)` going to `http://127.0.0.1:8000`. Like Serve, `--bg` keeps it after you close the terminal, and after reboots. If it says Funnel isn't enabled, open the link it prints and allow Funnel for the Pi, same as Serve the first time. Your own devices still come in through Serve, which is why the camera keeps working for you.
+`funnel status` should show `https://dayoon.tail279594.ts.net (Funnel on)` going to `http://127.0.0.1:8000`. Like Serve, `--bg` keeps it after you close the terminal and after reboots. If it says Funnel isn't enabled, open the link it prints and allow Funnel for the Pi, same as Serve the first time. Your own devices still come in through Serve, which is why the camera keeps working for you.
 
-Turning it back off (Serve only):
+**Turning it off** (back to Serve, only your own devices):
 
 ```bash
 sudo tailscale funnel reset
 sudo tailscale serve --bg 8000
 tailscale serve status
 ```
+
+Friends who aren't on your tailnet can't reach the site then (not even their invite link), but their accounts and desks stay, ready for next time.
+
+#### Check it's safe
+
+Do both every time you turn Funnel on, and after anything that touches `/etc/dayanpi.env`:
+
+1. **The journal line.** `journalctl -u dayanpi -b --no-pager | grep -i tailscale` should say `camera locked to Tailscale login you@github` (your login). If it says `camera not locked to Tailscale, don't turn on Funnel`, turn Funnel off and set the lock first.
+2. **The phone test.** On your phone, switch off **Tailscale and Wi-Fi**, so it really comes in from the internet through Funnel. Then open https://dayoon.tail279594.ts.net/:
+   - You land on the sign-in page, and nothing else shows until you sign in.
+   - Sign in as you. The room and your desk work like always.
+   - Open the Pi page: the cameras say **Only on your own devices**, with no Peek.
+   - Switch Tailscale back on and reload: Peek shows the camera again.
+
+#### What strangers can reach
+
+Someone who finds the address but has no account gets exactly this:
+
+| What | What they get |
+| --- | --- |
+| `/login` | The sign-in page. Wrong passwords start a wait after 5 tries on a name ([Signing in](#signing-in)) |
+| `/join/<code>` | The join page. It only makes an account with a live invite code, and a made-up code is turned away straight off. It never says who's in the room or who sent the invite |
+| `/api/health` | `{"status": "ok"}` |
+| `/assets/...` | The page's own code, styles and fonts: the same files for everyone, nothing about anyone |
+
+Everything else says "sign in first", or sends them to the sign-in page: the room, everyone's names and seats, the pictures, the Pi's numbers, the camera, the tracker's models. A Mac helper token only works on `/api/mac/...`, and never opens the camera.
+
+#### What members see of each other
+
+Everyone sees each other through the room (seats, the sidebar or bottom bar, the quick peek when they tap a seat, and someone's desk at `/people/<username>`), and the Pi only ever sends the parts that person shares in Settings → Sharing. That goes for you too: the others see you the same way, and you see them the same way.
+
+| Their switch | What the others see |
+| --- | --- |
+| Always | Their name, whether they're here, focused / on the phone / away / offline, and for how long |
+| Focus time (on to start) | Today's total, and on the peek and their desk, the day's bar with phone time and pickups |
+| To-do list (on) | What they're working on and how many are done; the whole list on the peek and their desk |
+| History (on) | This month's minutes per day and the total since they joined, on their desk. With focus time too, their minutes that day in everyone's calendar day pages |
+| Apps (off) | The Mac app in front right now, and time per app today |
+| Sites (off, needs Apps) | The site in front right now, YouTube time, and time per site today |
+| Video (off) | The small picture on their seat, peek and desk, about once a second, only while they're working or on the phone, and never one older than 3 s |
+| Nudges (on) | Whether the others get the Nudge button once they've been on the phone 5 minutes |
+
+**Nobody else ever sees,** whatever the switches say: anyone's Settings, bedtime or voice, camera choice, Mac tokens, the peace-sign messages and nudges they got, their own calendar and day pages, or their focus log. **Only you** get the Pi page (cameras, temperature, memory, disk, power), the full camera feeds (and only on your own Tailscale devices), invites and the accounts list.
+
+**What's on your Pi.** Each desk is a folder on your SD card, `data/users/<username>/`: focus log, to-dos, day pages and switches. The site never shows one person's to another, but you can read those files over SSH, so it's fair to tell your friends that. The small pictures and the voice clips never touch the disk (they only live in memory, for seconds), and the journal never has anyone's to-dos, peace-sign or nudge words, pictures, audio, passwords or tokens: just usernames and what happened ("sam nudged dayoon", "peace sign on sam's desk").
 
 ---
 
@@ -516,6 +563,15 @@ curl -s -o /dev/null -w '%{http_code}\n' -d 'username=nobody&password=x' localho
 
 journalctl -u dayanpi -b --no-pager | grep -i tailscale
 # expect the camera locked to your login before Funnel goes on
+
+curl -s localhost:8000/api/health
+# expect {"status":"ok"}: the one API answer a stranger gets
+
+curl -s localhost:8000/api/people/yourname/picture
+# expect {"detail":"sign in first"}: no seats or pictures without signing in
+
+journalctl -u dayanpi --since today --no-pager | grep -iE "would say|didn't pass"
+# only "would say something (N characters)" or "(N characters)": never anyone's words
 ```
 
 Then sign in the way [Using the API from a terminal](#using-the-api-from-a-terminal) shows, and:
@@ -544,9 +600,9 @@ sudo grep -i password /etc/systemd/system/dayanpi.service
 
 ## The dashboard
 
-The site is a few pages now: **Desk** at `/me` (`/` goes there too), **Pi** at `/pi` (just you), and **Settings**. The tabs, the dock on a phone and the Reconnecting chip are in [The pages](focus-tracker.md#the-pages).
+The site is a few pages now: the **Room** at `/`, your **Desk** at `/me`, someone's desk at `/people/<username>`, **Pi** at `/pi` (just you), and **Settings**. The tabs, the dock on a phone and the Reconnecting chip are in [The pages](focus-tracker.md#the-pages).
 
-- **Top bar:** the Desk / Pi tabs, the theme button, and your initial at the top right, with a menu for Settings and Sign out.
+- **Top bar:** the Room / Desk / Pi tabs, the theme button, and your initial at the top right, with a menu for Settings and Sign out.
 - **Members** get the Desk and Settings but no Pi tab, and `/pi` sends them back to the Desk (see [Inviting someone](#inviting-someone)).
 - **Desk:** at the top, with no card around it, your state in big letters, a live timer, today's timeline from 6 am to midnight, and one line of totals (focus, phone, pickups) with the Mac line at its right: what's in front on the Mac (the site for a browser, the app otherwise), plus a small Pause/Resume for you (see [Steps 2 to 4](focus-tracker.md#steps-2-to-4-the-tracker-runs-inside-the-site)). Then the apps, the to-do list next to the apps (see [To-do list](focus-tracker.md#to-do-list)), and the calendar (see [Calendar](focus-tracker.md#calendar)).
 - **Pi:** **Cameras** first, then **The Pi**: temperature, CPU, memory and how long it's been up, each with its number rolling to the new one every second (the temperature's bar turns amber past 70° and red past 80°), and an amber **Undervoltage** warning while the power supply sags.

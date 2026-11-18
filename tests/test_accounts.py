@@ -163,6 +163,20 @@ def test_an_invite_expires_after_seven_days(store):
     assert store.join(invite.code, "Bo", "bo", PASSWORD, NOW + INVITE_TTL_S - 1).username == "bo"
 
 
+def test_a_made_up_code_never_costs_a_scrypt(store, monkeypatch):
+    """Funnel lets anyone try codes, so a guess must be cheap for the Pi. A real code still hashes the password."""
+    hashed = []
+    real_hash = accounts.hash_password
+    monkeypatch.setattr(accounts, "hash_password", lambda password: hashed.append(password) or real_hash(password))
+    expired = store.create_invite(NOW - INVITE_TTL_S)
+    for code in ("made-up", expired.code):
+        with pytest.raises(InviteNotFound):
+            store.join(code, "Bo", "bo", PASSWORD, NOW)
+    assert hashed == []
+    assert add_member(store, "bo").username == "bo"
+    assert hashed == [PASSWORD]
+
+
 def test_a_wrong_code_and_a_deleted_invite_do_not_work(store):
     invite = store.create_invite(NOW)
     with pytest.raises(InviteNotFound):

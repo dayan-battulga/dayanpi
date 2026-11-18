@@ -20,6 +20,23 @@ PICTURE_MAX_HEIGHT = 360
 PICTURE_MAX_BYTES = 32 * 1024
 PICTURE_MAX_BASE64 = (PICTURE_MAX_BYTES * 4) // 3 + 4
 JPEG_START = b"\xff\xd8"
+# The start-of-frame markers, which carry the picture's size (C4, C8 and CC are other segments).
+SIZE_MARKERS = set(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+
+
+def read_jpeg_size(jpeg: bytes) -> dict | None:
+    """{"width", "height"} from a JPEG's header without decoding it, or None when the header never says."""
+    at = len(JPEG_START)
+    size = None
+    while size is None and at + 9 <= len(jpeg) and jpeg[at] == 0xFF:
+        marker = jpeg[at + 1]
+        if marker == 0xFF:
+            at += 1  # a fill byte before the next marker
+        elif marker in SIZE_MARKERS:
+            size = {"height": int.from_bytes(jpeg[at + 5 : at + 7], "big"), "width": int.from_bytes(jpeg[at + 7 : at + 9], "big")}
+        else:
+            at += 2 + int.from_bytes(jpeg[at + 2 : at + 4], "big")
+    return size
 
 
 def shrink_frame(jpeg: bytes) -> bytes | None:
@@ -45,7 +62,10 @@ def read_browser_picture(sent: str) -> bytes | None:
     except (binascii.Error, ValueError):
         jpeg = b""
     picture = None
-    if JPEG_START == jpeg[:2] and len(jpeg) <= PICTURE_MAX_BYTES:
+    # cv2 makes room for whatever size the header claims before it reads a pixel, and a 1 KB file can claim 30000 x 30000
+    # (2.7 GB), so the size is checked first.
+    size = read_jpeg_size(jpeg) if JPEG_START == jpeg[:2] and len(jpeg) <= PICTURE_MAX_BYTES else None
+    if size is not None and size["width"] <= PICTURE_MAX_WIDTH and size["height"] <= PICTURE_MAX_HEIGHT:
         frame = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
         if frame is not None and frame.shape[1] <= PICTURE_MAX_WIDTH and frame.shape[0] <= PICTURE_MAX_HEIGHT:
             picture = jpeg

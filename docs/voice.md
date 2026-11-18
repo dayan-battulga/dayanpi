@@ -2,7 +2,7 @@
 
 Part of the dayanpi docs. Setting up and running the Pi is in the [manual](MANUAL.md).
 
-The focus tracker can say things out loud, like "Phone down." or "Break's over.", through a plain USB speaker. The voice is **off** until you turn it on. While it's off, the app just writes what it would have said to the log (`voice off, would say: 'Phone down.'`).
+The focus tracker can say things out loud, like "Phone down." or "Break's over.", through a plain USB speaker. The voice is **off** until you turn it on. While it's off, the app just notes in the log that it would have said something (`voice off, would say something (11 characters)`), never the words: a peace sign's message is someone's to-dos. The tracker's own lines show up in full on their `focus callout` line (`focus callout for you, instant_pickup: Phone down.`).
 
 One thing to know first: the dashboard runs as a systemd **system** service, so it can't use the desktop's sound system (PipeWire). It plays straight to the speaker with `aplay` instead. That's why you tell it exactly which device the speaker is.
 
@@ -246,6 +246,6 @@ journalctl -u dayanpi -n 100 --no-pager | grep "peace sign"
 | `no LLM message (ConnectionRefusedError: ...)` | Ollama isn't running: `sudo systemctl status ollama` |
 | `no LLM message (Ollama said 404: model ... not found)` | The model in `DAYANPI_LLM_MODEL` isn't pulled: `ollama list`, then `ollama pull` it |
 | `no LLM message (TimeoutError: ...)` | It took over 60 s. The first message after a reboot also has to load the model, so give it one more round |
-| `the LLM's message didn't pass` | The model wrote a list, an emoji, too much, or a number that wasn't in the facts. The message is in the log line. Once in a while is fine; all the time means try another model |
+| `the LLM's message didn't pass` | The model wrote a list, an emoji, too much, or a number that wasn't in the facts. The line only says how long it was, never the words (they're someone's to-dos). Once in a while is fine; all the time means try another model |
 
 To go back to the template, delete the `DAYANPI_LLM_MODEL` line and restart.

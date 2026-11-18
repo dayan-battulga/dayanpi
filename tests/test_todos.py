@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from dayanpi.focus.todos import SAVE_EVERY_S, TodoList
+from dayanpi.focus.todos import SAVE_EVERY_S, TODOS_MAX, TodoList, TodoListFull
 from dayanpi.focus.tracker import MAX_STEP_S, FocusLog
 
 NOON = datetime(2026, 11, 15, 12, 0).timestamp()
@@ -153,3 +153,18 @@ def test_added_current_done_and_undone_go_to_the_focus_log(tmp_path):
     done = todo_lines[2]
     assert (done["id"], done["text"], done["seconds"]) == (report, "finish the report", 120)
     assert todo_lines[3]["id"] is None, "checking the current item clears current"
+
+
+def test_a_full_list_takes_no_more_until_some_are_gone(tmp_path):
+    todos = make_list(tmp_path)
+    first = todos.add("first", NOON)["id"]
+    todos.change(first, NOON, done=True)
+    for index in range(TODOS_MAX - 1):
+        todos.add(f"item {index}", NOON)
+    saved = (tmp_path / "todos.json").read_text()
+    with pytest.raises(TodoListFull):
+        todos.add("one too many", NOON)
+    assert (tmp_path / "todos.json").read_text() == saved, "nothing saved"
+    assert "one too many" not in json.dumps(todos.snapshot(NOON)), "done ones count too"
+    todos.delete(first, NOON)
+    assert todos.add("room again", NOON)["text"] == "room again"

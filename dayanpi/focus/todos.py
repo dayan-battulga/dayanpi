@@ -20,9 +20,16 @@ from dayanpi.utils.files import write_atomically
 
 TODO_FILE = "todos.json"
 TEXT_MAX = 200
+# Open and done together. Every desk's list goes into the stream once a second, so a script adding them forever
+# would slow the whole room down; nobody does a hundred things in a day.
+TODOS_MAX = 100
 SAVE_EVERY_S = 30.0  # collected time saves this often, like the log's samples; edits save right away
 
 logger = logging.getLogger(__name__)
+
+
+class TodoListFull(Exception):
+    pass
 
 
 @dataclass
@@ -56,7 +63,10 @@ class TodoList:
     # ----- public API -----
 
     def add(self, text: str, now: float) -> dict:
+        """Raises TodoListFull at TODOS_MAX items; done ones leave at midnight."""
         with self._lock:
+            if len(self._items) >= TODOS_MAX:
+                raise TodoListFull
             item = TodoItem(id=uuid.uuid4().hex[:8], text=text, created_at=round(now, 3))
             self._items.append(item)
             self._write("added", item, now)

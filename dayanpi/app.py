@@ -34,7 +34,7 @@ from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shr
 from dayanpi.focus.sharing import AT_DESK_STATES, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
-from dayanpi.focus.todos import TEXT_MAX
+from dayanpi.focus.todos import TEXT_MAX, TODOS_MAX, TodoListFull
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import ClipShelf, VoiceAnnouncer
@@ -823,7 +823,10 @@ def list_todos(request: Request):
 def add_todo(request: Request, new: TodoNew):
     todos = find_desk(request).todos
     now = time.time()
-    item = todos.add(new.text, now)
+    try:
+        item = todos.add(new.text, now)
+    except TodoListFull:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"that's {TODOS_MAX} to-dos already; finish or delete some first") from None
     return {"status": "ok", "item": item, "todos": todos.snapshot(now)}
 
 

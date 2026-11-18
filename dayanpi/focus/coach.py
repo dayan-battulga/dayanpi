@@ -264,7 +264,8 @@ class TodoCoach:
         if reply is None and (was_working or self.draft is None):
             logger.warning("peace sign: no LLM message (%s), the template stands in until it's back", self.llm.problem)
         elif reply is not None and text is None:
-            logger.info("peace sign: the LLM's message didn't pass, the template stands in: %r", reply[:200])
+            # Not the words: the draft is someone's to-dos, and the journal is mine.
+            logger.info("peace sign: the LLM's message didn't pass (%d characters), the template stands in", len(reply))
         elif text is not None and not was_working:
             logger.info("peace sign: LLM messages from %s are ready", self.llm.model)
         draft = Draft(key=facts.key, text=text, written_at=now)

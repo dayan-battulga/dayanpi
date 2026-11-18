@@ -292,6 +292,7 @@ def test_anything_but_a_good_reply_speaks_the_template(tmp_path, ollama, mode, c
     assert message.source == "template"
     assert message.text.startswith("It's 6 p.m., about 6 hours until bed. You have 3 things to do:")
     assert "peace sign:" in caplog.text
+    assert "finish the report" not in caplog.text, "a to-do never goes in the journal"
     if mode == "missing":
         assert "404" in coach.llm.problem
 

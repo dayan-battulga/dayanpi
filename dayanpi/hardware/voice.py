@@ -6,7 +6,7 @@ through ALSA's aplay, on DAYANPI_AUDIO_DEVICE when it's set (for example
 plughw:CARD=Device,DEV=0), or on ALSA's default device when it isn't.
 
 Settings come from the environment (/etc/dayanpi.env on the Pi):
-- DAYANPI_VOICE: "off" (the default, which only logs what it would have said)
+- DAYANPI_VOICE: "off" (the default, which only logs that it would have said something)
   or "piper" (piper-tts from pip, in the venv)
 - DAYANPI_PIPER_MODEL: path to a Piper voice .onnx, with its .onnx.json next to it
 - DAYANPI_AUDIO_DEVICE: the ALSA device aplay plays on
@@ -17,6 +17,9 @@ A phrase can also become a clip instead (render): Piper makes the same audio, it
 in memory, and someone's own page plays it ("This computer" in Settings → Voice and bedtime). ClipShelf
 keeps each person's latest clip for CLIP_KEEP_S at most and hands it out once. Clips never touch the disk
 and are never logged.
+
+No phrase's words are ever logged either: a peace sign's message is someone's to-dos, and a nudge names who sent
+it. The callouts' fixed lines are in the app's own "focus callout" log line.
 """
 
 import importlib.metadata
@@ -344,7 +347,7 @@ class VoiceAnnouncer:
         phrase = clean_text(text)
         queued = False
         if phrase and not self.enabled:
-            logger.info("voice off, would say: %r", phrase)
+            logger.info("voice off, would say something (%d characters)", len(phrase))
         elif phrase:
             queued = self._enqueue(phrase, None)
         return queued
@@ -361,7 +364,7 @@ class VoiceAnnouncer:
 
     def _enqueue(self, phrase: str, sink: ClipSink | None) -> bool:
         queued = False
-        shown = repr(phrase) if sink is None else "a clip"
+        shown = "a phrase" if sink is None else "a clip"
         with self._lock:
             if self._phrases is None:
                 logger.warning("voice isn't running, dropped %s", shown)
@@ -410,6 +413,6 @@ class VoiceAnnouncer:
         try:
             self._runner(build_piper_job(phrase, self._settings.piper_model, self._sample_rate, self._settings.audio_device))
         except SpeechError as error:
-            logger.error("voice couldn't say %r: %s", phrase, error)
+            logger.error("voice couldn't say a phrase: %s", error)
         except Exception:
-            logger.exception("voice broke while saying %r, carrying on", phrase)
+            logger.exception("voice broke while saying a phrase, carrying on")

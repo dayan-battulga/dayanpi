@@ -369,11 +369,15 @@ class AccountStore:
         Raises InviteNotFound, RoomFull or UsernameTaken (checked in that order); nothing changes then.
         username and display_name come already checked (check_username, check_display_name).
         """
+        find_invite = "SELECT id FROM invites WHERE code_hash = ? AND expires_at > ?"
+        # Funnel lets anyone post here: a made-up code is turned away before it costs the Pi a 16 MB scrypt.
+        with self._transaction() as db:
+            known = db.execute(find_invite, (hash_secret(code), now)).fetchone() is not None
+        if not known:
+            raise InviteNotFound
         password_hash = hash_password(password)
         with self._transaction() as db:
-            invite = db.execute(
-                "SELECT id FROM invites WHERE code_hash = ? AND expires_at > ?", (hash_secret(code), now)
-            ).fetchone()
+            invite = db.execute(find_invite, (hash_secret(code), now)).fetchone()
             if invite is None:
                 raise InviteNotFound
             if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] >= MAX_ACCOUNTS:
