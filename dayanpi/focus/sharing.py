@@ -26,6 +26,8 @@ SHOWN_SWITCHES = ("focus", "todos", "apps", "sites", "video", "history")  # what
 HERE_S = 120.0  # someone is here while their site is open or their camera checked them this recently
 NUDGE_AFTER_S = 5 * 60  # on the phone this long before anyone can nudge them
 NUDGE_EVERY_S = 10 * 60  # at most one nudge per person this often
+PICTURE_MAX_AGE_S = 3.0  # a seat's picture older than this is no picture
+AT_DESK_STATES = ("working", "phone")  # the only states with a picture; away or unknown never has one
 
 # Every part that can leave the Pi about someone, and the switches it needs. A part missing here is a KeyError, so
 # nothing new gets out without saying what it needs.
@@ -42,6 +44,7 @@ NEEDS = {
     "app": ("apps",),
     "site": ("apps", "sites"),
     "nudge": ("nudges",),
+    "picture": ("video",),  # the seat's say-so ({at}); the JPEG itself goes through the same part (app.their_picture)
     # Their desk (/api/people/<username>) and the quick peek, on top of the seat. When they got here is status too.
     "here_since": (),
     "today": ("focus",),
@@ -121,6 +124,12 @@ def describe_nudge(nudged: dict | None, now: float) -> dict:
     return described
 
 
+def find_fresh_picture(picture: dict | None, status: dict, here: bool, now: float) -> dict | None:
+    """The desk's picture ({jpeg, at}) while it's no older than PICTURE_MAX_AGE_S and they're here at the desk."""
+    fresh = picture if picture is not None and here and status["state"] in AT_DESK_STATES and now - picture["at"] <= PICTURE_MAX_AGE_S else None
+    return fresh
+
+
 def summarize_todos(todos: dict) -> dict:
     current = next((item for item in todos["open"] if item["id"] == todos["current"]), None)
     summary = {
@@ -132,8 +141,11 @@ def summarize_todos(todos: dict) -> dict:
     return summary
 
 
-def build_seat(username: str, name: str, status: dict, sharing: dict[str, bool], here: bool, nudged: dict | None = None, now: float = 0.0) -> dict:
+def build_seat(
+    username: str, name: str, status: dict, sharing: dict[str, bool], here: bool, nudged: dict | None = None, now: float = 0.0, picture: dict | None = None
+) -> dict:
     """What the room sees of one desk every second. status is the desk's own full focus status (app.build_desk_status)."""
+    fresh = find_fresh_picture(picture, status, here, now)
     seat = share_parts(
         sharing,
         {
@@ -148,6 +160,7 @@ def build_seat(username: str, name: str, status: dict, sharing: dict[str, bool],
             "app": lambda: status["app"],
             "site": lambda: status["site"],
             "nudge": lambda: describe_nudge(nudged, now),
+            "picture": lambda: None if fresh is None else {"at": fresh["at"]},
         },
     )
     return seat

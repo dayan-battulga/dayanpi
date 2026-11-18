@@ -249,6 +249,8 @@ export function TrackPage() {
               </button>
             </div>
             <p className="track-note">Keep this tab open. It keeps going behind other tabs and windows.</p>
+            {/* Said out loud, since it's a picture of you: only while Video's on and you're at your desk. */}
+            {tracked?.tracked.send_picture === true && <p className="track-note">Your seat in the room shows a small picture from this camera, about once a second.</p>}
             <p className="track-load">{describeLoad(check?.ms ?? null, memory, backend, check?.reason ?? "normal")}</p>
           </div>
         )}

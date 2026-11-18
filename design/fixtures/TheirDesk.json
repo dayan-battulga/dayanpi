@@ -162,6 +162,9 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
           }
         },
         {
@@ -336,11 +339,17 @@
         "total_minutes": 613
       },
       "video": true,
-      "here_since": 1794867120
+      "here_since": 1794867120,
+      "picture": {
+        "at": 1794877937.6
+      }
     },
     "POST /api/nudge": {
       "status": "ok",
       "wait_s": 600
+    },
+    "/api/people/sam/picture": {
+      "$file": "design/fixtures/pictures/sam.jpg"
     }
   }
 }

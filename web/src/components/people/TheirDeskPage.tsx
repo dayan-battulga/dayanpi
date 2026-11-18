@@ -5,6 +5,7 @@ import { Link, Navigate, useParams } from "react-router";
 import { useFrame } from "@/components/frame/Frame";
 import { AppBars, DayBar, TheirTodoList, describeDone } from "@/components/people/TheirPieces";
 import { NudgeButton } from "@/components/room/NudgeButton";
+import { SeatPicture } from "@/components/room/SeatPicture";
 import { useNudge } from "@/hooks/useNudge";
 import { useTheirDesk } from "@/hooks/useTheirDesk";
 import { WEEKDAYS, buildMonthWeeks, formatCompactMinutes, formatDayKey, formatMonthLabel, readShade } from "@/lib/calendar";
@@ -196,11 +197,12 @@ export function TheirDeskPage() {
           <AnimatePresence initial={false}>
             {desk.video != null && (
               <m.section key="video" aria-label={`${seat.name}’s camera`} className="their-video" layout initial={{ opacity: 0 }} animate={PIECE_SHOWN} exit={PIECE_GONE}>
-                {/* The camera comes in step 7; until then the tile shows their initial, like their seat. */}
+                {/* Their once-a-second picture, or their initial while there's none (away, or nothing fresh). */}
                 <div className="their-video-tile">
                   <span className="seat-initial" aria-hidden="true">
                     {readInitial(seat.name)}
                   </span>
+                  {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
                 </div>
               </m.section>
             )}

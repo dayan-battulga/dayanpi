@@ -118,6 +118,7 @@ export interface Seat {
   app?: string | null;
   site?: string | null;
   nudge?: { wait_s: number; age_s: number | null }; // only while they take nudges
+  picture?: { at: number } | null; // while they share video: a fresh picture to fetch (/api/people/<username>/picture), or none
 }
 
 // Someone's desk (/api/people/<username>): their seat and each piece they share. A piece they don't share is missing.

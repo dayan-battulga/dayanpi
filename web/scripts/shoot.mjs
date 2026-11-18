@@ -42,8 +42,11 @@ const TYPES = {
   ".json": "application/json",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
   ".woff2": "font/woff2",
 };
+// The only folders a fixture's {"$file": ...} may answer from: the tracker's models and the seats' sample pictures.
+const FILE_FOLDERS = [path.join(repoDir, "models"), path.join(repoDir, "design", "fixtures", "pictures")];
 const PHONE = { width: 390, height: 844 };
 const SETTLE_MS = 900;
 
@@ -194,15 +197,16 @@ function serveFixtures(fixture) {
           const routes = fixture.routes ?? {};
           const body = routes[`${request.method} ${url}`] ?? routes[url] ?? routes[`${request.method} ${pathOnly}`] ?? routes[pathOnly];
           // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}, and
-          // {"$file": "models/x.onnx"} is that file from the repo's models/ (the tracker's models), nothing else.
+          // {"$file": "models/x.onnx"} is that file from the repo's models/ (the tracker's models) or design/fixtures/pictures/
+          // (the seats' made-up pictures), nothing else.
           const status = body?.$status ?? 200;
           const file = body?.$file === undefined ? null : path.resolve(repoDir, body.$file);
           if (body === undefined) {
             response.writeHead(404, { "content-type": "application/json" }).end("{}");
           } else if (file !== null) {
-            const inModels = file.startsWith(path.join(repoDir, "models") + path.sep) && existsSync(file);
-            if (inModels) {
-              response.writeHead(200, { "content-type": "application/octet-stream" });
+            const allowed = FILE_FOLDERS.some((folder) => file.startsWith(folder + path.sep)) && existsSync(file);
+            if (allowed) {
+              response.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
               createReadStream(file).pipe(response);
             } else {
               response.writeHead(404).end();

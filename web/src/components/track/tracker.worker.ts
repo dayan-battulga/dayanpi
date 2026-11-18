@@ -8,7 +8,8 @@ import { readFrame, type VisionModels } from "@/lib/vision/worker";
 
 // The tracker's checks: the Pi's pipeline on this worker's own timer (part 1 showed it keeps one a second in a hidden
 // tab, where the page's timer drops to one every 2 s), and each check's numbers straight to the Pi from here, so a
-// throttled page can't hold them up. Only numbers leave this worker, never a picture.
+// throttled page can't hold them up. The seat's small picture goes along only while the Pi's last answer asked for it
+// (video shared, and at the desk); otherwise only numbers leave this worker.
 
 const PERSON_MIN = 0.5; // the tracker's
 const MAX_THREADS = 2; // light enough to run for hours; part 1 had 2 threads close to 4
@@ -19,6 +20,7 @@ let models: VisionModels | null = null;
 let pacer: CheckPacer | null = null;
 let pace: Pace = { intervalMs: 1000, reason: "normal" };
 let isSending = false;
+let sendsPicture = false; // the Pi's last answer's send_picture
 
 function reply(message: TrackerReply): void {
   self.postMessage(message);
@@ -40,10 +42,13 @@ async function sendReading(body: object): Promise<void> {
     try {
       const response = await fetch("/api/track/reading", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (response.ok) {
-        reply({ type: "tracked", ...(await response.json()) });
+        const tracked = await response.json();
+        sendsPicture = tracked.send_picture === true;
+        reply({ type: "tracked", ...tracked });
       } else if (response.status === 401) {
         reply({ type: "signed-out" });
       } else if (response.status === 409) {
+        sendsPicture = false;
         reply({ type: "refused" });
       }
     } catch {
@@ -62,7 +67,9 @@ async function runCheck(): Promise<void> {
       const reading = await readFrame(picture, models);
       const person = findBestConfidence(reading.people);
       const ms = performance.now() - started;
-      void sendReading({ person, phone: findBestConfidence(reading.phones), sign: readSign(reading.hands), elapsed_ms: Math.min(ms, READING_MS_MAX) });
+      const seatPicture = sendsPicture ? await frames?.shrinkToPicture() : null;
+      const numbers = { person, phone: findBestConfidence(reading.phones), sign: readSign(reading.hands), elapsed_ms: Math.min(ms, READING_MS_MAX) };
+      void sendReading(seatPicture != null ? { ...numbers, picture: seatPicture } : numbers);
       pacer.record(started, ms, person >= PERSON_MIN);
       pace = pacer.pace(performance.now());
       reply({ type: "check", ms, boxes: makeBoxes(reading, picture.width, picture.height), pace });

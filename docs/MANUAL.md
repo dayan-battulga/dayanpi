@@ -40,6 +40,7 @@ Always use the **`main`** branch on both machines.
 | `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video", "nudges"}` as true/false; answers with all your switches and your seat as the room now sees it |
 | `/people/<username>` | Someone's desk, read-only, built from what they share (yours goes to `/me`) |
 | `/api/people/<username>` | That desk as JSON: their seat and only the pieces they share |
+| `/api/people/<username>/picture` | Their seat's small picture as a JPEG, only while they share video, are at the desk and it's under 3 s old (404 otherwise) |
 | `/api/nudge` | Nudge someone on their phone 5+ minutes: POST `{"username": ...}` (once per person every 10 minutes; 409 when they can't be nudged, 429 too soon) |
 | `/api/health` | Health check (open, no sign-in) |
 | `/video` | MJPEG camera (owner only; with the camera lock on, only from your own Tailscale devices; 404 otherwise) |
@@ -51,7 +52,7 @@ Always use the **`main`** branch on both machines.
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
-| `/api/track/reading` | The tracker's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
+| `/api/track/reading` | The tracker's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a small base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
 | `/api/track/pause` | The tracker's Pause (POST `{}`): your desk says paused until the next reading |
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
@@ -329,7 +330,7 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 
 - **Status** (working, on the phone, away, and for how long) always shows.
 - **Focus time**, **To-do list** and **History** start on.
-- **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. Video doesn't do anything until step 7.
+- **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. **Video** puts a small picture of you on your seat about once a second, only while you're working or on your phone: a friend's from the tracker on their laptop, yours from the front Pi camera, shrunk on the Pi ([pi-camera.md](pi-camera.md#your-seats-picture)). Your seat in the room has a Hide/Show my video button for the same switch.
 - **Nudges** starts on: others can nudge you once you've been on your phone 5 minutes (at most once every 10). Off, nobody gets the button. A nudge speaks where your peace sign does (the Pi's speaker for you, their own computer for everyone else), so it needs the Pi's voice on like the peace sign ([voice.md](voice.md)); with it off they still get the toast.
 
 Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as the group line in their calendar's day pages.
@@ -408,7 +409,7 @@ Install the Tailscale app, sign in to the same account, and keep it connected. T
 
 ### Camera lock
 
-Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Pi page's cameras say **Only on your own devices** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always.
+Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Pi page's cameras say **Only on your own devices** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always. The seats' small pictures (Settings → Sharing → Video) are a separate thing: a 320×180 copy each person, you included, chooses to show the room. They go through Funnel to signed-in room members, and the lock doesn't touch them.
 
 Find your login on the Pi:
 

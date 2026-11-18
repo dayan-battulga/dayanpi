@@ -3,6 +3,7 @@ import { Dialog } from "radix-ui";
 import { Link } from "react-router";
 import { AppBars, DayBar, TheirTodoList, describeDone } from "@/components/people/TheirPieces";
 import { NudgeButton } from "@/components/room/NudgeButton";
+import { SeatPicture } from "@/components/room/SeatPicture";
 import { PopDialog } from "@/components/ui/dialog";
 import type { Nudger } from "@/hooks/useNudge";
 import { useTheirDesk } from "@/hooks/useTheirDesk";
@@ -38,6 +39,7 @@ function PeekCard({ seat, username, nudger, now, elapsed }: Omit<PeekDialogProps
       <div className="peek-head">
         <span className="peek-face" aria-hidden="true">
           {readInitial(seat.name)}
+          {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
         </span>
         <div className="peek-who">
           <Dialog.Title className="peek-name">{seat.name}</Dialog.Title>

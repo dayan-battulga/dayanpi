@@ -107,7 +107,7 @@
         "history": true,
         "apps": true,
         "sites": false,
-        "video": false,
+        "video": true,
         "nudges": true
       }
     },
@@ -123,6 +123,7 @@
             "focus",
             "todos",
             "apps",
+            "video",
             "history"
           ],
           "focus_seconds": 11538,
@@ -136,6 +137,9 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
           }
         },
         {
@@ -164,6 +168,9 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
           }
         },
         {
@@ -413,6 +420,12 @@
     "POST /api/nudge": {
       "status": "ok",
       "wait_s": 600
+    },
+    "/api/people/dayan/picture": {
+      "$file": "design/fixtures/pictures/dayan.jpg"
+    },
+    "/api/people/sam/picture": {
+      "$file": "design/fixtures/pictures/sam.jpg"
     }
   }
 }

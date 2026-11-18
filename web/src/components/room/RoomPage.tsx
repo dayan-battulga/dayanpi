@@ -3,6 +3,7 @@ import { useFrame } from "@/components/frame/Frame";
 import { PeekDialog } from "@/components/room/PeekDialog";
 import { AloneSeat, EmptySeat, SeatCard } from "@/components/room/SeatCard";
 import { useNudge } from "@/hooks/useNudge";
+import { useSharing } from "@/hooks/useSharing";
 import { ROOM_SIZE } from "@/lib/account";
 import { formatDuration } from "@/lib/format";
 import { orderSeats, summarizeRoom } from "@/lib/room";
@@ -20,6 +21,8 @@ export function RoomPage() {
   const open = Math.max(0, ROOM_SIZE - seats.length);
   const elapsed = Math.max(0, now - receivedAt);
   const nudger = useNudge();
+  // Your seat's Show/Hide my video is Settings → Sharing → Video, held the same way.
+  const { sharing, flipSwitch } = useSharing(snapshot?.focus, room, user?.username, now, receivedAt);
   const [peeking, setPeeking] = useState<string | null>(null);
   // The peek follows the live seat, and closes if they leave the room.
   const peeked = seats.find((seat) => seat.username === peeking) ?? null;
@@ -44,6 +47,7 @@ export function RoomPage() {
               now={now}
               nudger={nudger}
               onPeek={() => setPeeking(seat.username)}
+              video={seat.username === user?.username ? { shown: sharing.video, flip: () => void flipSwitch("video", !sharing.video) } : undefined}
             />
           ))}
           {alone ? <AloneSeat owner={owner} /> : Array.from({ length: open }, (_, index) => <EmptySeat key={index} owner={owner} />)}

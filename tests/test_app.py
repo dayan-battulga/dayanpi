@@ -1267,6 +1267,7 @@ ACCESS = {
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
     ("GET", "/api/people/{username}"): ("/api/people/nobody", None, 401, 404, 404),
+    ("GET", "/api/people/{username}/picture"): ("/api/people/nobody/picture", None, 401, 404, 404),
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
     ("GET", "/people/{username}"): ("/people/sam", None, 303, 200, 200),  # the voice is off in the tests, so nothing plays
     ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
@@ -1672,7 +1673,7 @@ def test_a_browser_reading_feeds_the_senders_own_desk_about_once_a_second():
         signed_out = stranger().post("/api/track/reading", json=SEEN)
         member_desk = app.desks.open("bo", time.time())
     assert [reply.status_code for reply in replies] == [200, 200, 429], "two close together, then one a second"
-    assert replies[1].json() == {"state": "working", "seconds_in_state": 0.0, "paused": False, "spoken": None}
+    assert replies[1].json() == {"state": "working", "seconds_in_state": 0.0, "paused": False, "spoken": None, "send_picture": False}
     assert replies[2].json() == {"detail": "one reading a second"}
     assert (theirs["state"], theirs["camera_ok"], theirs["last_check"]["person"], theirs["last_check"]["elapsed_ms"]) == ("working", True, 0.91, 140.5)
     assert (mine["state"], mine["last_check"]) == ("unknown", None)
@@ -1688,7 +1689,7 @@ def test_a_browser_reading_feeds_the_senders_own_desk_about_once_a_second():
         {**SEEN, "phone": -0.1},
         {**SEEN, "elapsed_ms": 60_001},
         {**SEEN, "sign": "fist"},
-        {**SEEN, "picture": "data:image/jpeg;base64,AAAA"},
+        {**SEEN, "picture": "A" * 50_000},  # a picture is allowed now (step 7), but never a big one
         {"person": 0.9, "phone": 0.0},
         {**SEEN, "person": "0.9x"},
     ],
@@ -1743,7 +1744,7 @@ def test_pause_says_paused_until_the_next_reading():
         status = member.get("/api/focus").json()
         time.sleep(1.05)
         resumed = member.post("/api/track/reading", json=SEEN).json()
-    assert paused == {"state": "unknown", "seconds_in_state": 0.0, "paused": True, "spoken": None}
+    assert paused == {"state": "unknown", "seconds_in_state": 0.0, "paused": True, "spoken": None, "send_picture": False}
     assert (status["camera_paused"], status["camera_ok"]) == (True, False)
     assert resumed["paused"] is False
 
@@ -1996,7 +1997,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
     desk.sharing.set(switches)
     reply = let_in(stranger(), find_owner()).get("/api/people/sam")
     their = reply.json()
-    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since"}
+    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture"}
     assert reply.status_code == 200
     assert set(their) - seat_keys == pieces
     for piece, texts in SECRETS.items():
@@ -2098,3 +2099,151 @@ def test_the_day_page_has_the_others_who_share_focus_and_history():
     assert sams["others"] == [{"name": "tester", "focus_minutes": 30}]
     desk_of(sam).sharing.set({"focus": False})
     assert let_in(stranger(), owner).get(f"/api/days/{day}").json()["others"] == []
+
+
+# ----- the seats' small pictures (study room step 7) -----
+
+
+def make_jpeg(width=320, height=180) -> bytes:
+    import cv2
+    import numpy as np
+
+    frame = np.full((height, width, 3), 90, dtype=np.uint8)
+    cv2.circle(frame, (width // 2, height // 2), height // 4, (200, 180, 160), -1)
+    return cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])[1].tobytes()
+
+
+def as_base64(jpeg: bytes) -> str:
+    import base64
+
+    return base64.b64encode(jpeg).decode("ascii")
+
+
+def read_with_picture(client, picture: str, person: float = 0.9) -> dict:
+    reply = client.post("/api/track/reading", json={"person": person, "phone": 0, "elapsed_ms": 120, "picture": picture})
+    assert reply.status_code == 200, reply.text
+    return reply.json()
+
+
+def list_files(folder) -> list[str]:
+    return sorted(str(path.relative_to(folder)) for path in folder.rglob("*") if path.is_file())
+
+
+def test_a_browser_sends_a_picture_only_while_sharing_video_and_at_the_desk(tmp_path):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    client = let_in(stranger(), sam)
+    picture = as_base64(make_jpeg())
+    assert read_with_picture(client, picture)["send_picture"] is False, "video starts off"
+    assert desk.picture is None, "the Pi drops a picture nobody asked for"
+    client.post("/api/sharing", json={"video": True})
+    desk.browser._tokens = 2  # the reading bucket allows two at once; the test sends more than one second's worth
+    reply = read_with_picture(client, picture)
+    assert (reply["state"], reply["send_picture"]) == ("working", True)
+    assert desk.picture is not None and desk.picture["jpeg"] == make_jpeg()
+
+    owner = let_in(stranger(), find_owner())
+    served = owner.get("/api/people/sam/picture")
+    assert (served.status_code, served.content, served.headers["content-type"]) == (200, make_jpeg(), "image/jpeg")
+    assert served.headers["cache-control"] == "no-store" and served.headers["x-content-type-options"] == "nosniff"
+    seat = app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())
+    assert seat["picture"]["at"] == desk.picture["at"]
+    assert stranger().get("/api/people/sam/picture").status_code == 401, "signed-in room members only"
+
+
+def test_hiding_video_drops_the_picture_at_once_and_refuses_the_next(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    client = let_in(stranger(), sam)
+    client.post("/api/sharing", json={"video": True})
+    desk.picture = {"jpeg": make_jpeg(), "at": time.time()}
+    put_on_the_phone(monkeypatch, desk)
+    owner = let_in(stranger(), find_owner())
+    assert owner.get("/api/people/sam/picture").status_code == 200
+
+    client.post("/api/sharing", json={"video": False})
+    assert desk.picture is None, "hidden means gone, not in 3 seconds"
+    assert owner.get("/api/people/sam/picture").status_code == 404
+    desk.browser._tokens = 2
+    assert read_with_picture(client, as_base64(make_jpeg()))["send_picture"] is False
+    assert desk.picture is None, "one that still arrives is dropped"
+
+
+def test_away_or_unknown_means_no_picture(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    desk.sharing.set({"video": True})
+    now = time.time()
+    app.keep_picture(desk, make_jpeg(), "away", now)
+    assert desk.picture is None
+    app.keep_picture(desk, make_jpeg(), "working", now)
+    assert desk.picture is not None
+    real = desk.tracker.status
+    monkeypatch.setattr(desk.tracker, "status", lambda at: {**real(at), "state": "unknown", "last_check": {"at": at}})
+    assert let_in(stranger(), find_owner()).get("/api/people/sam/picture").status_code == 404, "the Pi serves nothing while away"
+    app.keep_picture(desk, make_jpeg(), "unknown", now)
+    assert desk.picture is None, "a reading that leaves the desk drops the last picture"
+
+
+def test_nothing_older_than_three_seconds(monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    desk.sharing.set({"video": True})
+    put_on_the_phone(monkeypatch, desk)
+    owner = let_in(stranger(), find_owner())
+    desk.picture = {"jpeg": make_jpeg(), "at": time.time() - 2.5}
+    assert owner.get("/api/people/sam/picture").status_code == 200
+    desk.picture["at"] = time.time() - 3.5
+    assert owner.get("/api/people/sam/picture").status_code == 404
+    assert app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())["picture"] is None
+
+
+@pytest.mark.parametrize("sent", ["not base64!", as_base64(b"GIF89a not a jpeg"), as_base64(make_jpeg(1280, 720))])
+def test_anything_but_a_small_jpeg_is_dropped_and_the_reading_still_counts(sent):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    desk.sharing.set({"video": True})
+    client = let_in(stranger(), sam)
+    desk.browser._tokens = 2
+    reply = read_with_picture(client, sent)
+    assert reply["seconds_in_state"] is not None
+    assert desk.picture is None
+
+
+def test_pictures_never_touch_the_disk(tmp_path, monkeypatch):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    client = let_in(stranger(), sam)
+    client.post("/api/sharing", json={"video": True})
+    read_with_picture(client, as_base64(make_jpeg()), person=0.9)
+    read_with_picture(client, as_base64(make_jpeg()), person=0.9)  # working now, so the log has its state line
+    before = list_files(tmp_path)
+    desk.browser._tokens = 2
+    picture = make_jpeg(320, 180)
+    read_with_picture(client, as_base64(picture))
+    put_on_the_phone(monkeypatch, desk)
+    assert let_in(stranger(), find_owner()).get("/api/people/sam/picture").status_code == 200
+    after = list_files(tmp_path)
+    assert after == before, "a picture changed the data folder"
+    for name in after:
+        content = (tmp_path / name).read_bytes()
+        assert picture not in content and as_base64(picture).encode() not in content, f"the picture ended up in {name}"
+
+
+def test_my_tile_is_off_until_i_turn_video_on(monkeypatch):
+    mine = use_owner_desk(monkeypatch)
+    monkeypatch.setattr(app.stream, "latest_frame", lambda: make_jpeg(640, 480))
+    put_on_the_phone(monkeypatch, mine)
+    app.take_owner_picture(time.time())
+    assert mine.picture is None, "my tile starts off"
+    mine.sharing.set({"video": True})
+    app.take_owner_picture(time.time())
+    import cv2
+    import numpy as np
+
+    shrunk = cv2.imdecode(np.frombuffer(mine.picture["jpeg"], dtype=np.uint8), cv2.IMREAD_COLOR)
+    assert shrunk.shape[:2] == (180, 320), "shrunk on the Pi, cut to 16:9"
+    mine.camera_source.set("browser")
+    mine.picture = None
+    app.take_owner_picture(time.time())
+    assert mine.picture is None, "on the browser's camera, the browser sends it instead"

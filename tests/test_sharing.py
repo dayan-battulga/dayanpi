@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, NEEDS, NUDGE_AFTER_S, NUDGE_EVERY_S, SharingSetting, build_seat, can_nudge, is_here, share_parts
+from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, NEEDS, NUDGE_AFTER_S, NUDGE_EVERY_S, PICTURE_MAX_AGE_S, SharingSetting, build_seat, can_nudge, is_here, share_parts
 
 NOW = 1_800_000_000.0
 # A desk's full status, with something to find for every part.
@@ -75,6 +75,7 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "app": "SecretApp",
         "site": "secret.example",
         "nudge": {"wait_s": 0.0, "age_s": None},
+        "picture": None,  # shares video, but no picture right now
     }
     status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": []}
     assert build_seat("sam", "Sam", STATUS, share(), here=True) == status_only
@@ -130,3 +131,27 @@ def test_nudging_needs_the_phone_for_five_minutes_their_ok_and_ten_minutes_since
     recent = seat(nudged={"by": "dayan", "at": NOW - 60})
     assert (can_nudge(recent), recent["nudge"]) == (False, {"wait_s": NUDGE_EVERY_S - 60, "age_s": 60.0})
     assert can_nudge(seat(nudged={"by": "dayan", "at": NOW - NUDGE_EVERY_S}))
+
+
+@pytest.mark.parametrize(
+    "state, video, age, here, shown",
+    [
+        ("working", True, 1, True, True),
+        ("phone", True, PICTURE_MAX_AGE_S, True, True),
+        ("away", True, 1, True, False),  # away or unknown: no picture at all
+        ("unknown", True, 1, True, False),
+        ("working", True, PICTURE_MAX_AGE_S + 0.1, True, False),  # older than 3 s is no picture
+        ("working", True, 1, False, False),  # not here
+    ],
+)
+def test_a_seat_has_a_picture_only_while_sharing_at_the_desk_and_fresh(state, video, age, here, shown):
+    picture = {"jpeg": b"secret jpeg", "at": NOW - age}
+    seat = build_seat("sam", "Sam", {**STATUS, "state": state}, share(video=video), here, None, NOW, picture)
+    assert seat["picture"] == ({"at": NOW - age} if shown else None)
+    assert "secret jpeg" not in json.dumps(seat), "the stream only says there is one; the JPEG has its own route"
+
+
+def test_with_video_off_the_seat_says_nothing_about_a_picture():
+    seat = build_seat("sam", "Sam", STATUS, share(focus=True), True, None, NOW, {"jpeg": b"x", "at": NOW})
+    assert "picture" not in seat
+    assert NEEDS["picture"] == ("video",)

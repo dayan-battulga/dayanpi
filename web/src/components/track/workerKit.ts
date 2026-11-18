@@ -1,4 +1,5 @@
 import * as ort from "onnxruntime-web";
+import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH, encodeBase64, findPictureCrop } from "@/lib/track";
 import { readRgba, type Picture } from "@/lib/vision/image";
 import { loadModel, MODEL_NAMES } from "@/lib/vision/models";
 import type { VisionModels } from "@/lib/vision/worker";
@@ -28,6 +29,21 @@ export class FrameKeeper {
       this.canvas.height = this.latest.displayHeight;
       this.context.drawImage(this.latest, 0, 0);
       picture = readRgba(this.context.getImageData(0, 0, this.canvas.width, this.canvas.height).data, this.canvas.width, this.canvas.height);
+    }
+    return picture;
+  }
+
+  // The seat's small picture of the newest frame, as base64 JPEG, or null before the first frame.
+  async shrinkToPicture(): Promise<string | null> {
+    let picture: string | null = null;
+    const frame = this.latest;
+    if (frame !== null) {
+      const canvas = new OffscreenCanvas(PICTURE_WIDTH, PICTURE_HEIGHT);
+      const crop = findPictureCrop(frame.displayWidth, frame.displayHeight);
+      // Drawn before the await, while this frame is still open: the reader closes it once a newer one comes.
+      canvas.getContext("2d")?.drawImage(frame, crop.x, crop.y, crop.width, crop.height, 0, 0, PICTURE_WIDTH, PICTURE_HEIGHT);
+      const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: PICTURE_QUALITY });
+      picture = encodeBase64(new Uint8Array(await blob.arrayBuffer()));
     }
     return picture;
   }

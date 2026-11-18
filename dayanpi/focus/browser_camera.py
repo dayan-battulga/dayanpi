@@ -1,4 +1,5 @@
-"""A browser's camera feeding a desk (the /track page): each check's numbers, never a picture.
+"""A browser's camera feeding a desk (the /track page): each check's numbers. The seat's small picture can ride along with
+a reading (step 7), but it never reaches the tracker: app.py keeps it on the desk, through the sharing switches.
 
 The page sends what the tracker reads from a check, and this turns it into the reading the Pi's own cameras would
 make, so the desk's tracker, log, to-do time and day pages work the same way. The desk's hand sign hold is its own,

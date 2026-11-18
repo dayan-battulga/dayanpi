@@ -1,15 +1,11 @@
 import { AnimatePresence, m } from "motion/react";
-import { useRef, useState } from "react";
+import { SeatPicture } from "@/components/room/SeatPicture";
 import { Switch } from "@/components/ui/switch";
-import { showToast } from "@/components/ui/toaster";
+import { useSharing } from "@/hooks/useSharing";
 import { formatClock } from "@/lib/format";
-import { request } from "@/lib/http";
 import { SPRINGS } from "@/lib/motion";
 import { listSharedPieces, readInitial } from "@/lib/room";
-import type { FocusStatus, Room, Seat, Sharing } from "@/lib/types";
-
-// A snapshot built just before a switch flipped can still arrive after the reply, so the reply wins for a moment.
-const SWITCH_HOLD_S = 2.5;
+import type { FocusStatus, Room, Sharing } from "@/lib/types";
 
 // History isn't in the mockup; it sits after the to-dos like the rest. Status is always on, so it's a plain row.
 const SWITCHES: { key: keyof Sharing; label: string }[] = [
@@ -22,8 +18,6 @@ const SWITCHES: { key: keyof Sharing; label: string }[] = [
   { key: "nudges", label: "Nudges" }, // whether others may nudge you; the button doesn't show for anyone while it's off
 ];
 
-const DEFAULT_SHARING: Sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true };
-
 const PIECE_IN = { opacity: 1, transition: SPRINGS.enter };
 const PIECE_OUT = { opacity: 0, transition: SPRINGS.exit };
 
@@ -35,38 +29,8 @@ interface SharingSectionProps {
   receivedAt: number;
 }
 
-interface Held {
-  sharing: Sharing;
-  seat: Seat | null; // the reply's, once it's in
-  at: number;
-  until: number;
-}
-
-// Settings → Share with the room (Settings.dc.html): your switches, and your seat exactly as everyone else gets it,
-// from the Pi: the stream's room, or the reply to the switch you just flipped, whose pieces fade in or out.
 export function SharingSection({ focus, room, username, now, receivedAt }: SharingSectionProps) {
-  const [held, setHeld] = useState<Held | null>(null);
-  const latest = useRef(0);
-  const holding = held != null && now < held.until;
-  const sharing = holding ? held.sharing : (focus?.sharing ?? DEFAULT_SHARING);
-  const streamed = room?.seats.find((entry) => entry.username === username) ?? null;
-  const seat = holding && held.seat != null ? held.seat : streamed;
-  const seatAt = holding && held.seat != null ? held.at : receivedAt;
-
-  const flipSwitch = async (key: keyof Sharing, on: boolean) => {
-    const asked = ++latest.current;
-    setHeld({ sharing: { ...sharing, [key]: on }, seat: null, at: now, until: Infinity });
-    const reply = await request<{ sharing: Sharing; seat: Seat }>("POST", "/api/sharing", { [key]: on });
-    const answer = reply.body;
-    // Only the newest flip's answer counts, so two quick ones can't land out of order.
-    if (asked === latest.current) {
-      const at = Date.now() / 1000;
-      setHeld(answer != null ? { sharing: answer.sharing, seat: answer.seat, at, until: at + SWITCH_HOLD_S } : null);
-    }
-    if (answer == null) {
-      showToast("Couldn't change what the room sees");
-    }
-  };
+  const { sharing, seat, seatAt, flipSwitch } = useSharing(focus, room, username, now, receivedAt);
 
   return (
     <section aria-labelledby="settings-sharing">
@@ -95,6 +59,7 @@ export function SharingSection({ focus, room, username, now, receivedAt }: Shari
                 <span className="share-initial" aria-hidden="true">
                   {readInitial(seat.name)}
                 </span>
+                {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
                 <div className="share-tile-foot">
                   <span className="share-name">{seat.name}</span>
                   <span className="share-timer">{seat.seconds_in_state == null ? "offline" : formatClock(seat.seconds_in_state + Math.max(0, now - seatAt))}</span>

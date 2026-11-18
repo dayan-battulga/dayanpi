@@ -181,6 +181,12 @@ INFO dayanpi.hardware.camera: side camera: USB webcam at /dev/v4l/by-id/usb-...-
 - **15 frames a second.** The webcam hands over ready-made JPEGs, but the Pi camera's frames get turned into JPEGs on the Pi, so it runs a bit slower to leave CPU for the detector.
 - **Picture upside down?** One line in `/etc/dayanpi.env` fixes it. See [Upside-down picture](#upside-down-picture).
 
+## Your seat's picture
+
+The room's seats can show a small picture of each person about once a second (study room step 7). Yours comes from this front camera, shrunk on the Pi, and it's off until you turn it on: Settings → Sharing → **Video**, or **Show my video** on your seat in the room.
+
+While it's on, and only while you're working or on your phone, the Pi takes the front camera's newest frame once a second, cuts it to 16:9 from the middle and shrinks it to 320×180 at JPEG quality 50 (about 6–7 KB). It keeps just that one picture in memory and never writes it anywhere. Away or unknown, or Video off, means no picture at all. Nothing about the full camera changes: `/video`, `/video/side` and the Pi page's peek still only answer you on your own Tailscale devices (see [Camera lock](MANUAL.md#camera-lock)). The small picture goes to the people in the room because you turned it on, the same as theirs comes to you. If your desk is on the browser's camera instead (Settings → Camera), the tracker sends your picture like everyone else's, and this camera's isn't used.
+
 ## Upside-down picture
 
 Mounted the Pi camera upside down? Add this to `/etc/dayanpi.env` with `sudo nano /etc/dayanpi.env`, on its own line:

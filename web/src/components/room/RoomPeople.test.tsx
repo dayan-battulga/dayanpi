@@ -148,3 +148,51 @@ it("leaves the bottom bar off when nobody else is here", async () => {
   await screen.findByRole("heading", { level: 1 });
   await waitFor(() => expect(screen.queryByRole("navigation", { name: "The room" })).toBeNull());
 });
+
+// jsdom has no object URLs; each blob gets a name so the test can tell frames apart and see them freed.
+function stubObjectUrls() {
+  let made = 0;
+  const revoked: string[] = [];
+  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => `blob:frame-${++made}`, revokeObjectURL: (url: string) => revoked.push(url) }));
+  return revoked;
+}
+
+it("shows a seat's picture, fading each new frame in over the last, and the initial again without one", async () => {
+  const revoked = stubObjectUrls();
+  const pictureRoutes = {
+    "GET /api/people/sam/picture?at=1": answer("jpeg one"),
+    "GET /api/people/sam/picture?at=2": answer("jpeg two"),
+    "GET /api/people/sam/picture?at=3": answer("jpeg three"),
+  };
+  openApp("/", [ME, { ...SAM, picture: { at: 1 } }, ALEX], { routes: pictureRoutes });
+  const sam = await screen.findByRole("article", { name: "Sam, on the phone" });
+  const frames = () => Array.from(sam.querySelectorAll(".seat-picture-frame"), (frame) => frame.getAttribute("src"));
+  await waitFor(() => expect(frames()).toEqual(["blob:frame-1"]));
+
+  FakeEventSource.latest?.send({ ...makeSnapshot(), room: { seats: [ME, { ...SAM, picture: { at: 2 } }, ALEX] } });
+  await waitFor(() => expect(frames()).toEqual(["blob:frame-1", "blob:frame-2"])); // the new one fades in on top
+  FakeEventSource.latest?.send({ ...makeSnapshot(), room: { seats: [ME, { ...SAM, picture: { at: 3 } }, ALEX] } });
+  await waitFor(() => expect(frames()).toEqual(["blob:frame-2", "blob:frame-3"]));
+  expect(revoked).toEqual(["blob:frame-1"]);
+
+  FakeEventSource.latest?.send({ ...makeSnapshot(), room: { seats: [ME, { ...SAM, picture: null }, ALEX] } }); // hid it, or walked away
+  await waitFor(() => expect(sam.querySelector(".seat-picture")).toBeNull());
+  expect(revoked).toEqual(["blob:frame-1", "blob:frame-2", "blob:frame-3"]);
+  expect(within(sam).getByText("S")).toHaveClass("seat-initial");
+});
+
+it("hides and shows your video from your own seat, the same switch as Settings → Sharing → Video", async () => {
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: true, nudges: true };
+  const { user, sent } = openApp("/", [ME, SAM], {
+    focus: { sharing },
+    routes: { "POST /api/sharing": answer({ sharing: { ...sharing, video: false }, seat: { ...ME, picture: undefined } }) },
+  });
+  const hide = await screen.findByRole("button", { name: "Hide my video" });
+  expect(hide).toHaveAttribute("aria-pressed", "true");
+  expect(within(screen.getByRole("article", { name: "Sam, on the phone" })).queryByRole("button", { name: /my video/ })).toBeNull();
+
+  await user.click(hide);
+
+  expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/sharing", body: { video: false } });
+  expect(screen.getByRole("button", { name: "Show my video" })).toHaveAttribute("aria-pressed", "false");
+});

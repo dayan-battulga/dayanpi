@@ -2960,7 +2960,16 @@ button.todo-pill:active,
   cursor: default;
 }
 
-/* Two rings leave a nudged seat's initial, the second 0.6 s behind, two rounds and done. */
+/* Two rings leave a nudged seat's middle (over its picture, if it has one), the second 0.6 s behind, two rounds and done. */
+.seat-ripples {
+  position: absolute;
+  inset: 0;
+  width: 84px;
+  height: 84px;
+  margin: auto;
+  pointer-events: none;
+}
+
 .seat-ripples span {
   position: absolute;
   inset: 0;
@@ -3904,6 +3913,159 @@ button.todo-pill:active,
   .nudge-bell {
     top: 8px;
     right: 8px;
+  }
+}
+
+/* ---------- the seats' small pictures (study room step 7): SeatsInfo's video seats ---------- */
+
+/* Each new frame fades in over the last one, so once a second reads as a calm live photo. */
+.seat-picture {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.seat-picture-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: fade-in 0.8s var(--ease) both;
+}
+
+/* The name and the details read on a picture through SeatsInfo's shade along the bottom. */
+.seat-picture:has(.seat-picture-frame)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 140px;
+  background: linear-gradient(to top, rgb(0 0 0 / 62%), transparent);
+}
+
+.seat:has(.seat-picture-frame) .seat-chip {
+  background: rgb(0 0 0 / 35%);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.seat:has(.seat-picture-frame) :is(.seat-name, .seat-timer) {
+  color: #ffffff;
+}
+
+.seat:has(.seat-picture-frame) .seat-line {
+  color: rgb(255 255 255 / 86%);
+}
+
+.seat:has(.seat-picture-frame) .seat-app {
+  color: rgb(255 255 255 / 62%);
+}
+
+.seat:has(.seat-picture-frame) .seat-bar {
+  background: rgb(255 255 255 / 14%);
+}
+
+.seat:has(.seat-picture-frame) .nudge-bell:not([data-waiting]) {
+  background: rgb(0 0 0 / 35%);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Your own seat's Show/Hide my video (Room.dc.html): on a picture it's frosted dark, otherwise a plain sunken circle. */
+.video-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease),
+    background-color 0.3s var(--ease);
+}
+
+.video-toggle:active {
+  transform: scale(0.97);
+}
+
+.seat:has(.seat-picture-frame) .video-toggle {
+  background: rgb(0 0 0 / 32%);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* The same picture in the peek's face, Settings' preview and their desk's camera tile. */
+.peek-face {
+  position: relative;
+  overflow: hidden;
+}
+
+.peek-face .seat-picture::after,
+.their-video-tile .seat-picture::after {
+  display: none;
+}
+
+.share-tile .seat-picture:has(.seat-picture-frame)::after {
+  height: 80px;
+  background: linear-gradient(to top, rgb(0 0 0 / 50%), transparent);
+}
+
+.share-tile-foot {
+  z-index: 1;
+}
+
+.share-tile:has(.seat-picture-frame) .share-tile-foot {
+  color: #ffffff;
+}
+
+/* Settings → Camera: "Show my video in the room" points at Sharing's switch. */
+.settings-video-row {
+  margin-top: 16px;
+}
+
+.setting-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 400 13px var(--font-ui);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (max-width: 639px) {
+  .seat-ripples {
+    width: 60px;
+    height: 60px;
+  }
+
+  .seat-picture:has(.seat-picture-frame)::after {
+    height: 80px;
+    background: linear-gradient(to top, rgb(0 0 0 / 50%), transparent);
+  }
+
+  .seat:has(.seat-picture-frame) .seat-line {
+    color: rgb(255 255 255 / 78%);
+  }
+
+  /* RoomPhone's seats have no video button; Settings → Sharing has the switch. */
+  .video-toggle {
+    display: none;
   }
 }
 

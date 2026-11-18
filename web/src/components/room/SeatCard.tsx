@@ -1,6 +1,7 @@
-import { Plus } from "lucide-react";
+import { Plus, Video, VideoOff } from "lucide-react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
+import { SeatPicture } from "@/components/room/SeatPicture";
 import type { Nudger } from "@/hooks/useNudge";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SEAT_WORDS, describeSeatLine, findDoneShare, readInitial } from "@/lib/room";
@@ -17,11 +18,13 @@ interface SeatCardProps {
   now: number;
   nudger: Nudger;
   onPeek: () => void; // someone else's seat opens the quick peek
+  video?: { shown: boolean; flip: () => void }; // your own seat's Show/Hide my video (Settings → Sharing → Video)
 }
 
-// One person's seat (SeatsInfo.dc.html): the lamp in their state color, their initial until video comes, today's total,
-// their name and timer, the current to-do and app, and the to-dos-done bar. Each detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek }: SeatCardProps) {
+// One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
+// when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
+// detail only if they share it.
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, video }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -33,14 +36,20 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek }:
       {!mine && <button type="button" className="seat-peek" aria-label={`Peek at ${seat.name}`} aria-haspopup="dialog" onClick={onPeek} />}
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
-        {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
-          <span className="seat-ripples">
-            <span />
-            <span />
-          </span>
-        )}
       </span>
+      {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
+      {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
+        <span className="seat-ripples" aria-hidden="true">
+          <span />
+          <span />
+        </span>
+      )}
       <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
+      {video != null && (
+        <button type="button" className="video-toggle" aria-pressed={video.shown} aria-label={video.shown ? "Hide my video" : "Show my video"} onClick={video.flip}>
+          {video.shown ? <Video size={18} strokeWidth={1.8} aria-hidden="true" /> : <VideoOff size={18} strokeWidth={1.8} aria-hidden="true" />}
+        </button>
+      )}
       {seat.focus_seconds != null && (
         <span className="seat-chip">
           {formatDuration(seat.focus_seconds)}

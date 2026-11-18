@@ -14,9 +14,9 @@ const SOURCES: { value: Source; label: string }[] = [
 ];
 
 // Settings → Camera (Settings.dc.html): where your desk's checks come from. Only the owner's desk can have the Pi's
-// cameras; everyone else's is a browser's, through /track. The mockup's "Show my video in the room" row waits for the
-// Sharing section.
-export function CameraSection({ focus, owner, now }: { focus: FocusStatus | undefined; owner: boolean; now: number }) {
+// cameras; everyone else's is a browser's, through /track. "Show my video in the room" is Sharing's Video switch, so this
+// row only points there.
+export function CameraSection({ focus, owner, now, onOpenSharing }: { focus: FocusStatus | undefined; owner: boolean; now: number; onOpenSharing: () => void }) {
   const [held, setHeld] = useState<{ source: Source; until: number } | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const saved = focus?.camera_source ?? (owner ? "pi" : "browser");
@@ -65,6 +65,13 @@ export function CameraSection({ focus, owner, now }: { focus: FocusStatus | unde
         )}
         {!owner && " The Pi's cameras are only for the owner's desk."}
       </p>
+      <div className="setting-row settings-video-row">
+        Show my video in the room
+        <button type="button" className="setting-link" onClick={onOpenSharing}>
+          Set in Sharing
+        </button>
+      </div>
+      <p className="settings-hint">Your seat never shows video while you’re away.</p>
     </section>
   );
 }

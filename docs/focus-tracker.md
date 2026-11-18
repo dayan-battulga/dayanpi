@@ -249,7 +249,7 @@ Each seat has:
 
 ### What each person shares
 
-Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** and **History** (your past days) start on; **Apps**, **Sites** and **Video** start off, and Sites only counts while Apps is on. Next to the switches is **What the room sees**: your seat exactly as everyone else gets it, straight from the Pi, so it changes the moment you flip something. History shows on their desk page (part 2, below); Video has nothing to show until step 7, which will read it. **Nudges** (on to start) is whether others can nudge you. Your own desk always shows you everything.
+Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** and **History** (your past days) start on; **Apps**, **Sites** and **Video** start off, and Sites only counts while Apps is on. Next to the switches is **What the room sees**: your seat exactly as everyone else gets it, straight from the Pi, so it changes the moment you flip something. History shows on their desk page (part 2, below); Video is the seat's small picture (step 7, below). **Nudges** (on to start) is whether others can nudge you. Your own desk always shows you everything.
 
 ### How it's enforced (for changing it)
 
@@ -269,7 +269,7 @@ Clicking anyone opens their desk.
 
 ### Their desk
 
-`/people/<username>` is someone's desk, read-only, built from separate pieces, each only if they share it: **video** (their initial in a tile until step 7), **Today** (focus time, phone time, pickups and the timeline), **To-do**, **Apps** (with a browser's YouTube part in red when they share sites too), **Sites** and **History** (this month's calendar and how long they've focused since joining). A line at the top says what they share. When a piece is off, the rest fill the row; when they flip a switch while you watch, that piece fades in or out and the rest slide over. Their state and timer are live off the room stream; the pieces come from `GET /api/people/<username>`, asked again the moment what they share changes and every 30 s. Your own name goes to your desk.
+`/people/<username>` is someone's desk, read-only, built from separate pieces, each only if they share it: **video** (their once-a-second picture, or their initial while there's none), **Today** (focus time, phone time, pickups and the timeline), **To-do**, **Apps** (with a browser's YouTube part in red when they share sites too), **Sites** and **History** (this month's calendar and how long they've focused since joining). A line at the top says what they share. When a piece is off, the rest fill the row; when they flip a switch while you watch, that piece fades in or out and the rest slide over. Their state and timer are live off the room stream; the pieces come from `GET /api/people/<username>`, asked again the moment what they share changes and every 30 s. Your own name goes to your desk.
 
 ### The quick peek
 
@@ -278,6 +278,23 @@ Tapping someone's seat in the room opens the quick peek: what they're working on
 ### Nudges
 
 Someone who's been on their phone for 5 minutes or more gets a **Nudge** button: a bell on their seat, and a button in the peek and on their desk. Press it and their speaker says "Dayan says put the phone down": the Pi's speaker for you (where your peace sign speaks), their own computer for anyone else, the same way their peace sign plays (step 5). They get a toast with it, two rings leave their seat for everyone in the room to see, and you get a "Nudged Sam" toast. A person can only be nudged once every 10 minutes, by anyone; until then the button stays greyed and says how long is left. Anyone can turn **Nudges** off in Settings → Sharing, and then the button doesn't show for them at all. The Pi checks all of this again (`POST /api/nudge`): yourself is a 400, not on the phone 5 minutes or nudges off a 409, too soon a 429 with Retry-After. Nudges are kept in memory, so a restart forgets the last one.
+
+### The seats' small pictures (study room step 7)
+
+With **Video** on (it starts off for everyone), your seat shows a small picture of you, about once a second, while you're working or on your phone. Away or unknown, there's no picture, just your initial. Each new frame fades in over the last one, so it feels like a calm live photo rather than video. Your own seat has a **Hide my video** / **Show my video** button at the top right (not on a phone), the same switch as Settings → Sharing → Video. The quick peek shows it in the person's face, their desk in its camera tile, and Settings' preview in your seat.
+
+Where the picture comes from:
+
+- **A friend's laptop:** the tracker (`/track`) shrinks its camera to a 320×180 JPEG and sends it with its next reading, but only while the Pi's last answer said `send_picture` (Video on and at the desk). The tracker page says so under the preview while it's sending.
+- **Your desk on the Pi's cameras:** the Pi takes the front camera's latest frame once a second, cuts it to 16:9 and shrinks it to 320×180 (`focus/pictures.py`). Your full feeds (`/video`, `/video/side`, the Pi page's peek) don't change and stay behind the camera lock; this is a separate small copy that only exists while you've turned Video on. See [pi-camera.md](pi-camera.md#your-seats-picture).
+
+What the Pi enforces (the page can't get around any of it):
+
+- It keeps only the latest picture per person, in memory (`Desk.picture`), never on disk, and drops it the moment Video goes off, the tracker pauses, or a reading says away or unknown.
+- A picture that arrives with Video off, or away, is dropped. Anything that isn't a real JPEG under 640×360 and 32 KB is dropped too, and the reading still counts.
+- `GET /api/people/<username>/picture` goes through the same gate as everything else (`share_parts`, the `picture` part needs Video): it answers only while they share video, are at the desk and the picture is at most 3 s old, otherwise a plain 404. It's signed-in only, like every `/api/` route, and `no-store`. The room stream only says when there's a new one (`picture: {at}`), and the page fetches each frame once.
+
+**How big:** 320×180 at JPEG quality 50 came out at 6.0–6.9 KB on real desk frames (6.6 KB on average, 8.8 KB as base64 in a reading). One person watching the room with four pictures takes about 26 KB/s, and each tracking laptop sends about 9 KB/s. If all four of you have the Room open at once, the Pi sends about 106 KB/s and takes in about 26 KB/s.
 
 ### The group calendar
 

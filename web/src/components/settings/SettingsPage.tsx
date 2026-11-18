@@ -52,7 +52,7 @@ export function SettingsPage() {
           <div key={section} className="settings-section rise">
             {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
             {section === "sharing" && <SharingSection focus={snapshot?.focus} room={snapshot?.room} username={user.username} now={now} receivedAt={receivedAt} />}
-            {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} />}
+            {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} onOpenSharing={() => setSection("sharing")} />}
             {section === "voice" && <VoiceSection focus={snapshot?.focus} owner={owner} now={now} />}
             {section === "mac" && <MacHelperSection macTracking={macTracking} />}
             {section === "room" && owner && <RoomSection />}

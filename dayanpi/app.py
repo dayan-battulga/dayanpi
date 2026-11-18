@@ -30,7 +30,8 @@ from dayanpi.focus.browser_camera import BrowserCheck
 from dayanpi.focus.camera_source import SOURCES
 from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
-from dayanpi.focus.sharing import NUDGE_EVERY_S, build_seat, can_nudge, is_here, share_parts
+from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shrink_frame
+from dayanpi.focus.sharing import AT_DESK_STATES, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
 from dayanpi.focus.todos import TEXT_MAX
@@ -208,8 +209,26 @@ def build_desk_status(desk: Desk, now: float) -> dict:
 
 def seat_desk(desk: Desk, name: str, status: dict, now: float) -> dict:
     """One desk's seat, through sharing.build_seat: what anyone else may see of it."""
-    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now), desk.last_nudged, now)
+    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now), desk.last_nudged, now, desk.picture)
     return seat
+
+
+def keep_picture(desk: Desk, jpeg: bytes | None, state: str, now: float) -> None:
+    """The desk's newest picture, only while it shares video and is at the desk; anything else drops the old one too,
+    so turning Video off or walking away leaves nothing behind. Memory only."""
+    keeps = jpeg is not None and desk.sharing.read()["video"] and state in AT_DESK_STATES
+    desk.picture = {"jpeg": jpeg, "at": round(now, 3)} if keeps else None
+
+
+def take_owner_picture(now: float) -> None:
+    """My tile: the front Pi camera's latest frame, shrunk, once a second, only while my desk is on the Pi's cameras, I
+    share video and I'm at the desk. The full feeds stay behind the camera lock; this is a separate small copy."""
+    desk = owner_desk
+    if desk is not None and find_camera_source(desk) == "pi":
+        state = desk.tracker.status(now)["state"]
+        wants = desk.sharing.read()["video"] and state in AT_DESK_STATES
+        frame = stream.latest_frame() if wants else None
+        keep_picture(desk, None if frame is None else shrink_frame(frame), state, now)
 
 
 def find_user(username: str) -> User:
@@ -413,6 +432,7 @@ async def snapshot_producer() -> None:
             snapshot = collector.snapshot(sampler)
             now = time.time()
             await asyncio.to_thread(tick_browser_desks, now)
+            await asyncio.to_thread(take_owner_picture, now)
             latest_focus = {desk.username: build_desk_status(desk, now) for desk in desks.list()}
             latest_room = build_room(latest_focus, now)
             latest_snapshot = snapshot
@@ -871,6 +891,8 @@ class TrackReading(BaseModel):
     phone: float = Field(ge=0, le=1)  # the best phone near a hand
     sign: Literal[tuple(HAND_SIGNS)] | None = None  # the hand sign this check saw; the Pi does the hold
     elapsed_ms: float = Field(ge=0, le=READING_MS_MAX)
+    # The seat's small JPEG (base64), only when the last reply said send_picture. Never part of the check itself.
+    picture: Annotated[str, StringConstraints(max_length=PICTURE_MAX_BASE64)] | None = None
 
 
 class TrackSource(BaseModel):
@@ -883,9 +905,16 @@ def require_browser_source(desk: Desk) -> None:
 
 
 def describe_tracking(desk: Desk, now: float) -> dict:
-    """What /track shows under the preview, from the Pi's own clock."""
+    """What /track shows under the preview, from the Pi's own clock, and whether to send the seat's picture with the next
+    reading: only while the desk shares video and is at the desk."""
     focus = desk.tracker.status(now)
-    described = {"state": focus["state"], "seconds_in_state": focus["seconds_in_state"], "paused": desk.browser.paused, "spoken": describe_spoken(desk, now)}
+    described = {
+        "state": focus["state"],
+        "seconds_in_state": focus["seconds_in_state"],
+        "paused": desk.browser.paused,
+        "spoken": describe_spoken(desk, now),
+        "send_picture": desk.sharing.read()["video"] and focus["state"] in AT_DESK_STATES,
+    }
     return described
 
 
@@ -899,6 +928,7 @@ def track_reading(request: Request, reading: TrackReading):
     if taken is None:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="one reading a second")
     handle_focus_update(desk, taken.update, now)
+    keep_picture(desk, None if reading.picture is None else read_browser_picture(reading.picture), taken.update.state, now)
     if taken.gesture is not None:
         logger.info("gesture on %s's desk: %s", desk.username, taken.gesture)
         handle_gesture(desk, taken.gesture, now)
@@ -912,6 +942,7 @@ def pause_tracking(request: Request):
     require_browser_source(desk)
     now = time.time()
     handle_focus_update(desk, desk.browser.pause(now), now)
+    desk.picture = None
     return describe_tracking(desk, now)
 
 
@@ -945,6 +976,8 @@ def set_sharing(request: Request, change: SharingChange):
     """Your own desk's switches. The reply has your seat exactly as the room now gets it, for Settings' preview."""
     desk = find_desk(request)
     sharing = desk.sharing.set(change.model_dump(exclude_none=True))
+    if not sharing["video"]:
+        desk.picture = None  # hidden means gone from the Pi this moment, not in 3 seconds
     now = time.time()
     seat = seat_desk(desk, auth_routes.read_viewer(request).user.display_name, build_desk_status(desk, now), now)
     return {"sharing": sharing, "seat": seat}
@@ -954,6 +987,21 @@ def set_sharing(request: Request, change: SharingChange):
 def their_desk(username: str):
     """Someone's desk (TheirDesk), the quick peek's too: only what they share. Your own works, as the room sees it."""
     return build_their_desk(find_user(username), time.time())
+
+
+@app.get("/api/people/{username}/picture")
+def their_picture(username: str):
+    """Someone's seat picture as a JPEG, through sharing.share_parts: only while they share video, are at the desk and
+    the picture is under 3 s old; otherwise the same 404 as nobody. Signed-in room members only, like every /api/ route."""
+    user = find_user(username)
+    now = time.time()
+    desk = desks.open(user.username, now)
+    focus = desk.tracker.status(now)
+    shared = share_parts(desk.sharing.read(), {"picture": lambda: find_fresh_picture(desk.picture, focus, is_here(desk.seen_at, focus, now), now)})
+    fresh = shared.get("picture")
+    if fresh is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no picture")
+    return Response(fresh["jpeg"], media_type="image/jpeg", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 class NudgeRequest(BaseModel):
