@@ -198,7 +198,7 @@ export function TrackPage() {
       </header>
       <main className="track-main">
         {step === "ask" && (
-          <TrackCard icon={Video} title="Turn on your camera" text="Your video stays on this computer. Only the numbers go to the room.">
+          <TrackCard icon={Video} title="Turn on your camera" text="Your video stays on this computer. The room gets the numbers, and a small picture once a second only if you turn on Video.">
             <button type="button" className="button button-ink button-block track-ask-button" onClick={() => void startTracking()}>
               Allow camera
             </button>

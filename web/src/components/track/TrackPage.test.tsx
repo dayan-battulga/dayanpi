@@ -70,7 +70,7 @@ it("asks before it turns the camera on", async () => {
   const { getUserMedia } = pretendChrome("works");
   const { user } = renderTrack();
   expect(screen.getByRole("heading", { name: "Turn on your camera" })).toBeInTheDocument();
-  expect(screen.getByText("Your video stays on this computer. Only the numbers go to the room.")).toBeInTheDocument();
+  expect(screen.getByText("Your video stays on this computer. The room gets the numbers, and a small picture once a second only if you turn on Video.")).toBeInTheDocument();
   expect(getUserMedia).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "Allow camera" }));
   expect(getUserMedia).toHaveBeenCalledWith({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });

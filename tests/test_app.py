@@ -2247,3 +2247,48 @@ def test_my_tile_is_off_until_i_turn_video_on(monkeypatch):
     mine.picture = None
     app.take_owner_picture(time.time())
     assert mine.picture is None, "on the browser's camera, the browser sends it instead"
+
+
+def run_producer_once(seconds: float = 1.3) -> None:
+    """The real once-a-second loop, for about one tick: the pictures, the statuses and the room, as on the Pi."""
+
+    async def run():
+        task = asyncio.create_task(app.snapshot_producer())
+        await asyncio.sleep(seconds)
+        task.cancel()
+
+    import asyncio
+
+    asyncio.run(run())
+
+
+def test_my_tile_reaches_the_room_stream_end_to_end(real_server, monkeypatch):
+    mine = use_owner_desk(monkeypatch)
+    owner = find_owner()
+    mine.sharing.set({"video": True})
+    monkeypatch.setattr(app.stream, "latest_frame", lambda: make_jpeg(640, 480), raising=False)  # the test server's camera has none
+    put_on_the_phone(monkeypatch, mine)
+    run_producer_once()
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(owner), timeout=3) as response:
+        [event] = read_events(response, 1)
+    [seat] = [seat for seat in event["room"]["seats"] if seat["username"] == owner.username]
+    assert seat["picture"] is not None, seat
+    picture = httpx.get(real_server + f"/api/people/{owner.username}/picture?at={seat['picture']['at']}", headers=session_header(owner), timeout=3)
+    assert (picture.status_code, picture.headers["content-type"]) == (200, "image/jpeg")
+
+
+def test_a_browser_picture_reaches_the_room_stream_end_to_end(real_server):
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    desk_of(find_owner())  # the viewer's own desk, or the stream only pings
+    headers = {**session_header(sam), "Content-Type": "application/json"}
+    httpx.post(real_server + "/api/sharing", headers=headers, json={"video": True}, timeout=3)
+    for _ in range(2):
+        reply = httpx.post(real_server + "/api/track/reading", headers=headers, json={"person": 0.9, "phone": 0, "elapsed_ms": 100, "picture": as_base64(make_jpeg())}, timeout=3)
+        assert reply.status_code == 200, reply.text
+    assert reply.json()["send_picture"] is True and desk.picture is not None
+    run_producer_once()
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(find_owner()), timeout=3) as response:
+        [event] = read_events(response, 1)
+    [seat] = [seat for seat in event["room"]["seats"] if seat["username"] == "sam"]
+    assert seat["picture"] is not None, seat
