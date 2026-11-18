@@ -11,13 +11,10 @@ aren't all on is never even made, let alone sent. Your own desk (the stream's "f
 shows you everything.
 """
 
-import json
-import logging
-import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from dayanpi.utils.files import write_atomically
+from dayanpi.utils.files import JsonSetting
 
 SHARING_FILE = "sharing.json"
 # Nudges isn't something you show; it's whether others may nudge you. Video waits for step 7.
@@ -58,41 +55,15 @@ NEEDS = {
     "day_focus": ("focus", "history"),
 }
 
-logger = logging.getLogger(__name__)
 
+class SharingSetting(JsonSetting):
+    """read() is the switches; update(changes) changes the ones given."""
 
-class SharingSetting:
     def __init__(self, path: Path) -> None:
-        self._path = path
-        self._lock = threading.Lock()
-        self._parts = self._load()
+        super().__init__(path, DEFAULT_SHARING)
 
-    def read(self) -> dict[str, bool]:
-        with self._lock:
-            parts = dict(self._parts)
-        return parts
-
-    def set(self, changes: dict[str, bool]) -> dict[str, bool]:
-        """Changes the switches given and saves them all. A failed save is logged; the change holds until the next restart."""
-        with self._lock:
-            self._parts.update({key: value for key, value in changes.items() if key in DEFAULT_SHARING})
-            parts = dict(self._parts)
-            try:
-                write_atomically(self._path, json.dumps(parts))
-            except OSError:
-                logger.exception("sharing setting save failed: %s", self._path)
-        return parts
-
-    def _load(self) -> dict[str, bool]:
-        parts = dict(DEFAULT_SHARING)
-        try:
-            saved = json.loads(self._path.read_text(encoding="utf-8"))
-            parts.update({key: value for key, value in saved.items() if key in DEFAULT_SHARING and isinstance(value, bool)})
-        except FileNotFoundError:
-            pass
-        except (OSError, ValueError, AttributeError):
-            logger.warning("couldn't read %s, so the room sees the defaults", self._path)
-        return parts
+    def accepts(self, key: str, value: object) -> bool:
+        return isinstance(value, bool)
 
 
 def share_parts(sharing: dict[str, bool], parts: dict[str, Callable[[], object]]) -> dict:

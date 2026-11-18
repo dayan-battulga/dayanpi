@@ -15,10 +15,9 @@ Two ways to say them:
 """
 
 import logging
-import os
 import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -27,7 +26,6 @@ from dayanpi.focus.tracker import format_spoken_duration
 from dayanpi.hardware.llm import OllamaClient
 from dayanpi.utils.threads import LoopThread
 
-BEDTIME_ENV = "DAYANPI_BEDTIME"
 DEFAULT_BEDTIME = 0  # minutes after midnight: 00:00
 NIGHT_END_MINUTES = 5 * 60  # past bedtime lasts until 5 a.m.
 DAY_MINUTES = 24 * 60
@@ -105,17 +103,6 @@ def parse_bedtime(value: str) -> int | None:
 def format_bedtime(minutes: int) -> str:
     text = f"{minutes // 60:02d}:{minutes % 60:02d}"
     return text
-
-
-def read_bedtime(environ: Mapping[str, str] = os.environ) -> int:
-    """DAYANPI_BEDTIME as minutes after midnight: the owner's bedtime until they pick one in Settings. Unset or not
-    HH:MM means 00:00 (a bad value warns)."""
-    value = environ.get(BEDTIME_ENV, "").strip()
-    parsed = parse_bedtime(value)
-    bedtime = DEFAULT_BEDTIME if parsed is None else parsed
-    if value and parsed is None:
-        logger.warning("%s=%r isn't HH:MM, using 00:00", BEDTIME_ENV, value)
-    return bedtime
 
 
 def format_spoken_clock(minutes: int) -> str:

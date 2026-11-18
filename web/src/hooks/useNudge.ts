@@ -1,6 +1,7 @@
 import { createElement, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { NudgeToast } from "@/components/room/NudgeButton";
-import { TOAST_S, showToast } from "@/components/ui/toaster";
+import { TOAST_S } from "@/components/ui/toaster";
 import { request } from "@/lib/http";
 import type { Seat, Spoken } from "@/lib/types";
 
@@ -23,7 +24,7 @@ export function useNudge(): Nudger {
       setSent((before) => ({ ...before, [seat.username]: { at: Date.now() / 1000, wait_s: answer.wait_s } }));
     }
     const message = reply.ok ? `Nudged ${seat.name}` : reply.status === 429 ? `${seat.name} was nudged a few minutes ago` : `Couldn't nudge ${seat.name}`;
-    showToast(createElement(NudgeToast, { text: message, meta: reply.ok ? "just now" : null }));
+    toast(createElement(NudgeToast, { text: message, meta: reply.ok ? "just now" : null }));
   };
   return { sending, sent, nudge };
 }
@@ -35,7 +36,7 @@ export function useNudgeToast(spoken: Spoken | null | undefined): void {
   useEffect(() => {
     if (spoken?.kind === "nudge" && spoken.at !== shownAt.current && spoken.age_s < TOAST_S) {
       shownAt.current = spoken.at;
-      showToast(createElement(NudgeToast, { text: spoken.text, meta: null }));
+      toast(createElement(NudgeToast, { text: spoken.text, meta: null }));
     }
   }, [spoken]);
 }

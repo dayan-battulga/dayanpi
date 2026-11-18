@@ -654,7 +654,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     plan = desk.todos.add("secret plan", now)
     desk.todos.change(plan["id"], now, current=True)
     desk.tracker.record_app("SecretApp", now, site="secret.example")
-    desk.sharing.set({"focus": False, "todos": False, "sites": True})  # sites without apps counts for nothing
+    desk.sharing.update({"focus": False, "todos": False, "sites": True})  # sites without apps counts for nothing
     room = make_room(monkeypatch, now)
     seen = "\n".join(read_member_views(real_server, member, now))
     for secret in ("secret plan", "SecretApp", "secret.example"):
@@ -662,7 +662,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
     assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "nudge"}
 
-    desk.sharing.set({"focus": True, "todos": True, "apps": True})
+    desk.sharing.update({"focus": True, "todos": True, "apps": True})
     make_room(monkeypatch, now)
     seen = "\n".join(read_member_views(real_server, member, now))
     for secret in ("secret plan", "SecretApp", "secret.example", "focus_seconds"):
@@ -1958,9 +1958,9 @@ def wait_for_clip(username):
     return app.clips.has(username, time.time())
 
 
-def test_bedtime_is_per_person_kept_in_their_folder_and_mine_starts_from_the_env(monkeypatch):
-    monkeypatch.setenv("DAYANPI_BEDTIME", "22:30")
+def test_bedtime_is_per_person_and_kept_in_their_folder(monkeypatch):
     with open_client() as client, open_client("member") as member:
+        client.post("/api/voice", json={"bedtime": "22:30"})
         before = (client.get("/api/focus").json()["bedtime"], member.get("/api/focus").json()["bedtime"])
         changed = member.post("/api/voice", json={"bedtime": "23:15"})
         after = (client.get("/api/focus").json()["bedtime"], member.get("/api/focus").json()["bedtime"])
@@ -2162,7 +2162,7 @@ def make_sams_desk():
 )
 def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
     sam, desk = make_sams_desk()
-    desk.sharing.set(switches)
+    desk.sharing.update(switches)
     reply = let_in(stranger(), find_owner()).get("/api/people/sam")
     their = reply.json()
     seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture"}
@@ -2179,7 +2179,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
 
 def test_nobodys_desk_is_a_404_and_yours_is_what_the_room_sees():
     owner = find_owner()
-    desk_of(owner).sharing.set({"todos": False})
+    desk_of(owner).sharing.update({"todos": False})
     client = let_in(stranger(), owner)
     assert client.get("/api/people/nobody").status_code == 404
     mine = client.get(f"/api/people/{owner.username}").json()
@@ -2260,12 +2260,12 @@ def test_the_day_page_has_the_others_who_share_focus_and_history():
         desk = desk_of(user)
         desk.days_dir.mkdir(parents=True)
         (desk.days_dir / f"{day}.md").write_text(f"---\nfocus_minutes: {minutes}\n---\n")
-    desk_of(al).sharing.set({"history": False})
+    desk_of(al).sharing.update({"history": False})
     mine = let_in(stranger(), owner).get(f"/api/days/{day}").json()
     sams = let_in(stranger(), sam).get(f"/api/days/{day}").json()
     assert mine["others"] == [{"name": "Sam", "focus_minutes": 108}], "Al keeps history private"
     assert sams["others"] == [{"name": "tester", "focus_minutes": 30}]
-    desk_of(sam).sharing.set({"focus": False})
+    desk_of(sam).sharing.update({"focus": False})
     assert let_in(stranger(), owner).get(f"/api/days/{day}").json()["others"] == []
 
 
@@ -2340,7 +2340,7 @@ def test_hiding_video_drops_the_picture_at_once_and_refuses_the_next(monkeypatch
 def test_away_or_unknown_means_no_picture(monkeypatch):
     sam = add_member("sam")
     desk = desk_of(sam)
-    desk.sharing.set({"video": True})
+    desk.sharing.update({"video": True})
     now = time.time()
     app.keep_picture(desk, make_jpeg(), "away", now)
     assert desk.picture is None
@@ -2356,7 +2356,7 @@ def test_away_or_unknown_means_no_picture(monkeypatch):
 def test_nothing_older_than_three_seconds(monkeypatch):
     sam = add_member("sam")
     desk = desk_of(sam)
-    desk.sharing.set({"video": True})
+    desk.sharing.update({"video": True})
     put_on_the_phone(monkeypatch, desk)
     owner = let_in(stranger(), find_owner())
     desk.picture = {"jpeg": make_jpeg(), "at": time.time() - 2.5}
@@ -2370,7 +2370,7 @@ def test_nothing_older_than_three_seconds(monkeypatch):
 def test_anything_but_a_small_jpeg_is_dropped_and_the_reading_still_counts(sent):
     sam = add_member("sam")
     desk = desk_of(sam)
-    desk.sharing.set({"video": True})
+    desk.sharing.update({"video": True})
     client = let_in(stranger(), sam)
     desk.browser._tokens = 2
     reply = read_with_picture(client, sent)
@@ -2419,7 +2419,7 @@ def test_my_tile_is_off_until_i_turn_video_on(monkeypatch):
     put_on_the_phone(monkeypatch, mine)
     app.take_owner_picture(time.time())
     assert mine.picture is None, "my tile starts off"
-    mine.sharing.set({"video": True})
+    mine.sharing.update({"video": True})
     app.take_owner_picture(time.time())
     import cv2
     import numpy as np
@@ -2448,7 +2448,7 @@ def run_producer_once(seconds: float = 1.3) -> None:
 def test_my_tile_reaches_the_room_stream_end_to_end(real_server, monkeypatch):
     mine = use_owner_desk(monkeypatch)
     owner = find_owner()
-    mine.sharing.set({"video": True})
+    mine.sharing.update({"video": True})
     monkeypatch.setattr(app.stream, "latest_frame", lambda: make_jpeg(640, 480), raising=False)  # the test server's camera has none
     put_on_the_phone(monkeypatch, mine)
     run_producer_once()

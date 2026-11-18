@@ -11,27 +11,11 @@
       "available_mb": 5100,
       "percent_used": 36.3
     },
-    "disk": {
-      "percent_used": 41,
-      "free_gb": 19.8
-    },
     "throttle": {
-      "is_undervoltage": false,
-      "is_frequency_capped": false,
-      "is_throttled": false,
-      "has_undervoltage_occured": false,
-      "has_throttling_occured": false
+      "is_undervoltage": false
     },
     "rates": {
-      "cpu_percent": 21.5,
-      "core_percents": [
-        18,
-        25,
-        22,
-        21
-      ],
-      "rx_kbps": 96,
-      "tx_kbps": 640
+      "cpu_percent": 21.5
     },
     "focus": {
       "state": "working",

@@ -17,7 +17,6 @@ from dayanpi.focus.coach import (
     clean_message,
     collect_facts,
     describe_todos,
-    read_bedtime,
 )
 from dayanpi.focus.todos import TodoList
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
@@ -69,16 +68,6 @@ def test_the_to_dos_in_the_facts():
     assert facts.open_count == 8
     assert [(item.text, item.seconds) for item in facts.done] == [("read chapter 3", 2400)] * 5
     assert facts.done_count == 6
-
-
-@pytest.mark.parametrize(
-    ("value", "bedtime", "warned"),
-    [("", 0, False), ("22:30", 22 * 60 + 30, False), ("1:30", 90, False), ("25:00", 0, True), ("10pm", 0, True)],
-)
-def test_the_bedtime_setting(value, bedtime, warned, caplog):
-    with caplog.at_level(logging.WARNING):
-        assert read_bedtime({"DAYANPI_BEDTIME": value}) == bedtime
-    assert ("isn't HH:MM" in caplog.text) == warned
 
 
 # ----- the template -----

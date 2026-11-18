@@ -5,7 +5,6 @@ import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "@/App";
-import { showToast } from "@/components/ui/toaster";
 import { ME_RETRY_MS } from "@/hooks/useMe";
 import { PHONE_QUERY } from "@/hooks/useMediaQuery";
 import { STREAM_RETRY_MS } from "@/hooks/useSnapshot";
@@ -397,8 +396,8 @@ it("only fades the pill in with reduced motion", async () => {
 it("shows one toast at a time, the newest", async () => {
   renderApp();
   act(() => {
-    showToast("Nudged Sam");
-    showToast("Nudged Alex");
+    toast("Nudged Sam");
+    toast("Nudged Alex");
   });
   await screen.findByText("Nudged Alex");
   expect(readToasts()).toEqual([

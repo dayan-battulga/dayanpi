@@ -38,8 +38,11 @@ def test_the_switches_start_with_focus_todos_and_history_on(tmp_path):
 
 def test_the_switches_are_saved_and_read_back(tmp_path):
     path = tmp_path / "desk" / "sharing.json"
-    saved = SharingSetting(path).set({"apps": True, "focus": False, "status": False})
+    setting = SharingSetting(path)
+    assert setting.update({"apps": True, "focus": False, "status": False})
+    saved = setting.read()
     assert saved == DEFAULT_SHARING | {"apps": True, "focus": False}, "status isn't a switch"
+    assert not setting.update({"apps": True}), "nothing changed"
     assert SharingSetting(path).read() == saved
     assert json.loads(path.read_text()) == saved
 

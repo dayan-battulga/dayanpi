@@ -1,84 +1,36 @@
-import shutil
 import subprocess
-import time
 from pathlib import Path
 from typing import NamedTuple
 
 
 # ======== Classes ===========
-class RateSample(NamedTuple):
-    cpu_percent: float
-    rx_kbps: float
-    tx_kbps: float
-    core_percents: list[float]
-
-
 class CpuTimes(NamedTuple):
     total: int
     idle: int
 
 
-class RateSampler:
-    def __init__(
-        self,
-        interface: str,
-        stat_path: Path = Path("/proc/stat"),
-        net_root: Path = Path("/sys/class/net"),
-    ) -> None:
-        self.interface = interface
+class CpuSampler:
+    """How busy the CPU was since the last sample, from /proc/stat's running totals."""
+
+    def __init__(self, stat_path: Path = Path("/proc/stat")) -> None:
         self.stat_path = stat_path
-        self.net_root = net_root
-        self._previous: dict | None = None
+        self._previous: CpuTimes | None = None
 
-    def sample(self) -> RateSample | None:
-        base = self.net_root / self.interface / "statistics"
-        current = {
-            "times": read_cpu_times(self.stat_path.read_text()),
-            "rx": int((base / "rx_bytes").read_text().strip()),
-            "tx": int((base / "tx_bytes").read_text().strip()),
-            "at": time.monotonic(),
-        }
-        previous = self._previous
-        if previous is None:
-            self._previous = current
-            return None
-
-        # same jiffy → dividing by zero would blow up
-        if current["times"]["cpu"].total == previous["times"]["cpu"].total:
-            return None
-
-        cpu_percent = compute_busy_percent(previous["times"]["cpu"], current["times"]["cpu"])
-        # A core that went offline since the last sample has no delta to report.
-        core_percents = [
-            round(compute_busy_percent(previous["times"][name], core), 2)
-            for name, core in current["times"].items()
-            if name != "cpu" and name in previous["times"]
-        ]
-        # bytes → kilobits/sec
-        elapsed = current["at"] - previous["at"]
-        rx_kbps = (current["rx"] - previous["rx"]) * 8 / 1000 / elapsed
-        tx_kbps = (current["tx"] - previous["tx"]) * 8 / 1000 / elapsed
+    def sample(self) -> float | None:
+        """The busy percent since the last call; None on the first one, when there's nothing to compare with."""
+        current = read_cpu_times(self.stat_path.read_text())
+        busy = None if self._previous is None else round(compute_busy_percent(self._previous, current), 2)
         self._previous = current
-
-        return RateSample(
-            cpu_percent=round(cpu_percent, 2),
-            rx_kbps=round(rx_kbps, 2),
-            tx_kbps=round(tx_kbps, 2),
-            core_percents=core_percents,
-        )
+        return busy
 
 
 # ======== Functions ===========
 
 
-def read_cpu_times(stat_text: str) -> dict[str, CpuTimes]:
-    """Every cpu line of /proc/stat, in file order: "cpu" for the whole chip, then "cpu0", "cpu1"..."""
-    times: dict[str, CpuTimes] = {}
-    for line in stat_text.splitlines():
-        if line.startswith("cpu"):
-            name, *fields = line.split()
-            values = [int(field) for field in fields]
-            times[name] = CpuTimes(total=sum(values), idle=values[3] + values[4])  # idle + iowait
+def read_cpu_times(stat_text: str) -> CpuTimes:
+    """The whole chip's "cpu" line of /proc/stat."""
+    fields = [int(field) for field in stat_text.splitlines()[0].split()[1:]]
+    times = CpuTimes(total=sum(fields), idle=fields[3] + fields[4])  # idle + iowait
     return times
 
 
@@ -122,19 +74,6 @@ def memory_usage() -> dict:
     }
 
 
-def disk_usage() -> dict:
-    usage = shutil.disk_usage("/")
-    total_gb = usage.total / (1024**3)
-    free_gb = usage.free / (1024**3)
-    percent_used = (1 - free_gb / total_gb) * 100
-
-    return {
-        "total_gb": total_gb,
-        "free_gb": free_gb,
-        "percent_used": percent_used,
-    }
-
-
 def throttle_status() -> dict:
     result = subprocess.run(
         ["vcgencmd", "get_throttled"],
@@ -145,24 +84,15 @@ def throttle_status() -> dict:
 
     value = int(result.stdout.strip().split("=")[1], 16)
 
-    return {
-        "is_undervoltage": bool(value & (1 << 0)),
-        "is_frequency_capped": bool(value & (1 << 1)),
-        "is_throttled": bool(value & (1 << 2)),
-        # sticky since boot (bits 16+)
-        "has_undervoltage_occured": bool(value & (1 << 16)),  # under-voltage since boot
-        "has_throttling_occured": bool(value & (1 << 18)),  # throttling since boot
-    }
+    return {"is_undervoltage": bool(value & (1 << 0))}
 
 
-def snapshot(sampler: RateSampler) -> dict:
-    rates = sampler.sample()
+def snapshot(sampler: CpuSampler) -> dict:
+    cpu_percent = sampler.sample()
     return {
         "temperature_celsius": temperature_celcius(),
         "uptime_seconds": uptime_seconds(),
         "memory": memory_usage(),
-        "disk": disk_usage(),
         "throttle": throttle_status(),
-        "rates": rates._asdict() if rates is not None else None,
+        "rates": None if cpu_percent is None else {"cpu_percent": cpu_percent},
     }
-

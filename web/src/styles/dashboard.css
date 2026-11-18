@@ -65,10 +65,106 @@
     box-shadow 0.6s var(--ease) !important;
 }
 
+/* The base the pages were built on (Tailwind's preflight, trimmed to what they use). It's a layer, so every
+   rule below wins over it whatever its selector, as it did when Tailwind supplied it. */
+@layer reset {
+  *,
+  ::before,
+  ::after {
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  b,
+  strong {
+    font-weight: bolder;
+  }
+
+  kbd,
+  pre {
+    font-family: var(--font-mono);
+    font-size: 1em;
+  }
+
+  ol,
+  ul {
+    list-style: none;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    vertical-align: middle;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+
+  ::placeholder {
+    opacity: 1;
+    color: color-mix(in oklab, currentcolor 50%, transparent);
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 body {
@@ -762,6 +858,44 @@ ol {
   box-shadow:
     0 0 0 2px var(--bg),
     0 0 0 4px var(--work);
+}
+
+.account-menu {
+  z-index: 50;
+  min-width: 192px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 10%),
+    0 4px 6px -4px rgb(0 0 0 / 10%);
+}
+
+.account-menu-label {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  outline-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.account-menu-item[data-highlighted] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
 .dock {

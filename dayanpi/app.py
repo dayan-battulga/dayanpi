@@ -34,7 +34,7 @@ from dayanpi.focus.desks import Desk, Desks, move_owner_data
 from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shrink_frame
 from dayanpi.focus.sharing import AT_DESK_STATES, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
-from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime, read_bedtime
+from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime
 from dayanpi.focus.todos import TEXT_MAX, TODOS_MAX, TodoListFull
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
@@ -91,7 +91,7 @@ INDEX_PAGE = STATIC_DIR / "index.html"
 MODEL_FILES = {path.name: path for path in (detector.OBJECT_MODEL_PATH, detector.FACE_MODEL_PATH, hands.PALM_MODEL_PATH, hands.HAND_MODEL_PATH)}
 MODEL_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
-sampler = collector.RateSampler("wlan0")
+sampler = collector.CpuSampler()
 stream = create_stream()
 side_stream = create_side_stream()
 latest_snapshot: dict | None = None  # the Pi's numbers, which only the owner gets
@@ -191,9 +191,9 @@ def find_camera_source(desk: Desk) -> str:
 
 
 def find_bedtime(desk: Desk) -> int:
-    """Minutes after midnight: what the desk picked, or mine from DAYANPI_BEDTIME and everyone else's 00:00."""
+    """Minutes after midnight: what the desk picked in Settings, else 00:00."""
     picked = desk.voice.bedtime
-    bedtime = picked if picked is not None else read_bedtime() if desk is owner_desk else DEFAULT_BEDTIME
+    bedtime = DEFAULT_BEDTIME if picked is None else picked
     return bedtime
 
 
@@ -1026,7 +1026,8 @@ class SharingChange(BaseModel):
 def set_sharing(request: Request, change: SharingChange):
     """Your own desk's switches. The reply has your seat exactly as the room now gets it, for Settings' preview."""
     desk = find_desk(request)
-    sharing = desk.sharing.set(change.model_dump(exclude_none=True))
+    desk.sharing.update(change.model_dump(exclude_none=True))
+    sharing = desk.sharing.read()
     if not sharing["video"]:
         desk.picture = None  # hidden means gone from the Pi this moment, not in 3 seconds
     now = time.time()

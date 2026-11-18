@@ -44,9 +44,8 @@ export function makeSnapshot(focus: FocusStatus = makeFocus()): Snapshot {
     temperature_celsius: 48.2,
     uptime_seconds: 3 * 86400 + 3600,
     memory: { total_mb: 8000, available_mb: 5000, percent_used: 37.5 },
-    disk: { percent_used: 40, free_gb: 20.4 },
-    throttle: { is_undervoltage: false, is_frequency_capped: false, is_throttled: false, has_undervoltage_occured: false, has_throttling_occured: false },
-    rates: { cpu_percent: 23.4, core_percents: [20, 30, 25, 18], rx_kbps: 120, tx_kbps: 1500 },
+    throttle: { is_undervoltage: false },
+    rates: { cpu_percent: 23.4 },
     focus,
   };
   return snapshot;

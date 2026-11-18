@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { TOAST_S, showToast } from "@/components/ui/toaster";
+import { toast } from "sonner";
+import { TOAST_S } from "@/components/ui/toaster";
 import type { FocusStatus } from "@/lib/types";
 
 // A toast for each hand sign, so it's clear it fired even with the speaker off. Every snapshot repeats the last sign
@@ -10,7 +11,7 @@ export function useGestureToast(gesture: FocusStatus["gesture"]): void {
   useEffect(() => {
     const age = gesture?.age_s ?? Infinity;
     if (gesture != null && age < lastAge.current && age < TOAST_S && gesture.name !== "peace") {
-      showToast(gesture.name);
+      toast(gesture.name);
     }
     lastAge.current = age;
   }, [gesture]);

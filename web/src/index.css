@@ -1,37 +1,3 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
-@import "tailwindcss";
 @import "./styles/dashboard.css";
-
-/* The dashboard switches themes with data-theme on <html>, not shadcn's .dark class. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
-/* shadcn's color names, pointed straight at the dashboard's tokens in dashboard.css.
-   No --muted, --card... middlemen: dashboard.css already uses --muted for gray text. */
-@theme inline {
-  --color-background: var(--bg);
-  --color-foreground: var(--ink);
-  --color-card: var(--surface);
-  --color-card-foreground: var(--ink);
-  --color-primary: var(--ink);
-  --color-primary-foreground: var(--surface);
-  --color-secondary: var(--sunken);
-  --color-secondary-foreground: var(--ink);
-  --color-muted: var(--sunken);
-  --color-muted-foreground: var(--muted);
-  --color-accent: color-mix(in srgb, var(--ink) 6%, transparent);
-  --color-accent-foreground: var(--ink);
-  --color-destructive: var(--hot);
-  --color-border: var(--line);
-  --color-input: var(--line-strong);
-  --color-ring: var(--ink);
-  --color-work: var(--work);
-  --font-sans: var(--font-ui);
-}
-
-/* shadcn's components take their border color from here; dashboard.css sets its own everywhere. */
-@layer base {
-  * {
-    border-color: var(--color-border);
-  }
-}

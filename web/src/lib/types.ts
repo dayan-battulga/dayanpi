@@ -137,21 +137,12 @@ export interface Room {
   seats: Seat[]; // oldest account first; lib/account's ROOM_SIZE is the most there can be
 }
 
-export interface Throttle {
-  is_undervoltage: boolean;
-  is_frequency_capped: boolean;
-  is_throttled: boolean;
-  has_undervoltage_occured: boolean;
-  has_throttling_occured: boolean;
-}
-
 export interface PiStats {
   temperature_celsius: number;
   uptime_seconds: number;
   memory: { total_mb: number; available_mb: number; percent_used: number };
-  disk: { percent_used: number; free_gb: number };
-  throttle: Throttle;
-  rates: { cpu_percent: number; core_percents?: number[]; rx_kbps: number; tx_kbps: number } | null;
+  throttle: { is_undervoltage: boolean };
+  rates: { cpu_percent: number } | null;
 }
 
 // The owner's stream carries the Pi's numbers; a member's carries only "focus" and "room".

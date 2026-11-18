@@ -143,14 +143,6 @@ sudo systemctl status dayanpi
 
 You want `Active: active (running)`.
 
-### Network interface
-
-```bash
-ls /sys/class/net/
-```
-
-Skip `lo`. If you use Ethernet, change `wlan0` to `eth0` in `dayanpi/app.py` (`RateSampler`) and redeploy.
-
 ---
 
 ## Everyday: ship code Mac → Pi
@@ -187,7 +179,7 @@ sudo systemctl restart dayanpi
 
 ## Working on the dashboard
 
-The page is a React app in `web/` (TypeScript, Vite, Tailwind CSS and shadcn/ui). `npm run build` turns it into plain files in `dayanpi/static/`, and those get committed, so the Pi just serves them: no Node on the Pi, nothing new to install there. Never edit `dayanpi/static/` by hand, because the next build wipes it.
+The page is a React app in `web/` (TypeScript, Vite and one plain stylesheet). `npm run build` turns it into plain files in `dayanpi/static/`, and those get committed, so the Pi just serves them: no Node on the Pi, nothing new to install there. Never edit `dayanpi/static/` by hand, because the next build wipes it.
 
 **Once, on the Mac.** Install Node (the current LTS, for example `brew install node`), then:
 
@@ -294,7 +286,7 @@ A link works once, for 7 days. With 4 accounts, no invite works and you can't ma
 
 **Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras and the voice only feed yours; their desk gets its checks from their own laptop's camera instead, through the tracker ([below](#a-friends-camera-the-tracker)). Until that's running their desk says "No camera yet" with a link to it, and their time and apps don't count. Of everyone else they only see what each person shares ([What members see of each other](#what-members-see-of-each-other)).
 
-**What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, disk, power), or touch invites and accounts.
+**What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, power), or touch invites and accounts.
 
 **Removing someone:** Settings → Room and invites, **Remove** next to their name, then **Yes, remove**. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. Their desk isn't deleted: its folder moves to `data/users/removed/<username>-<date>/` (with `-2`, `-3` if that day already has one) and stays there until you delete it yourself, so someone who later picks the same username starts with an empty desk. The owner can't be removed.
 
@@ -496,7 +488,7 @@ Everyone sees each other through the room (seats, the sidebar or bottom bar, the
 | Video (off) | The small picture on their seat, peek and desk, about once a second, only while they're working or on the phone, and never one older than 3 s |
 | Nudges (on) | Whether the others get the Nudge button once they've been on the phone 5 minutes |
 
-**Nobody else ever sees,** whatever the switches say: anyone's Settings, bedtime or voice, camera choice, Mac tokens, the peace-sign messages and nudges they got, their own calendar and day pages, or their focus log. **Only you** get the Pi page (cameras, temperature, memory, disk, power), the full camera feeds (and only on your own Tailscale devices), invites and the accounts list.
+**Nobody else ever sees,** whatever the switches say: anyone's Settings, bedtime or voice, camera choice, Mac tokens, the peace-sign messages and nudges they got, their own calendar and day pages, or their focus log. **Only you** get the Pi page (cameras, temperature, memory, power), the full camera feeds (and only on your own Tailscale devices), invites and the accounts list.
 
 **What's on your Pi.** Each desk is a folder on your SD card, `data/users/<username>/`: focus log, to-dos, day pages and switches. The site never shows one person's to another, but you can read those files over SSH, so it's fair to tell your friends that. The small pictures and the voice clips never touch the disk (they only live in memory, for seconds), and the journal never has anyone's to-dos, peace-sign or nudge words, pictures, audio, passwords or tokens: just usernames and what happened ("sam nudged dayoon", "peace sign on sam's desk").
 

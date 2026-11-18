@@ -187,7 +187,7 @@ The words come through the live stream as `focus.spoken`: `{"text", "at", "age_s
 
 Settings → **Voice and bedtime** → **Bedtime**, everyone their own, kept in their desk's folder (`data/users/<username>/voice.json`). It counts for the next peace sign right away.
 
-Until you pick one, yours comes from `DAYANPI_BEDTIME` in `/etc/dayanpi.env`, as `HH:MM` on a 24-hour clock (default `00:00`, midnight), and everyone else's is midnight. A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away. A `DAYANPI_BEDTIME` that isn't `HH:MM` logs a warning and falls back to midnight.
+Until someone picks one, theirs is midnight. A bedtime after midnight works too: `01:30` means 1:30 a.m., and at 11 p.m. that's two and a half hours away.
 
 ### With the voice off
 

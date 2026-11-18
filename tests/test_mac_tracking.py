@@ -28,4 +28,4 @@ def test_an_unreadable_file_means_on(tmp_path, caplog):
         path.write_text(broken)
         with caplog.at_level(logging.WARNING):
             assert MacTrackingSetting(path).enabled is True
-    assert caplog.text.count("so Mac tracking is on") == 2, "a non-bool value just means on"
+    assert caplog.text.count("couldn't read") == 2, "a non-bool value just means on"

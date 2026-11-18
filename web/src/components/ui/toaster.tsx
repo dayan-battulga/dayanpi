@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { Toaster as SonnerToaster, toast } from "sonner";
+import { Toaster as SonnerToaster } from "sonner";
 
 export const TOAST_S = 4;
 
@@ -16,8 +15,4 @@ export function Toaster() {
       toastOptions={{ unstyled: true, className: "toast" }}
     />
   );
-}
-
-export function showToast(message: ReactNode): void {
-  toast(message);
 }

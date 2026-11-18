@@ -164,7 +164,7 @@ These live in `web/src/lib/motion.ts`, next to `replayAnimation`:
 | `motion` | layout moves, things leaving, springs, presses | import from `"motion/react"` |
 | `@number-flow/react` | rolling numbers | |
 | `sonner` | toasts | wrap it in `components/ui/` with our tokens; no next-themes |
-| `cmdk` | the ⌘K palette | inside our own Radix Dialog; don't `npx shadcn add` it (see the shadcn trap in CLAUDE.md) |
+| `cmdk` | the ⌘K palette | inside our own Radix Dialog (components/ui/command.tsx) |
 | React's `<ViewTransition>` | page changes | built into React 19.3 |
 | `radix-ui` (have it) | Dialog, Switch, Tooltip, Popover | the accessible parts, restyled |
 | `lucide-react` (have it) | icons | stroke 1.8, like the mockups |
