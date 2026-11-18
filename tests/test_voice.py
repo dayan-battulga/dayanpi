@@ -430,17 +430,54 @@ def test_render_makes_the_clip_on_the_voice_thread_behind_what_the_speaker_says(
     rig.announcer._synthesizer = lambda job, rate: made.append((decode_phrase(job), rate)) or b"RIFFclip"
     rig.announcer.start()
     rig.announcer.say("Phone down.")
-    assert rig.announcer.render("It's 9 p.m.", lambda wav: rendered.set() if wav == b"RIFFclip" else None)
+    assert rig.announcer.render("It's 9 p.m.", lambda wav: rendered.set() if wav == b"RIFFclip" else None, "sam")
     assert rendered.wait(WAIT_S)
     assert rig.runner.list_phrases() == ["Phone down."], "only the speaker's phrase went to aplay"
     assert made == [("It's 9 p.m.", 16000)]
     assert not rig.announcer.is_saying("It's 9 p.m."), "a clip isn't the speaker's to say"
 
 
+def test_each_person_has_one_clip_at_a_time_and_the_speaker_keeps_its_places(make_voice):
+    from dayanpi.auth.accounts import MAX_ACCOUNTS
+
+    assert voice.CLIP_SLOTS == MAX_ACCOUNTS, "a place in the queue for every account's clip"
+    rig = make_voice(runner=FakeRunner(hold=True))
+    making = threading.Event()
+    release = threading.Event()
+    made = []
+
+    def make_slowly(job, rate):
+        making.set()
+        release.wait(WAIT_S)
+        made.append(decode_phrase(job))
+        return b"RIFFclip"
+
+    rig.announcer._synthesizer = make_slowly
+    rig.announcer.start()
+    keep = lambda wav: None
+    assert rig.announcer.render("sam's first", keep, "sam")
+    assert making.wait(WAIT_S)
+    assert rig.announcer.render("sam's second", keep, "sam") is False, "one being made is still sam's one"
+    assert [rig.announcer.render(f"{name}'s", keep, name) for name in ("dayoon", "bo", "cy")] == [True] * 3
+    assert rig.announcer.render("bo's second", keep, "bo") is False, "one waiting too"
+    assert [rig.announcer.say(line) for line in ("one", "two", "three")] == [True] * 3, "everyone's clips leave the speaker its places"
+    assert rig.announcer.say("four") is False
+    release.set()
+    rig.runner.release.set()
+    assert rig.runner.wait_for_jobs(3)
+    deadline = time.monotonic() + WAIT_S
+    while len(made) < 4 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert made == ["sam's first", "dayoon's", "bo's", "cy's"]
+    while not rig.announcer.render("sam's next", keep, "sam") and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert "sam" in rig.announcer._clip_owners, "a new one once the last is made"
+
+
 def test_render_does_nothing_with_the_voice_off(make_voice):
     rig = make_voice(backend=voice.OFF)
     rig.announcer.start()
-    assert rig.announcer.render("It's 9 p.m.", lambda wav: pytest.fail("no clip with the voice off")) is False
+    assert rig.announcer.render("It's 9 p.m.", lambda wav: pytest.fail("no clip with the voice off"), "sam") is False
 
 
 def test_the_clip_shelf_hands_out_your_own_clip_once_and_only_for_a_minute():

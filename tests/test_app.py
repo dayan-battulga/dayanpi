@@ -1,12 +1,14 @@
 import gc
 import json
 import logging
+import math
 import os
 import re
 import subprocess
 import tempfile
 import threading
 import time
+from collections import defaultdict
 from contextlib import ExitStack, contextmanager
 from urllib.parse import quote
 
@@ -31,6 +33,7 @@ from dayanpi.focus.desks import Desks  # noqa: E402
 from dayanpi.focus.sharing import DEFAULT_SHARING  # noqa: E402
 from dayanpi.focus.tracker import format_day  # noqa: E402
 from dayanpi.paths import MODELS_DIR  # noqa: E402
+from dayanpi.utils.limits import NOTE_EVERY_S, RefusalNote, TokenBucket  # noqa: E402
 
 AUTH = (app.AUTH_USER, app.AUTH_PASSWORD)
 BASE_URL = "https://testserver"  # the session cookie is Secure, so an http client would never send it back
@@ -56,6 +59,11 @@ def fresh_accounts(monkeypatch, tmp_path):
     monkeypatch.setattr(auth_routes, "lockout", LoginLockout())
     monkeypatch.setattr(auth_routes, "password_lockout", LoginLockout())
     monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", "")
+    # The limits are in memory and ids start over with each accounts.db, so every test gets them full.
+    monkeypatch.setattr(app, "write_allowances", defaultdict(app.make_write_allowance))
+    monkeypatch.setattr(app, "write_refusals", RefusalNote())
+    monkeypatch.setattr(auth_routes, "stranger_sign_ins", TokenBucket(auth_routes.STRANGER_SIGN_INS_PER_S, auth_routes.STRANGER_SIGN_IN_BURST))
+    monkeypatch.setattr(auth_routes, "stranger_refusals", RefusalNote())
 
 
 @pytest.fixture(autouse=True)
@@ -1058,7 +1066,8 @@ def test_a_removed_member_is_signed_out_everywhere():
     assert [account["username"] for account in after] == [AUTH[0].lower()]
 
 
-def test_five_wrong_passwords_lock_the_username_and_say_how_long():
+def test_five_wrong_passwords_lock_the_username_and_say_how_long(monkeypatch):
+    monkeypatch.setattr(auth_routes, "stranger_sign_ins", TokenBucket(1000.0, 1000.0))  # this one's about the per-name wait
     with open_client(None) as client:
         misses = [client.post("/api/login", json={"username": AUTH[0], "password": "wrong"}) for _ in range(5)]
         locked = client.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
@@ -1069,6 +1078,50 @@ def test_five_wrong_passwords_lock_the_username_and_say_how_long():
     assert [(reply.status_code, reply.json(), reply.headers["retry-after"]) for reply in (misses[4], locked)] == [(429, {"detail": "too many tries, wait a bit"}, "30")] * 2
     assert "set-cookie" not in locked.headers and "www-authenticate" not in locked.headers
     assert [reply.status_code for reply in unknown] == [401] * 4 + [429], "a name that doesn't exist waits the same way"
+
+
+def test_strangers_get_ten_sign_ins_at_once_then_the_same_wait_for_any_name(monkeypatch, caplog):
+    monkeypatch.setattr(auth_routes, "stranger_sign_ins", TokenBucket(0.001, auth_routes.STRANGER_SIGN_IN_BURST))  # no refill
+    checked = []
+    monkeypatch.setattr(auth_routes, "check_sign_in", lambda store, lockout, username, *rest: checked.append(username))
+    find_owner()
+    client = stranger()
+    with caplog.at_level(logging.WARNING, logger="dayanpi.auth.routes"):
+        burst = [client.post("/api/login", json={"username": f"guess{index}", "password": "x"}).status_code for index in range(10)]
+        real = client.post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
+        made_up = client.post("/api/login", json={"username": "nobody", "password": "x"})
+    assert burst == [401] * 10
+    assert len(checked) == 10, "turned away before the scrypt"
+    assert (real.status_code, real.json(), real.headers["retry-after"]) == (429, {"detail": "too many tries, wait a bit"}, "1")
+    same = [{key: value for key, value in reply.headers.items() if key != "date"} for reply in (real, made_up)]
+    assert (real.text, same[0]) == (made_up.text, same[1]), "a real name and a made-up one read the same"
+    lines = [record.getMessage() for record in caplog.records if "strangers' sign-ins" in record.getMessage()]
+    assert lines == ["turned away 1 strangers' sign-ins in the last minute"], "a line a minute, not one per try"
+
+
+def test_my_devices_skip_the_strangers_cap_and_never_queue_behind_their_scrypts(monkeypatch):
+    monkeypatch.setattr(auth_routes, "TAILSCALE_LOGIN", MY_LOGIN)
+    monkeypatch.setattr(auth_routes, "stranger_sign_ins", TokenBucket(0.001, 0.0))  # strangers have nothing left
+    find_owner()
+    release = threading.Event()
+    busy = [auth_routes.scrypt_pool.submit(release.wait) for _ in range(auth_routes.SCRYPT_AT_ONCE)]  # strangers' scrypts fill the shared pool
+    replies = []
+    try:
+        mine = threading.Thread(
+            target=lambda: replies.append(
+                stranger().post("/api/login", json={"username": AUTH[0], "password": AUTH[1]}, headers={auth_routes.TAILSCALE_HEADER: MY_LOGIN})
+            )
+        )
+        mine.start()
+        mine.join(10)
+        answered = [reply.status_code for reply in replies]
+        funnel = stranger().post("/api/login", json={"username": AUTH[0], "password": AUTH[1]})
+    finally:
+        release.set()
+        for job in busy:
+            job.result(5)
+    assert answered == [200], "my sign-in ran on its own thread while both shared ones were busy"
+    assert funnel.status_code == 429, "the same sign-in without my device is a stranger's"
 
 
 @pytest.mark.parametrize(
@@ -1202,6 +1255,44 @@ def test_writes_need_a_json_body():
     assert charset.status_code == 200
 
 
+def test_twenty_writes_go_through_at_once_then_it_says_slow_down_and_the_journal_hears_once(monkeypatch, caplog):
+    monkeypatch.setattr(app, "WRITES_PER_S", 0.001)  # no refill while this runs; the refill has its own test below
+    owner = let_in(stranger(), find_owner())
+    bo, sam = let_in(stranger(), add_member("bo")), let_in(stranger(), add_member("sam"))
+
+    def write(client):
+        return client.post("/api/mac/tracking", json={"enabled": True})
+
+    with caplog.at_level(logging.WARNING, logger="dayanpi.app"):
+        reads = [bo.get("/api/mac/tracking").status_code for _ in range(30)]
+        burst = [write(bo).status_code for _ in range(int(app.WRITE_BURST))]
+        over = [write(bo) for _ in range(5)]
+        others = [write(sam).status_code] + [write(owner).status_code for _ in range(int(app.WRITE_BURST))]
+        mine_over = write(owner)
+    assert reads == [200] * 30, "reads never count"
+    assert burst == [200] * 20
+    assert [(reply.status_code, reply.json()) for reply in over] == [(429, {"detail": "slow down"})] * 5
+    assert all(int(reply.headers["retry-after"]) >= 1 for reply in over)
+    assert others == [200] * 21, "bo's limit is bo's alone"
+    assert mine_over.status_code == 429, "mine too"
+    lines = [record.getMessage() for record in caplog.records if record.getMessage().startswith("write limit hit")]
+    assert lines == ["write limit hit for bo", f"write limit hit for {find_owner().username}"], "one line, not one per request"
+
+
+def test_the_allowance_refills_and_its_journal_line_comes_once_a_minute():
+    bucket = TokenBucket(app.WRITES_PER_S, app.WRITE_BURST)
+    assert [bucket.take(1000.0) for _ in range(20)] == [0.0] * 20
+    wait = bucket.take(1000.0)
+    assert 0 < wait <= 0.2 and math.ceil(wait) == 1, "Retry-After: 1 at 5 a second"
+    assert bucket.take(1000.0 + wait) == 0.0, "one back after its fifth of a second"
+    assert bucket.take(1000.0 + wait) > 0
+    assert [bucket.take(1100.0) for _ in range(21)].count(0.0) == 20, "back to the whole burst, and no more"
+    note = RefusalNote()
+    assert [note.count("bo", 1000.0 + offset) for offset in (0, 1, 30, 59)] == [1, 0, 0, 0]
+    assert note.count("sam", 1001.0) == 1, "each account its own line"
+    assert note.count("bo", 1000.0 + NOTE_EVERY_S) == 4, "then once a minute, saying how many since"
+
+
 def test_writes_must_say_how_big_they_are_and_stay_small():
     """Checked before anything reads the body, so a stranger can't fill the Pi's memory through the sign-in."""
     client = stranger()
@@ -1314,6 +1405,7 @@ def test_every_route_has_an_access_rule_and_keeps_it(monkeypatch):
     for (method, route), (path, body, *expected) in ACCESS.items():
         got = []
         for user in (None, member, owner):
+            app.write_allowances.clear()  # the limit has its own tests; here it's only the door
             client = stranger() if user is None else let_in(stranger(), user)
             got.append(client.request(method, path, json=body, follow_redirects=False).status_code)
         assert got == expected, f"{method} {route}: no session, member, owner"
@@ -1522,7 +1614,9 @@ def test_the_boxes_only_go_where_the_feed_does(monkeypatch):
     assert (member["camera_access"], member["overlay"], member["side_overlay"]) == ("owner_only", None, None)
 
 
-def test_the_access_log_never_shows_an_invite_code():
+@contextmanager
+def keep_access_lines():
+    """The lines uvicorn's access logger lets through, with its filters on, while the block runs."""
     seen = []
 
     class KeepHandler(logging.Handler):
@@ -1536,15 +1630,24 @@ def test_the_access_log_never_shows_an_invite_code():
     access.setLevel(logging.INFO)
     access.disabled = False
     try:
-        # uvicorn's own access line: client, method, path with query, HTTP version, status.
-        # A stray "/" on a pasted link misses the join page, so the sign-in redirect carries the code in its query.
-        redirect = stranger().get("/join/SECRETcode-123/", follow_redirects=False).headers["location"]
-        for path in ("/join/SECRETcode-123", "/join/SECRETcode-123/", redirect, "/login?next=/join/SECRETcode-123&x=1", "/api/focus"):
-            access.info('%s - "%s %s HTTP/%s" %d', "100.64.0.1:51000", "GET", path, "1.1", 200)
+        yield seen
     finally:
         access.removeHandler(handler)
         access.setLevel(level)
         access.disabled = disabled
+
+
+def log_access(method, path, code):
+    """uvicorn's own access line: client, method, path with query, HTTP version, status."""
+    logging.getLogger("uvicorn.access").info('%s - "%s %s HTTP/%s" %d', "100.64.0.1:51000", method, path, "1.1", code)
+
+
+def test_the_access_log_never_shows_an_invite_code():
+    with keep_access_lines() as seen:
+        # A stray "/" on a pasted link misses the join page, so the sign-in redirect carries the code in its query.
+        redirect = stranger().get("/join/SECRETcode-123/", follow_redirects=False).headers["location"]
+        for path in ("/join/SECRETcode-123", "/join/SECRETcode-123/", redirect, "/login?next=/join/SECRETcode-123&x=1", "/api/focus"):
+            log_access("GET", path, 200)
     assert redirect == "/login?next=%2Fjoin%2FSECRETcode-123%2F"
     assert [line.split('"')[1] for line in seen] == [
         "GET /join/… HTTP/1.1",
@@ -1554,6 +1657,40 @@ def test_the_access_log_never_shows_an_invite_code():
         "GET /api/focus HTTP/1.1",
     ]
     assert not any("SECRET" in line for line in seen)
+
+
+
+def test_the_access_log_leaves_out_what_comes_every_second():
+    with keep_access_lines() as seen:
+        for method, path, code in (
+            ("GET", "/api/people/sam/picture?at=1763250000.5", 200),
+            ("GET", "/api/people/sam/picture?at=1763250001.5", 404),  # not sharing right now
+            ("POST", "/api/track/reading", 200),
+            ("POST", "/api/todos", 429),
+            ("POST", "/api/login", 429),
+            ("POST", "/api/track/reading", 429),
+            ("GET", "/api/people/sam/picture", 401),
+            ("POST", "/api/track/reading", 409),
+            ("POST", "/api/login", 401),
+            ("POST", "/api/login", 200),
+            ("POST", "/api/join", 404),
+            ("POST", "/api/todos", 200),
+            ("GET", "/api/people/sam", 200),
+            ("GET", "/api/focus", 500),
+            ("GET", "/join/SECRETcode-123", 200),
+        ):
+            log_access(method, path, code)
+    assert [line.split('"')[1] + line.split('"')[2] for line in seen] == [
+        "GET /api/people/sam/picture HTTP/1.1 401",
+        "POST /api/track/reading HTTP/1.1 409",
+        "POST /api/login HTTP/1.1 401",
+        "POST /api/login HTTP/1.1 200",
+        "POST /api/join HTTP/1.1 404",
+        "POST /api/todos HTTP/1.1 200",
+        "GET /api/people/sam HTTP/1.1 200",
+        "GET /api/focus HTTP/1.1 500",
+        "GET /join/… HTTP/1.1 200",
+    ], "the invite code still never shows either"
 
 
 # Everyone's own desk (study room step 3).
@@ -1909,13 +2046,30 @@ def test_a_newer_message_never_gets_an_older_ones_clip(monkeypatch, tmp_path):
     speaker.start()
     try:
         app.speak_to(theirs, "first", time.time())
-        app.speak_to(theirs, "second", time.time() + 1)
+        app.speak_to(theirs, "second", time.time() + 1)  # one clip a person at a time: dropped while the first is made
         first_done.set()
+        deadline = time.monotonic() + 5
+        while "bo" in speaker._clip_owners and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not app.clips.has("bo", time.time()), "the first's clip never stands in for the second"
+        app.speak_to(theirs, "third", time.time() + 2)
         assert wait_for_clip("bo")
-        time.sleep(0.1)
     finally:
         speaker.stop()
-    assert app.clips.take("bo", time.time()) == b"RIFFsecond\n"
+    assert app.clips.take("bo", time.time()) == b"RIFFthird\n"
+
+
+def test_the_voice_test_waits_ten_seconds_per_desk():
+    bo, sam = add_member("bo"), add_member("sam")
+    client = let_in(stranger(), bo)
+    first = client.post("/api/voice/test", json={})
+    second = client.post("/api/voice/test", json={})
+    theirs = let_in(stranger(), sam).post("/api/voice/test", json={})
+    desk_of(bo).voice_tested_at -= app.VOICE_TEST_EVERY_S
+    later = client.post("/api/voice/test", json={})
+    assert [first.status_code, theirs.status_code, later.status_code] == [200, 200, 200], "sam's desk has its own wait"
+    assert (second.status_code, second.json()) == (429, {"detail": "one test every 10 s"})
+    assert 1 <= int(second.headers["retry-after"]) <= 10
 
 
 def test_with_the_voice_off_the_pill_gets_the_words_and_no_clip():
@@ -2055,7 +2209,7 @@ def test_i_nudge_a_member_on_their_own_computer(monkeypatch):
     desk = desk_of(sam)
     put_on_the_phone(monkeypatch, desk)
     rendered = []
-    monkeypatch.setattr(app.voice, "render", lambda text, sink: rendered.append(text))
+    monkeypatch.setattr(app.voice, "render", lambda text, sink, owner: rendered.append(text))
     monkeypatch.setattr(app.voice, "say", lambda text: pytest.fail("a member's nudge never plays on the Pi"))
     reply = let_in(stranger(), find_owner()).post("/api/nudge", json={"username": "sam"})
     assert reply.status_code == 200
@@ -2067,7 +2221,7 @@ def test_i_nudge_a_member_on_their_own_computer(monkeypatch):
 def test_nudges_wait_ten_minutes_per_person_and_only_on_the_phone(monkeypatch):
     sam = add_member("sam")
     desk = desk_of(sam)
-    monkeypatch.setattr(app.voice, "render", lambda text, sink: None)
+    monkeypatch.setattr(app.voice, "render", lambda text, sink, owner: None)
     owner = let_in(stranger(), find_owner())
     other = let_in(stranger(), add_member("al"))
     assert owner.post("/api/nudge", json={"username": "sam"}).status_code == 409, "not on the phone"

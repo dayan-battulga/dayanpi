@@ -2,6 +2,7 @@ import asyncio
 import functools
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -39,6 +40,7 @@ from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import ClipShelf, VoiceAnnouncer
 from dayanpi.paths import STATIC_DIR
+from dayanpi.utils.limits import RefusalNote, TokenBucket
 from dayanpi.vision import detector, hands
 from dayanpi.vision.gestures import HAND_SIGNS
 
@@ -57,6 +59,10 @@ AFTER_MIDNIGHT_S = 5.0  # the day pages get written this long after local midnig
 READING_MS_MAX = 60_000  # a browser check that took longer than this is a broken one
 # The biggest write body. FastAPI reads a whole body before any max_length runs, and the sign-in is public.
 MAX_BODY_BYTES = 64 * 1024
+# Every write from a signed-in account, mine too, takes from that account's own allowance. The tracker's reading a
+# second and the Mac helper stay far under it.
+WRITES_PER_S = 5.0
+WRITE_BURST = 20.0
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +107,7 @@ llm: OllamaClient | None = None  # made at startup when DAYANPI_LLM_MODEL is set
 coach_writer: CoachWriter | None = None  # the one thread that writes every desk's drafts
 _coach_lock = threading.Lock()
 TEST_LINE = "This is how your peace sign sounds."
+VOICE_TEST_EVERY_S = 10.0  # per desk: each test is a Piper run on the Pi
 
 _video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
@@ -108,6 +115,15 @@ _side_video_slots = threading.BoundedSemaphore(VIDEO_MAX_CONCURRENT)
 _stream_slots: defaultdict[int, threading.BoundedSemaphore] = defaultdict(
     lambda: threading.BoundedSemaphore(STREAM_MAX_CONCURRENT)
 )
+
+
+def make_write_allowance() -> TokenBucket:
+    return TokenBucket(WRITES_PER_S, WRITE_BURST)
+
+
+# By user id, which never comes back for another account. In memory, like the sign-in waits.
+write_allowances: defaultdict[int, TokenBucket] = defaultdict(make_write_allowance)
+write_refusals = RefusalNote()
 
 
 class InviteCodeFilter(logging.Filter):
@@ -120,7 +136,29 @@ class InviteCodeFilter(logging.Filter):
         return True
 
 
+PICTURE_PATH = re.compile(r"/api/people/[^/]+/picture")
+
+
+class QuietAccessFilter(logging.Filter):
+    """uvicorn's access log, without what comes every second while the room is open: each seat's picture (its 404 is
+    just "not sharing right now"), the tracker's readings that worked, and every 429, since the limits write their own
+    line a minute instead. Sign-ins, joins, every other write and the other errors all stay."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        keep = True
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[4], int):
+            method, path, code = args[1], str(args[2]).partition("?")[0], args[4]
+            keep = not (
+                code == 429
+                or (method == "GET" and code in (200, 404) and PICTURE_PATH.fullmatch(path) is not None)
+                or (method == "POST" and path == "/api/track/reading" and 200 <= code < 300)
+            )
+        return keep
+
+
 logging.getLogger("uvicorn.access").addFilter(InviteCodeFilter())
+logging.getLogger("uvicorn.access").addFilter(QuietAccessFilter())
 
 
 def stamp_age(event: dict | None, now: float) -> dict | None:
@@ -363,7 +401,7 @@ def speak_to(desk: Desk, text: str, now: float, kind: str = "peace") -> None:
             if desk.last_spoken is not None and desk.last_spoken["at"] == at:
                 clips.put(desk.username, wav, time.time())
 
-        voice.render(text, keep_clip)
+        voice.render(text, keep_clip, desk.username)
 
 
 def say_todos(desk: Desk, now: float) -> dict:
@@ -619,6 +657,14 @@ def refuse_stranger(request: Request, path: str) -> Response:
     return response
 
 
+def refuse_fast_writes(user: User, wait: float, now: float) -> Response:
+    """Past the account's allowance: a 429, and one journal line a minute at most for it, never one per request."""
+    if write_refusals.count(user.username, now):
+        logger.warning("write limit hit for %s", user.username)
+    response = JSONResponse({"detail": "slow down"}, status_code=status.HTTP_429_TOO_MANY_REQUESTS, headers={"Retry-After": str(math.ceil(wait))})
+    return response
+
+
 async def guard_request(request: Request, call_next) -> Response:
     # scope["path"] is what the router matches; request.url.path re-splits it, so a %3F could make the two differ.
     path = request.scope["path"]
@@ -634,6 +680,8 @@ async def guard_request(request: Request, call_next) -> Response:
         response = refuse_stranger(request, path)
     elif viewer.user.role != "owner" and not is_member_allowed(request.method, path):
         response = JSONResponse({"detail": "only the owner can do that"}, status_code=status.HTTP_403_FORBIDDEN)
+    elif request.method not in READ_METHODS and (wait := write_allowances[viewer.user.id].take(now)) > 0:
+        response = refuse_fast_writes(viewer.user, wait, now)
     else:
         request.state.viewer = viewer
         response = await call_next(request)
@@ -1058,9 +1106,15 @@ def set_voice(request: Request, change: VoiceChange):
 
 @app.post("/api/voice/test")
 def test_voice(request: Request):
-    """Settings' Test the voice: a short line wherever your peace sign speaks, with its pill."""
+    """Settings' Test the voice: a short line wherever your peace sign speaks, with its pill. Once every
+    VOICE_TEST_EVERY_S per desk; sooner is a 429 that says how long to wait."""
     desk = find_desk(request)
-    speak_to(desk, TEST_LINE, time.time())
+    now = time.time()
+    wait = 0.0 if desk.voice_tested_at is None else desk.voice_tested_at + VOICE_TEST_EVERY_S - now
+    if wait > 0:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="one test every 10 s", headers={"Retry-After": str(math.ceil(wait))})
+    desk.voice_tested_at = now
+    speak_to(desk, TEST_LINE, now)
     return {"output": find_voice_output(desk), "voice": voice.enabled}
 
 

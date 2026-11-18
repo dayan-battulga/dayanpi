@@ -169,6 +169,15 @@ it("saves your own bedtime and where the peace sign speaks, and tests the voice 
   );
 });
 
+it("says how long to wait when the voice was tested a moment ago", async () => {
+  serveSettings(MEMBER, [], { "POST /api/voice/test": answer({ detail: "one test every 10 s" }, 429, { "Retry-After": "8" }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ voice_output: "computer", voice: { enabled: true, backend: "piper", problem: null } })));
+  const voice = await openSection(user, "Voice and bedtime");
+  await user.click(voice.getByRole("button", { name: "Test the voice" }));
+  expect(await voice.findByRole("alert")).toHaveTextContent("Wait 8 s, then test it again.");
+});
+
 it("lets the owner move the peace sign from the Pi's speaker to this computer, and says when the voice is off", async () => {
   const sent = serveSettings(OWNER, undefined, { "POST /api/voice": answer({ bedtime: "22:30", output: "computer" }) });
   const user = renderSettings();

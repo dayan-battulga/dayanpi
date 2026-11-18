@@ -33,6 +33,7 @@ PASSWORD_MIN = 10
 PASSWORD_MAX = 256
 DISPLAY_NAME_MAX = 40
 TOKEN_NAME_MAX = 40
+TOKENS_MAX = 10  # Mac helper tokens per account
 USERNAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9_.-]{1,31}")
 RESERVED_USERNAMES = {"removed"}  # data/users/removed/ keeps the folders of removed accounts (focus/desks.py)
 
@@ -139,6 +140,10 @@ class RoomFull(Exception):
 
 class UsernameTaken(Exception):
     pass
+
+
+class TooManyTokens(Exception):
+    """TOKENS_MAX tokens on the account already."""
 
 
 def encode_b64(raw: bytes) -> str:
@@ -393,8 +398,11 @@ class AccountStore:
         return user
 
     def create_token(self, user_id: int, name: str, now: float) -> NewToken:
+        """Raises TooManyTokens at TOKENS_MAX, counted in the insert's own transaction so two at once can't make an 11th."""
         secret = "dpi_" + secrets.token_urlsafe(32)
         with self._transaction() as db:
+            if db.execute("SELECT COUNT(*) FROM tokens WHERE user_id = ?", (user_id,)).fetchone()[0] >= TOKENS_MAX:
+                raise TooManyTokens
             cursor = db.execute(
                 "INSERT INTO tokens (user_id, name, secret_hash, created_at) VALUES (?, ?, ?, ?)",
                 (user_id, name, hash_secret(secret), now),

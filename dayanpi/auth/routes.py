@@ -6,6 +6,7 @@ check what's yours. The store and the lockout live here, and the middleware read
 """
 
 import asyncio
+import logging
 import math
 import os
 import time
@@ -22,11 +23,13 @@ from dayanpi.auth.accounts import (
     PASSWORD_MIN,
     SESSION_TTL_S,
     TOKEN_NAME_MAX,
+    TOKENS_MAX,
     AccountStore,
     InviteNotFound,
     LoginLockout,
     RoomFull,
     Session,
+    TooManyTokens,
     User,
     UsernameTaken,
     check_display_name,
@@ -35,6 +38,7 @@ from dayanpi.auth.accounts import (
     find_accounts_path,
     normalize_username,
 )
+from dayanpi.utils.limits import RefusalNote, TokenBucket
 
 SESSION_COOKIE = "__Host-dayanpi_session"
 MAC_PREFIX = "/api/mac/"
@@ -59,13 +63,33 @@ router = APIRouter()
 # its own two threads: a login waiting its turn then holds none of the pool every other sync route shares.
 SCRYPT_AT_ONCE = 2
 scrypt_pool = ThreadPoolExecutor(SCRYPT_AT_ONCE, thread_name_prefix="scrypt")
+# Sign-ins from my own devices get a thread of their own, so they never wait behind strangers' (48 MB at most, all told).
+my_scrypt_pool = ThreadPoolExecutor(1, thread_name_prefix="scrypt-mine")
+# Strangers are every sign-in that isn't from my devices, friends over Funnel too, all sharing one allowance taken before
+# the scrypt. Over it, the same 429 as a name's wait, with a Retry-After that's 1 for everyone, so it says nothing of a name.
+STRANGER_SIGN_INS_PER_S = 2.0
+STRANGER_SIGN_IN_BURST = 10.0
+STRANGERS = "strangers"
+stranger_sign_ins = TokenBucket(STRANGER_SIGN_INS_PER_S, STRANGER_SIGN_IN_BURST)
+stranger_refusals = RefusalNote()
 Result = TypeVar("Result")
 
+logger = logging.getLogger(__name__)
 
-async def run_scrypt_work(work: Callable[..., Result], *args) -> Result:
-    """For every call that hashes or checks a password."""
-    result = await asyncio.get_running_loop().run_in_executor(scrypt_pool, work, *args)
+
+async def run_scrypt_work(work: Callable[..., Result], *args, pool: ThreadPoolExecutor | None = None) -> Result:
+    """For every call that hashes or checks a password: on scrypt_pool, or the pool given."""
+    result = await asyncio.get_running_loop().run_in_executor(scrypt_pool if pool is None else pool, work, *args)
     return result
+
+
+def refuse_strangers_past_the_cap(now: float) -> None:
+    """Raises the 429 once strangers' sign-ins are past their allowance, with one journal line a minute at most."""
+    if stranger_sign_ins.take(now) > 0:
+        turned_away = stranger_refusals.count(STRANGERS, now)
+        if turned_away:
+            logger.warning("turned away %d strangers' sign-ins in the last minute", turned_away)
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES, headers={"Retry-After": "1"})
 
 
 @dataclass(frozen=True)
@@ -156,7 +180,9 @@ class TokenNew(BaseModel):
 async def log_in(body: LoginBody, request: Request, response: Response):
     now = time.time()
     mine = is_from_my_devices(request)
-    user = await run_scrypt_work(check_sign_in, accounts, lockout, body.username, body.password, now, mine)
+    if not mine:
+        refuse_strangers_past_the_cap(now)
+    user = await run_scrypt_work(check_sign_in, accounts, lockout, body.username, body.password, now, mine, pool=my_scrypt_pool if mine else None)
     # A miss is the same 401 for every name. While a wait is on (from the miss that starts it) it's a 429 that says
     # how long, which tells nothing about the name either: unknown names wait the same way.
     wait = 0.0 if user is not None or mine else lockout.wait_left(normalize_username(body.username), now)
@@ -235,7 +261,10 @@ def list_tokens(request: Request):
 @router.post("/api/tokens")
 def create_token(new: TokenNew, request: Request):
     """The only time the secret is shown; the Pi keeps its hash."""
-    created = accounts.create_token(read_viewer(request).user.id, new.name, time.time())
+    try:
+        created = accounts.create_token(read_viewer(request).user.id, new.name, time.time())
+    except TooManyTokens:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=f"{TOKENS_MAX} tokens is the most. Delete one first.") from None
     return {"token": asdict(created.token), "secret": created.secret}
 
 

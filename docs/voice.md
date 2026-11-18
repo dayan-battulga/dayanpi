@@ -171,11 +171,11 @@ Past bedtime (from bedtime until 5 a.m.) it says it's past your bedtime and to w
 Settings → **Voice and bedtime** → *The peace sign speaks through*:
 
 - **The Pi's speaker**: aplay, like the rest of this page. Only your desk can pick it (it's in your room), and it's yours until you pick This computer.
-- **This computer**: the person's own page plays it. The Pi makes the audio with Piper, with the same voice and settings, but wraps it into a WAV in memory instead of playing it, and keeps it until their page fetches it with `GET /api/voice/clip` (signed in, their own clip only). It's handed out once and gone, or gone after a minute if nobody fetched it. Clips are never written to disk or logged. Every member's peace sign speaks this way.
+- **This computer**: the person's own page plays it. The Pi makes the audio with Piper, with the same voice and settings, but wraps it into a WAV in memory instead of playing it, and keeps it until their page fetches it with `GET /api/voice/clip` (signed in, their own clip only). It's handed out once and gone, or gone after a minute if nobody fetched it. Clips are never written to disk or logged. Every member's peace sign speaks this way. Each person has at most one clip waiting or being made: another one in the meantime is dropped, the same as a full queue. The queue keeps a place for each person's clip on top of the 3 lines the Pi's speaker may have waiting, so nobody's clips can push out anyone else's, or your lines on the speaker.
 
 **Browsers only play sound after a click on the page.** Any click counts, and it lasts as long as the tab is open: the tracker's **Allow camera** on `/track`, or any click anywhere on `/me`. If a browser still says no, the pill shows the words with a small play button, which plays it (it stays up to a minute for that).
 
-**Test the voice** in the same section says a short line ("This is how your peace sign sounds.") through whichever one is picked, pill and all. Clicking it also counts as the click the browser wants.
+**Test the voice** in the same section says a short line ("This is how your peace sign sounds.") through whichever one is picked, pill and all. Clicking it also counts as the click the browser wants. It works once every 10 s per desk, since each test is a Piper run on the Pi; sooner, Settings says how long to wait ("Wait 8 s, then test it again.").
 
 ### What the page shows while it talks
 

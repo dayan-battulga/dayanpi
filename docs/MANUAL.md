@@ -33,7 +33,7 @@ Always use the **`main`** branch on both machines.
 | `/track` | The tracker: this browser's camera feeds your own desk (Chrome, see [A friend's camera](#a-friends-camera-the-tracker)) |
 | `/track/test` | The camera test: is this laptop fast enough for the tracker (nothing goes to the Pi) |
 | `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
-| `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens |
+| `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens (at most 10 each; the 11th is a 409) |
 | `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
 | `/api/stats` | One JSON snapshot (owner only) |
 | `/api/stream` | Live SSE feed: your own desk's `focus` and everyone's seat as `room` (members don't get the Pi's numbers) |
@@ -57,7 +57,7 @@ Always use the **`main`** branch on both machines.
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
 | `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
-| `/api/voice/test` | Test the voice (POST `{}`): a short line wherever your peace sign speaks |
+| `/api/voice/test` | Test the voice (POST `{}`): a short line wherever your peace sign speaks. Once every 10 s per desk (429 with `Retry-After` sooner) |
 | `/api/voice/clip` | Your own latest peace-sign clip as a WAV, once (gone after it's fetched or a minute), for This computer |
 | `/docs` | Disabled (404 on purpose) |
 
@@ -273,6 +273,8 @@ Open the site and it sends you to `/login`. Sign in with your username and passw
 
 - **It lasts 30 days**, and every visit pushes that back, so a device you use keeps you signed in. **Sign out** from the menu under your name at the top right (or at the bottom of the list in Settings), and that sign-in is gone on the Pi too.
 - **Wrong passwords.** A miss says **Wrong username or password.**, rings the password box in red and gives the form a little shake. Five misses in a row on one username and that name has to wait 30 s: the page says **Too many tries. Try again in 0:30** in amber, counting down, with the button dimmed until it's over. Each miss after a wait doubles it, up to 15 minutes, and the right password clears it. A name that doesn't exist waits exactly the same way, so the wait doesn't tell a stranger which names are real. (The API answers 429 with a `Retry-After` header for the wait; a miss is a 401.) Restarting the service clears every wait. With [the camera lock](#camera-lock) on, a sign-in from your own Tailscale devices never waits and its typos don't count, so strangers on Funnel guessing your username can't keep you out; everyone else (you over Funnel too) still waits.
+- **Lots of sign-ins from the internet.** Everyone signing in from somewhere other than your own Tailscale devices (friends over Funnel too) shares one allowance: 2 tries a second, 10 at once. Past that, the next one gets the same **Too many tries** for a second, whatever name it typed, so it gives nothing away. Your own devices never touch that allowance and check their password on a thread of their own, so a flood of strangers can't slow your sign-in down. The journal says it once a minute at most: `turned away 340 strangers' sign-ins in the last minute`.
+- **Slow down.** Once you're signed in, every account (yours too) can make 5 changes a second, with 20 in a row allowed. Clicking around, the tracker's reading a second and the Mac helper never get near it; something hammering the Pi gets a 429 "slow down" with a `Retry-After`, and the journal says `write limit hit for sam` once a minute at most. Reading things is never limited. Like the waits, it's all in memory, so a restart starts everyone fresh.
 - **Changing your password:** Settings → Profile. Type a new one (at least 10 characters) and it asks for the current one too, then **Save**. A wrong current one counts as a sign-in miss, and after 5 wrong ones in a row it says **too many tries, wait a bit** (30 seconds, doubling each time up to 15 minutes). It signs you out on every other device and keeps this one signed in. After that, the password in `/etc/dayanpi.env` doesn't work any more. It only comes back if `data/accounts.db` is gone (see [Forgot your password?](#forgot-your-password)).
 - **Your name:** Settings → Profile → Name, then **Save**. That's what the header shows.
 
@@ -472,7 +474,7 @@ Someone who finds the address but has no account gets exactly this:
 
 | What | What they get |
 | --- | --- |
-| `/login` | The sign-in page. Wrong passwords start a wait after 5 tries on a name ([Signing in](#signing-in)) |
+| `/login` | The sign-in page. Wrong passwords start a wait after 5 tries on a name, and all strangers together get 2 tries a second, 10 at once, before anything checks a password ([Signing in](#signing-in)) |
 | `/join/<code>` | The join page. It only makes an account with a live invite code, and a made-up code is turned away straight off. It never says who's in the room or who sent the invite |
 | `/api/health` | `{"status": "ok"}` |
 | `/assets/...` | The page's own code, styles and fonts: the same files for everyone, nothing about anyone |

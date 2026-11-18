@@ -11,10 +11,12 @@ from dayanpi.auth import accounts
 from dayanpi.auth.accounts import (
     INVITE_TTL_S,
     SESSION_TTL_S,
+    TOKENS_MAX,
     AccountStore,
     InviteNotFound,
     LoginLockout,
     RoomFull,
+    TooManyTokens,
     UsernameTaken,
     check_display_name,
     check_password,
@@ -294,6 +296,19 @@ def test_tokens_are_per_user_and_revocable(store):
     assert store.delete_token(member.id, mine.token.id) is True
     assert store.find_token_user(mine.secret, NOW) is None
     assert store.find_token_user("", NOW) is None
+
+
+def test_ten_tokens_is_the_most_per_account(store):
+    store.seed_owner("dayoon", PASSWORD, NOW)
+    owner = store.list_users()[0]
+    bo = add_member(store, "bo")
+    made = [store.create_token(owner.id, f"mac {index}", NOW) for index in range(TOKENS_MAX)]
+    with pytest.raises(TooManyTokens):
+        store.create_token(owner.id, "one too many", NOW)
+    assert len(store.list_tokens(owner.id)) == TOKENS_MAX == 10
+    assert store.create_token(bo.id, "bo's mac", NOW).token.name == "bo's mac", "everyone has their own ten"
+    store.delete_token(owner.id, made[0].token.id)
+    assert store.create_token(owner.id, "room again", NOW).token.name == "room again"
 
 
 def test_a_token_notes_its_last_use_at_most_once_a_minute(store):

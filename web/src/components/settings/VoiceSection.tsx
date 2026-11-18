@@ -44,7 +44,8 @@ export function VoiceSection({ focus, owner, now }: { focus: FocusStatus | undef
     setNote(null);
     const reply = await request("POST", "/api/voice/test", {});
     if (!reply.ok) {
-      setNote(buildErrorNote(reply.detail));
+      // One test every 10 s per desk: say how long is left instead of the Pi's "one test every 10 s".
+      setNote(reply.retryAfterS != null ? { text: `Wait ${reply.retryAfterS} s, then test it again.`, error: true } : buildErrorNote(reply.detail));
     }
   };
 

@@ -14,7 +14,8 @@ Settings come from the environment (/etc/dayanpi.env on the Pi):
 If the chosen voice can't run, it logs one error and stays off. The app carries on.
 
 A phrase can also become a clip instead (render): Piper makes the same audio, it's wrapped into a WAV
-in memory, and someone's own page plays it ("This computer" in Settings → Voice and bedtime). ClipShelf
+in memory, and someone's own page plays it ("This computer" in Settings → Voice and bedtime). Each person has at
+most one clip waiting or being made; a second is dropped, like a line when the speaker's queue is full. ClipShelf
 keeps each person's latest clip for CLIP_KEEP_S at most and hands it out once. Clips never touch the disk
 and are never logged.
 
@@ -46,7 +47,11 @@ OFF = "off"
 PIPER = "piper"
 BACKENDS = (OFF, PIPER)
 
-QUEUE_SIZE = 3
+SPEAKER_QUEUE = 3  # the Pi speaker's lines that may wait at once; one more is dropped
+# Each person has at most one clip waiting or being made (auth.accounts.MAX_ACCOUNTS of them), and the queue has a
+# place for each on top of the speaker's, so nobody's clips can push out anyone else's lines, mine on the speaker too.
+CLIP_SLOTS = 4
+QUEUE_SIZE = SPEAKER_QUEUE + CLIP_SLOTS
 STEP_TIMEOUT_S = 20.0
 STOP_JOIN_TIMEOUT_S = 1.0
 CLIP_KEEP_S = 60.0  # a clip nobody fetched in this long is gone
@@ -302,10 +307,12 @@ class VoiceAnnouncer:
             read_sample_rate(self._settings.piper_model) if self.backend == PIPER else PIPER_DEFAULT_SAMPLE_RATE
         )
         self._lock = threading.Lock()
-        # (phrase, None) plays on the speaker; (phrase, sink) hands its WAV to sink instead.
-        self._phrases: queue.Queue[tuple[str, ClipSink | None] | None] | None = None
+        # (phrase, None, None) plays on the speaker; (phrase, sink, owner) hands its WAV to sink instead.
+        self._phrases: queue.Queue[tuple[str, ClipSink | None, str | None] | None] | None = None
         self._thread: threading.Thread | None = None
         self._saying: Counter[str] = Counter()  # phrases queued or playing, until aplay finishes them
+        self._lines_waiting = 0  # the speaker's lines still in the queue
+        self._clip_owners: set[str] = set()  # whose clip is waiting or being made
 
     def start(self) -> None:
         with self._lock:
@@ -335,6 +342,8 @@ class VoiceAnnouncer:
                 self._thread = None
                 self._phrases = None
                 self._saying.clear()
+                self._lines_waiting = 0
+                self._clip_owners.clear()
         if thread is not None:
             thread.join(timeout=STOP_JOIN_TIMEOUT_S)
 
@@ -342,37 +351,44 @@ class VoiceAnnouncer:
         """Queues a phrase and returns right away.
 
         False means it was dropped: the voice is off (it's logged instead), the text
-        was blank, the voice isn't running, or QUEUE_SIZE phrases are already waiting.
+        was blank, the voice isn't running, or SPEAKER_QUEUE lines are already waiting.
         """
         phrase = clean_text(text)
         queued = False
         if phrase and not self.enabled:
             logger.info("voice off, would say something (%d characters)", len(phrase))
         elif phrase:
-            queued = self._enqueue(phrase, None)
+            queued = self._enqueue(phrase, None, None)
         return queued
 
-    def render(self, text: str, sink: ClipSink) -> bool:
-        """Queues a phrase to become a WAV clip, which goes to sink on the voice thread; nothing plays here.
+    def render(self, text: str, sink: ClipSink, owner: str) -> bool:
+        """Queues a phrase to become owner's WAV clip, which goes to sink on the voice thread; nothing plays here.
 
         Behind whatever the speaker is saying, so the Pi only ever runs one Piper. False, and no clip, when the
-        voice is off, the text is blank, or the queue is full. The text isn't logged: it's someone's to-dos.
+        voice is off, the text is blank, or owner already has a clip waiting or being made. The text isn't logged:
+        it's someone's to-dos.
         """
         phrase = clean_text(text)
-        queued = bool(phrase) and self.enabled and self._enqueue(phrase, sink)
+        queued = bool(phrase) and self.enabled and self._enqueue(phrase, sink, owner)
         return queued
 
-    def _enqueue(self, phrase: str, sink: ClipSink | None) -> bool:
+    def _enqueue(self, phrase: str, sink: ClipSink | None, owner: str | None) -> bool:
         queued = False
         shown = "a phrase" if sink is None else "a clip"
         with self._lock:
+            busy = self._lines_waiting >= SPEAKER_QUEUE if sink is None else owner in self._clip_owners
             if self._phrases is None:
                 logger.warning("voice isn't running, dropped %s", shown)
+            elif busy:
+                logger.info("voice is busy, dropped %s", shown)
             else:
                 try:
-                    self._phrases.put_nowait((phrase, sink))
+                    self._phrases.put_nowait((phrase, sink, owner))
                     if sink is None:
                         self._saying[phrase] += 1
+                        self._lines_waiting += 1
+                    else:
+                        self._clip_owners.add(owner)
                     queued = True
                 except queue.Full:
                     logger.info("voice is busy, dropped %s", shown)
@@ -386,12 +402,19 @@ class VoiceAnnouncer:
 
     def _speak_queued(self, phrases: queue.Queue) -> None:
         while (item := phrases.get()) is not None:
-            phrase, sink = item
+            phrase, sink, owner = item
             if sink is None:
+                self._take_line(phrases)
                 self._speak(phrase)
                 self._finish(phrases, phrase)
             else:
                 self._render(phrase, sink)
+                self._finish_clip(phrases, owner)
+
+    def _take_line(self, phrases: queue.Queue) -> None:
+        with self._lock:
+            if phrases is self._phrases:
+                self._lines_waiting -= 1
 
     def _finish(self, phrases: queue.Queue, phrase: str) -> None:
         with self._lock:
@@ -400,6 +423,11 @@ class VoiceAnnouncer:
                 self._saying[phrase] -= 1
                 if self._saying[phrase] <= 0:
                     del self._saying[phrase]
+
+    def _finish_clip(self, phrases: queue.Queue, owner: str) -> None:
+        with self._lock:
+            if phrases is self._phrases:
+                self._clip_owners.discard(owner)
 
     def _render(self, phrase: str, sink: ClipSink) -> None:
         try:
