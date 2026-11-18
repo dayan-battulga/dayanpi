@@ -1,0 +1,1 @@
+import{d as e,f as t,p as n}from"./SwitchLayoutGroupContext-e4q_0O-R.js";import{i as r,t as i}from"./react-BvdOq5eA.js";var a=r(i(),1);function o(){!t.current&&e();let[r]=(0,a.useState)(n.current);return r}export{o as t};

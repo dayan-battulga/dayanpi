@@ -46,7 +46,8 @@ export function summarizeRoom(seats: Seat[]): RoomSummary {
 }
 
 export interface SeatLine {
-  todo: string | null; // the current to-do, "· paused" while they're not working on it
+  todo: string | null; // the current to-do
+  paused: boolean; // there's a current to-do, and they aren't working on it right now
   app: string | null; // "VS Code", or "Chrome, docs.google.com"
 }
 
@@ -55,7 +56,8 @@ export function describeSeatLine(seat: Seat): SeatLine {
   const current = seat.todos?.current ?? null;
   const app = seat.app ?? null;
   const line = {
-    todo: current == null ? null : seat.state === "working" ? current : `${current} · paused`,
+    todo: current,
+    paused: current != null && seat.state !== "working",
     app: app == null ? null : seat.site != null ? `${app}, ${seat.site}` : app,
   };
   return line;

@@ -2442,19 +2442,19 @@ button.todo-pill:active,
 /* ---------- the room (components/room): Room.dc.html's layout with SeatsInfo.dc.html's seats ---------- */
 
 /* A state's color, for everything that shows one: seats, the faces up top and Settings' preview. */
-:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk) {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li) {
   --lamp: var(--muted);
 }
 
-:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="working"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li)[data-state="working"] {
   --lamp: var(--work);
 }
 
-:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="phone"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li)[data-state="phone"] {
   --lamp: var(--phone);
 }
 
-:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk)[data-state="away"] {
+:is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li)[data-state="away"] {
   --lamp: var(--away);
 }
 
@@ -2780,7 +2780,6 @@ button.todo-pill:active,
 @media (max-width: 639px) {
   .room-head {
     margin-top: 28px;
-    padding: 0 4px;
   }
 
   .room-total {
@@ -2797,7 +2796,6 @@ button.todo-pill:active,
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     margin-top: 30px;
-    padding: 0 4px;
   }
 
   .seat {
@@ -3622,6 +3620,28 @@ button.todo-pill:active,
   margin-top: 48px;
 }
 
+/* Above the bottom bar it's BottomBar's: SPEC's sizes, 40 px under the top bar. */
+.frame[data-bar] .focus {
+  margin-top: 40px;
+}
+
+.frame[data-bar] .focus-word {
+  font-size: clamp(56px, 8vw, 112px);
+}
+
+.frame[data-bar] .focus-timer {
+  font-size: clamp(40px, 5.6vw, 76px);
+}
+
+.frame[data-bar] .timeline-wrap {
+  margin-top: 48px;
+}
+
+/* With either, the to-dos start 64 px under the stats, as in both mockups. */
+.frame:is([data-rail], [data-bar]) .desk-columns {
+  margin-top: 64px;
+}
+
 .rail {
   flex: 1 1 320px;
   min-width: 0;
@@ -3961,7 +3981,7 @@ button.todo-pill:active,
   color: rgb(255 255 255 / 86%);
 }
 
-.seat:has(.seat-picture-frame) .seat-app {
+.seat:has(.seat-picture-frame) :is(.seat-app, .seat-paused) {
   color: rgb(255 255 255 / 62%);
 }
 
@@ -4063,6 +4083,10 @@ button.todo-pill:active,
     color: rgb(255 255 255 / 78%);
   }
 
+  .seat:has(.seat-picture-frame) .seat-paused {
+    color: inherit;
+  }
+
   /* RoomPhone's seats have no video button; Settings → Sharing has the switch. */
   .video-toggle {
     display: none;
@@ -4116,6 +4140,147 @@ button.todo-pill:active,
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--lamp) 34%, transparent),
       0 22px 56px -26px color-mix(in srgb, var(--lamp) 78%, transparent);
+  }
+}
+
+/* ---------- the desk sign (components/sign, Sign.dc.html): /sign, full screen on an old iPad ---------- */
+
+.sign {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* The slow lamp under everything, in your state's color. */
+.sign-glow {
+  position: absolute;
+  left: 50%;
+  bottom: -260px;
+  width: 900px;
+  height: 520px;
+  margin-left: -450px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--lamp) 16%, transparent), transparent);
+  animation: glow 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.sign-top {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  padding: 32px 40px 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.sign-middle {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.sign-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--lamp);
+  font-size: 22px;
+}
+
+.sign-dot {
+  --breathe-size: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--lamp);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.sign-timer {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: clamp(88px, 19.5vw, 230px);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.07em;
+  line-height: 0.9;
+}
+
+/* NumberFlow sets its own line-height of 1 (with no weight, so this wins); at 230 px that 0.1em is 23 px of extra air. */
+.sign-timer number-flow-react {
+  line-height: 0.9;
+}
+
+.sign-todo {
+  margin-top: 22px;
+  color: var(--muted);
+  font-size: 24px;
+}
+
+.sign-room {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 44px;
+  margin: 0;
+  padding: 0 0 44px;
+  list-style: none;
+}
+
+.sign-room li {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Someone away or offline is a dim lamp; working or on the phone, a lit one; an open seat, a dashed ring. Yours is
+   always lit, in your state's color, like the mockup's. */
+.sign-lamp {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lamp) 60%, transparent);
+}
+
+.sign-room li:is([data-state="working"], [data-state="phone"], [data-mine]) .sign-lamp {
+  background: var(--lamp);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--lamp) 70%, transparent);
+}
+
+.sign-room li[data-state="open"] .sign-lamp {
+  border: 1.5px dashed var(--muted);
+  background: none;
+}
+
+/* While the stream is down, the live parts dim like the frame's. */
+.sign[data-connection="reconnecting"] :is(.sign-middle, .sign-room) {
+  opacity: 0.55;
+}
+
+@media (max-width: 639px) {
+  .sign-top {
+    padding: 20px 20px 0;
+  }
+
+  .sign-todo {
+    padding: 0 20px;
+    font-size: 18px;
+  }
+
+  .sign-room {
+    gap: 28px;
+    padding-bottom: 32px;
   }
 }
 
@@ -4244,13 +4409,16 @@ button.todo-pill:active,
   }
 
   .shell {
-    padding: 16px 16px 120px;
+    padding: 16px 20px 120px;
   }
 
-  /* One row of pills, scrolling sideways if it ever runs out of room. Sign out is in the account menu up top. */
+  /* One row of pills, scrolling sideways if it ever runs out of room, out to the screen's edges. Sign out is in the
+     account menu up top. */
   .settings-nav-list {
     display: flex;
     gap: 6px;
+    margin-inline: -20px;
+    padding-inline: 20px;
     overflow-x: auto;
   }
 

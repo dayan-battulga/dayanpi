@@ -17,12 +17,13 @@ const WORD_HIDDEN = { opacity: 0, y: "0.3em", filter: "blur(4px)" };
 const WORD_SHOWN = { opacity: 1, y: 0, filter: "blur(0px)", transitionEnd: { filter: "none" }, transition: { duration: 0.7, ease: SPRINGS.enter.ease } };
 const WORD_LEAVING = { opacity: 0, filter: "blur(4px)", transition: SPRINGS.exit };
 
-// Time in this state, in the state color: two rolling numbers (three past an hour) in one group, so they move together.
-function StateTimer({ seconds }: { seconds: number }) {
+// Time in this state: two rolling numbers (three past an hour) in one group, so they move together. The Desk's, and the
+// desk sign's with its own class.
+export function StateTimer({ seconds, className = "focus-timer" }: { seconds: number; className?: string }) {
   const total = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(total / 3600);
   return (
-    <p className="focus-timer" role="timer" aria-label={formatClock(total)}>
+    <p className={className} role="timer" aria-label={formatClock(total)}>
       <NumberFlowGroup>
         {hours > 0 && <NumberFlow value={hours} suffix=":" aria-hidden="true" />}
         <NumberFlow value={Math.floor((total % 3600) / 60)} format={TWO_DIGITS} digits={SIXTY} aria-hidden="true" />

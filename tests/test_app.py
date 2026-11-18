@@ -1385,6 +1385,7 @@ ACCESS = {
     ("GET", "/pi"): ("/pi", None, 303, 200, 200),  # members get the page too; it sends them on to /me
     ("GET", "/track"): ("/track", None, 303, 200, 200),
     ("GET", "/track/test"): ("/track/test", None, 303, 200, 200),
+    ("GET", "/sign"): ("/sign", None, 303, 200, 200),  # the desk sign: signed in only
     ("GET", "/api/models/{name}"): ("/api/models/palm_detection_mediapipe_2023feb.onnx", None, 401, 200, 200),
     ("GET", "/"): ("/", None, 303, 200, 200),  # the static mount: the dashboard and its files
 }
@@ -1418,12 +1419,12 @@ def test_the_owner_only_reads_turn_a_member_away():
         assert (reply.status_code, reply.json()) == (403, {"detail": "only the owner can do that"}), path
 
 
-@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track", "/track/test", "/people/sam"])
+@pytest.mark.parametrize("path", ["/login", "/join/abc_DEF-123", "/settings", "/me", "/pi", "/track", "/track/test", "/sign", "/people/sam"])
 def test_the_page_routes_serve_the_page(path):
     signed_in = let_in(stranger(), find_owner()).get(path)
     signed_out = stranger().get(path, follow_redirects=False)
     assert (signed_in.status_code, signed_in.text) == (200, app.INDEX_PAGE.read_text())
-    if path in ("/settings", "/me", "/pi", "/track", "/track/test", "/people/sam"):
+    if path in ("/settings", "/me", "/pi", "/track", "/track/test", "/sign", "/people/sam"):
         assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=" + quote(path, safe=""))
     else:
         assert (signed_out.status_code, signed_out.text) == (200, app.INDEX_PAGE.read_text())

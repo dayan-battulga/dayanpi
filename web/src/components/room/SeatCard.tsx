@@ -64,6 +64,7 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, v
         {(line.todo != null || line.app != null) && (
           <p className="seat-line">
             {line.todo}
+            {line.paused && <span className="seat-paused"> · paused</span>}
             {line.app != null && <span className="seat-app">{`${line.todo != null ? " · " : ""}${line.app}`}</span>}
           </p>
         )}

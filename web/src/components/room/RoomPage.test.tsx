@@ -83,7 +83,9 @@ it("draws each seat with only what that person shares, yours first and called Yo
 
   const sam = within(screen.getByRole("article", { name: "Sam, on the phone" }));
   expect(sam.getByText("06:05")).toHaveClass("seat-timer");
-  expect(sam.getByText(/^Read chapter 7 · paused/)).toBeInTheDocument(); // on the phone, so the to-do isn't counting
+  // On the phone, so the to-do isn't counting: "· paused" goes with the app, in its dim color, like SeatsInfo's.
+  expect(sam.getByText("Read chapter 7").closest(".seat-line")).toHaveTextContent(/^Read chapter 7 · paused · Chrome$/);
+  expect(sam.getByText("· paused")).toHaveClass("seat-paused");
 
   const alex = screen.getByRole("article", { name: "Alex, away" });
   expect(alex.querySelector(".seat-chip, .seat-line, .seat-bar")).toBeNull();

@@ -206,7 +206,8 @@ The site is a few pages inside one frame now (the look comes from the mockups in
 | **Their desk** (`/people/<username>`) | everyone | Someone else's desk, read-only, built from what they share. Your own name takes you to your desk. See [Seeing the others](#seeing-the-others-nudges-and-the-group-calendar-study-room-step-6-part-2). |
 | **Desk** (`/me`) | everyone | Your day: the state, timer, timeline and totals with the Mac line at the top, then the to-do list with Apps next to it, and the calendar. |
 | **Pi** (`/pi`) | you | **Cameras**: one feed at a time (the **Side** / **Front** button switches, and only the one showing streams), hidden behind a veil until you press **Peek**, with the boxes over it and the latest readings under it. Off your own Tailscale devices they're locked. Then **The Pi**: temperature, CPU, memory and uptime, rolling to each new number. An amber **Undervoltage** warning shows up there while the power supply sags. Members don't get the tab, and typing the address just lands them on their desk. |
-| **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Sharing (what the room sees of you), Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
+| **Settings** (`/settings`) | everyone | A list of sections on the left (pills on a phone): Profile (name and password), Sharing (what the room sees of you), Camera (where your desk's checks come from), Voice and bedtime, Mac helper (the **Track apps and sites** switch, just for you, and the helper's tokens), and for you Room and invites. |
+| **Desk sign** (`/sign`) | everyone, signed in | Full screen, no frame: your state, its big timer and your current to-do, with the room's lamps along the bottom. Made for an old iPad standing on the desk. See [The desk sign](#the-desk-sign). |
 | **Sign in**, **Join** (`/login`, `/join/<code>`) | anyone | Just the wordmark and the theme button on top. |
 
 The frame around them:
@@ -217,6 +218,18 @@ The frame around them:
 - **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
 - **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign other than peace fires (peace has its own pill, see [Hand signs](#hand-signs)), and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
 - **Only the Room and the Desk download up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
+
+### The desk sign
+
+`/sign` turns a spare iPad (or any screen) into a sign for your desk: your state in its color ("Focused", "On your phone", "Away") with a slowly breathing dot, how long you've been in it in big numbers, and the to-do you're on under that. Along the bottom is a little lamp for everyone in the room, lit while they're working or on their phone and dim while they're away (yours is always lit, in your color), plus a dashed ring for each open seat, with how long the people here focused together at the top right. A soft glow in your state's color breathes under it all, every 8 seconds. It follows the theme like the rest of the site and goes still with Reduce motion on.
+
+Setting it up on the iPad:
+
+1. Open **https://dayoon.tail279594.ts.net/sign** in Safari and sign in (it's signed-in only, like everything else; a sign-in lasts 30 days and every visit pushes it back).
+2. Share → **Add to Home Screen**, then open it from there, so there's no address bar.
+3. Stand it up and plug it in.
+
+It keeps the screen awake by itself (the browser's Wake Lock, iPadOS 16.4 or newer), and asks again every time the page comes back into view, since the iPad lets go whenever you switch away. On an older iPad that can't, nothing goes wrong, it just sleeps as usual: set Settings → Display & Brightness → **Auto-Lock → Never** while it's on the desk. If the Pi restarts or the Wi-Fi blinks, the middle and the lamps dim until the stream is back.
 
 ### ⌘K and the keyboard
 

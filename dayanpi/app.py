@@ -1219,6 +1219,7 @@ def model_file(name: str):
 @app.get("/pi")
 @app.get("/track")
 @app.get("/track/test")
+@app.get("/sign")
 @app.get("/people/{username}")
 def page():
     """The page's own routes; the page picks what to show from the address. "/" comes from the static mount."""

@@ -16,6 +16,7 @@
 //   --click="text=Start"     click something on the real page before the shot (Playwright selector, repeatable)
 //   --press=Control+k        press keys on the real page before the shot (repeatable, after the clicks)
 //   --label=palette          added to the file names, so different states don't overwrite each other
+//   --reduced-motion         both sides with the system's reduced motion on ("reduced" in the file names)
 //
 // Nothing here reaches the internet or the Pi: the fonts come from web/node_modules, the real page runs
 // on a local Vite dev server, and every /api call is answered from design/fixtures/<Mockup>.json.
@@ -141,8 +142,8 @@ async function openBrowser() {
   return browser;
 }
 
-async function shootMockup(browser, baseUrl, name, query, size, file) {
-  const page = await browser.newPage({ viewport: size, reducedMotion: "no-preference" });
+async function shootMockup(browser, baseUrl, name, query, size, file, reducedMotion = "no-preference") {
+  const page = await browser.newPage({ viewport: size, reducedMotion });
   await page.goto(`${baseUrl}/${name}.dc.html${buildQuery(query)}`);
   await page.waitForSelector("html[data-dc-ready]");
   await page.waitForTimeout(SETTLE_MS);
@@ -241,7 +242,7 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
     viewport: size,
     colorScheme: theme,
     timezoneId: fixture.timezone ?? "America/Chicago",
-    reducedMotion: "no-preference",
+    reducedMotion: actions.reducedMotion ? "reduce" : "no-preference",
   });
   if (fixture.permissions) {
     await context.grantPermissions(fixture.permissions);
@@ -302,8 +303,8 @@ async function compare(name, route, options) {
   const mockupOptions = { ...(fixture.mockupOptions ?? {}), ...Object.fromEntries(new URLSearchParams(options.options ?? "")) };
   const usedThemes = themes.filter((value) => value !== null).length > 0 ? themes : ["light"];
   for (const theme of usedThemes) {
-    const stem = path.join(outDir, [name, options.label, sizeLabel, theme].filter(Boolean).join("-"));
-    await shootMockup(browser, readServerUrl(mockupServer), mockupName, { ...mockupOptions, theme }, size, `${stem}-mockup.png`);
+    const stem = path.join(outDir, [name, options.label, sizeLabel, options.reducedMotion ? "reduced" : null, theme].filter(Boolean).join("-"));
+    await shootMockup(browser, readServerUrl(mockupServer), mockupName, { ...mockupOptions, theme }, size, `${stem}-mockup.png`, options.reducedMotion ? "reduce" : "no-preference");
     await shootApp(browser, appServer.resolvedUrls.local[0], route, fixture, size, theme, options, `${stem}-page.png`);
     await placeSideBySide(browser, `${stem}-mockup.png`, `${stem}-page.png`, `${stem}.png`);
     console.log(path.relative(repoDir, `${stem}.png`));
@@ -344,9 +345,10 @@ async function main() {
       fills: readFlags(flags, "fill"),
       clicks: readFlags(flags, "click"),
       presses: readFlags(flags, "press"),
+      reducedMotion: flags.includes("--reduced-motion"),
     });
   } else {
-    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name]");
+    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name] [--reduced-motion]");
     process.exitCode = 1;
   }
 }

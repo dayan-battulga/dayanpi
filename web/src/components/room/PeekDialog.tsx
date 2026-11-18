@@ -44,13 +44,16 @@ function PeekCard({ seat, username, nudger, now, elapsed }: Omit<PeekDialogProps
         <div className="peek-who">
           <Dialog.Title className="peek-name">{seat.name}</Dialog.Title>
           <p className="peek-state">
-            {describeSeatState(seat.state)}
-            {seconds != null && (
-              <>
-                {" · "}
-                <span className="mono">{formatClock(seconds)}</span>
-              </>
-            )}
+            {/* One run of text, so a narrow peek wraps it at a space instead of leaving the "·" on a line of its own. */}
+            <span>
+              {describeSeatState(seat.state)}
+              {seconds != null && (
+                <>
+                  {" · "}
+                  <span className="mono">{formatClock(seconds)}</span>
+                </>
+              )}
+            </span>
           </p>
         </div>
         <Dialog.Close className="day-close" aria-label="Close">
