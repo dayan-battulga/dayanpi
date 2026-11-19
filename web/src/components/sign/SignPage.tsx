@@ -2,6 +2,7 @@ import { StateTimer } from "@/components/focus/FocusNow";
 import { useMe } from "@/hooks/useMe";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { useTabIcon } from "@/hooks/useTabIcon";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { ROOM_SIZE } from "@/lib/account";
 import { formatDuration } from "@/lib/format";
@@ -24,6 +25,7 @@ export function SignPage() {
   const { user } = useMe();
   const now = useNow();
   useWakeLock();
+  useTabIcon(snapshot?.focus?.state);
   const focus = snapshot?.focus;
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
   const summary = summarizeRoom(seats);

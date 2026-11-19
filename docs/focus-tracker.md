@@ -217,6 +217,7 @@ The frame around them:
 - **Reconnecting:** when the live stream drops (the Pi restarting, the Wi-Fi blinking), an amber **Reconnecting** chip shows next to the wordmark and the Desk and Pi pages (and the Room's seats) dim until it's back. The old Live badge is gone: no chip means it's live.
 - **Switching pages** cross-fades with a small rise. With Reduce motion on (on a Mac: System Settings → Accessibility → Display → Reduce motion) nothing slides: pages just fade and the tab pill jumps.
 - **Toasts:** little frosted pills at the bottom right (on a phone, centered just above the dock). One at a time, gone after 4 seconds. You get one when a hand sign other than peace fires (peace has its own pill, see [Hand signs](#hand-signs)), and when the Mac tracking switch couldn't reach the Pi (the switch flips back on its own).
+- **The tab icon** is a lowercase "d" whose round part is your lamp: teal while you're focused, orange on your phone, purple away, gray when it's unknown or you're signed out. It changes the moment your state does, and in a hidden tab it still checks every 10 s for the first hour, so the tab turns orange when you pick up your phone while you're in another one. The files are in `web/public/assets/` (one SVG per state, plus a 32 px PNG and a 180 px home screen icon of the teal one).
 - **Only the Room and the Desk download up front.** Settings, the Pi page, sign-in, join and the ⌘K box load the first time you open them.
 
 ### The desk sign

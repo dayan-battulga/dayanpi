@@ -16,6 +16,7 @@ import { PHONE_QUERY, WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNudgeToast } from "@/hooks/useNudge";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { useTabIcon } from "@/hooks/useTabIcon";
 import { SPRINGS } from "@/lib/motion";
 import { listOthersHere, orderSeats, summarizeRoom } from "@/lib/room";
 import { readStored, writeStored } from "@/lib/storage";
@@ -68,6 +69,7 @@ export function Frame() {
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
   useNudgeToast(snapshot?.focus?.spoken);
+  useTabIcon(snapshot?.focus?.state);
   const camera = useCamera(snapshot?.focus?.camera_source);
   // A hidden tab's stream is closed, but the camera's readings still bring the peace sign's message, so its clip plays.
   const shownSpoken = snapshot?.focus?.spoken;

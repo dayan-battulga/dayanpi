@@ -160,7 +160,7 @@ def test_dashboard_serves_every_file_it_links():
         page = client.get("/")
         assert page.status_code == 200
         linked = re.findall(r'(?:src|href)="([^"#?]+)"', page.text)
-        assert {path.rsplit(".", 1)[-1] for path in linked} == {"js", "css"}
+        assert {path.rsplit(".", 1)[-1] for path in linked} == {"js", "css", "svg", "png"}  # svg and png: the tab icon
         stylesheets = [client.get(path).text for path in linked if path.endswith(".css")]
         fonts = [path for css in stylesheets for path in re.findall(r"url\(([^)]+)\)", css)]
         assert any(path.endswith(".woff2") for path in fonts)
@@ -172,6 +172,14 @@ def test_dashboard_serves_every_file_it_links():
             assert response.headers["cache-control"] == "no-cache", path
         signed_out = stranger().get("/", follow_redirects=False)
     assert (signed_out.status_code, signed_out.headers["location"]) == (303, "/login?next=%2F")
+
+
+def test_every_tab_icon_loads_without_a_session():
+    """The page swaps the SVG for your state's (hooks/useTabIcon), and the sign-in page shows the gray one."""
+    types = {"svg": "image/svg+xml", "png": "image/png"}
+    for name in ("icon-working.svg", "icon-phone.svg", "icon-away.svg", "icon-unknown.svg", "icon-32.png", "apple-touch-icon.png"):
+        response = stranger().get(f"/assets/{name}")
+        assert (response.status_code, response.headers["content-type"].split(";")[0]) == (200, types[name.rsplit(".", 1)[-1]]), name
 
 
 def test_focus_api_reports_disabled_without_models():
