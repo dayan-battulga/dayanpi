@@ -126,7 +126,8 @@ class FocusWorker(LoopThread):
         self.last_side_overlay: dict | None = None
 
     def read_frame(self, feed: CameraFeed) -> FrameReading | None:
-        """One detector pass on a frame newer than the last one, or None when the camera gave nothing new.
+        """One detector pass on a frame newer than the last one, or None when the camera gave nothing new. Phones a
+        mouse outscores in the same place are dropped here, per camera, before the hand check.
 
         latest_frame() would hand back the same JPEG forever when the camera freezes, and the
         tracker would log hours of "focused" from one stale picture.
@@ -139,6 +140,7 @@ class FocusWorker(LoopThread):
             if image is not None:
                 feed.frame_size = FrameSize(width=image.shape[1], height=image.shape[0])
                 reading = self._scanner.scan(image)
+                reading = replace(reading, phones=detector.drop_mouse_phones(reading.phones, reading.mice))
                 if self._hands is not None:
                     reading = self.check_hands(reading, image)
         return reading

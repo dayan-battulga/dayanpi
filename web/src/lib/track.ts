@@ -9,6 +9,8 @@ export const PICTURE_WIDTH = 640;
 export const PICTURE_HEIGHT = 360;
 export const PICTURE_QUALITY = 0.6;
 export const PICTURE_MAX_BYTES = 44 * 1024;
+// dayanpi/focus/tracker.py's PHONE_MIN: a weaker phone doesn't count, so the pages that show a check's phone say so.
+export const PHONE_MIN = 0.6;
 const BASE64_CHUNK = 0x8000; // String.fromCharCode takes its bytes as arguments, so not all at once
 
 // The Pi's answer to a reading, in its own clock, with the peace sign's last message, so this page can play its clip.

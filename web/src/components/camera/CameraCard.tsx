@@ -3,13 +3,13 @@ import { useCallback, useState, type CSSProperties } from "react";
 import { Feed } from "@/components/camera/Feed";
 import { riseDelay } from "@/components/shared/rise";
 import { readStored, writeStored } from "@/lib/storage";
+import { PHONE_MIN } from "@/lib/track";
 import type { FocusStatus } from "@/lib/types";
 
 const FEEDS = [
   { name: "front", src: "/video", caption: "Front", alt: "Live front camera feed", overlayKey: "overlay" },
   { name: "side", src: "/video/side", caption: "Side", alt: "Live side camera feed", overlayKey: "side_overlay" },
 ] as const;
-const PHONE_MIN = 0.5; // focus/tracker.py's: a weaker phone doesn't count
 const FALLBACK_RATIO = 640 / 480; // the webcam's, until the camera's overlay or picture says its own shape
 const HIDDEN_NOTE = "The readings keep updating while the picture is hidden.";
 const LOCKED_NOTE = "This browser isn’t one of your Tailscale devices, so the cameras stay closed.";

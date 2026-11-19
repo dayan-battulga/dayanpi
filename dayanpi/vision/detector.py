@@ -13,6 +13,9 @@ again on the crop. At desk distance the phone is too small for the full-frame
 pass. Measured with YOLO11n on real desk frames, the full-frame pass scored
 0.00-0.37 on a phone in hand, the zoomed pass 0.26-0.72 on the same frames and
 0.00 on every frame of real work. YOLO26n hasn't been measured on the desk yet.
+
+A hand on a mouse can still look like a phone, so both passes find mice too, and a phone
+that a mouse box outscores in the same place doesn't count (drop_mouse_phones).
 """
 
 import math
@@ -33,12 +36,15 @@ PAD_VALUE = 114
 
 PERSON_CLASS_ID = 0
 PHONE_CLASS_ID = 67
-LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone"}
+MOUSE_CLASS_ID = 64
+LABELS = {PERSON_CLASS_ID: "person", PHONE_CLASS_ID: "phone", MOUSE_CLASS_ID: "mouse"}
 BOX_VALUES = 4
 
 MIN_CONFIDENCE = 0.15
 NMS_IOU = 0.5
 FACE_MIN_CONFIDENCE = 0.6
+# A phone isn't a phone when a mouse box that scored at least as high overlaps it this much (IoU), or holds its center.
+MOUSE_VETO_IOU = 0.3
 
 ZOOM_PERSON_MIN = 0.5
 ZOOM_MARGIN_SIDES = 0.15
@@ -87,6 +93,7 @@ class FrameReading:
     faces: list[FaceReading]
     elapsed_ms: float
     hands: list = field(default_factory=list)  # hands.Hand, when the hand models run
+    mice: list[Detection] = field(default_factory=list)  # from both passes, for drop_mouse_phones
     side: "FrameReading | None" = None  # the side camera's own reading, when this one was merged from two
 
 
@@ -210,6 +217,34 @@ def decode_objects(output: np.ndarray, letterbox: Letterbox) -> list[Detection]:
     return detections
 
 
+def measure_overlap(first: Box, second: Box) -> float:
+    """Intersection over union, 0 for boxes that don't touch."""
+    width = min(first.x2, second.x2) - max(first.x1, second.x1)
+    height = min(first.y2, second.y2) - max(first.y1, second.y1)
+    shared = width * height if width > 0 and height > 0 else 0.0
+    union = (first.x2 - first.x1) * (first.y2 - first.y1) + (second.x2 - second.x1) * (second.y2 - second.y1) - shared
+    overlap = shared / union if union > 0 else 0.0
+    return overlap
+
+
+def is_mouse(phone: Detection, mouse: Detection) -> bool:
+    """The mouse scored at least as high and sits on the phone: over MOUSE_VETO_IOU, or the phone's center inside it."""
+    center_x = (phone.box.x1 + phone.box.x2) / 2
+    center_y = (phone.box.y1 + phone.box.y2) / 2
+    holds_center = mouse.box.x1 <= center_x <= mouse.box.x2 and mouse.box.y1 <= center_y <= mouse.box.y2
+    vetoed = mouse.confidence >= phone.confidence and (holds_center or measure_overlap(phone.box, mouse.box) > MOUSE_VETO_IOU)
+    return vetoed
+
+
+def drop_mouse_phones(phones: list[Detection], mice: list[Detection]) -> list[Detection]:
+    """The phones no mouse box outscores in the same place: a hand on a mouse is the commonest fake phone at a desk.
+
+    Both lists have to come from the same camera's frame.
+    """
+    kept = [phone for phone in phones if not any(is_mouse(phone, mouse) for mouse in mice)]
+    return kept
+
+
 def find_zoom_region(person: Box, frame_width: int, frame_height: int) -> Box:
     """The person's box plus some margin (hands and lap stick out of it), in whole pixels."""
     width = person.x2 - person.x1
@@ -290,9 +325,10 @@ class FaceDetector:
 
 
 class DeskScanner:
-    """Full-frame pass for people, zoomed pass for phones, plus faces.
+    """Full-frame pass for people, zoomed pass for phones, plus faces, and mice from both passes.
 
-    Phones only come from the zoomed pass, so no person means no zoomed pass.
+    Phones only come from the zoomed pass, so no person means no zoomed pass. The phones are the
+    model's, before drop_mouse_phones: the worker drops the mouse ones, and dayanpi.focus.check shows both.
     """
 
     def __init__(
@@ -303,32 +339,30 @@ class DeskScanner:
         self._objects = object_detector or ObjectDetector()
         self._faces = face_detector or FaceDetector()
 
-    def find_people(self, image: np.ndarray) -> list[Detection]:
-        people = [detection for detection in self._objects.detect(image) if detection.label == "person"]
-        return people
-
-    def find_phones(self, image: np.ndarray, people: list[Detection]) -> list[Detection]:
-        phones = []
+    def zoom_in(self, image: np.ndarray, people: list[Detection]) -> list[Detection]:
+        """Everything the zoomed pass around the main person finds, moved back onto the frame; nothing without a clear person."""
+        zoomed = []
         main_person = max(people, key=lambda person: person.confidence, default=None)
         if main_person is not None and main_person.confidence >= ZOOM_PERSON_MIN:
             frame_height, frame_width = image.shape[:2]
             region = find_zoom_region(main_person.box, frame_width, frame_height)
             crop = image[int(region.y1):int(region.y2), int(region.x1):int(region.x2)]
-            phones = [
+            zoomed = [
                 Detection(label=found.label, confidence=found.confidence, box=shift_box(found.box, region.x1, region.y1))
                 for found in self._objects.detect(crop)
-                if found.label == "phone"
             ]
-        return phones
+        return zoomed
 
     def scan(self, image: np.ndarray) -> FrameReading:
         started = time.perf_counter()
-        people = self.find_people(image)
-        phones = self.find_phones(image, people)
+        found = self._objects.detect(image)
+        people = [detection for detection in found if detection.label == "person"]
+        zoomed = self.zoom_in(image, people)
         reading = FrameReading(
             people=people,
-            phones=phones,
+            phones=[detection for detection in zoomed if detection.label == "phone"],
             faces=self._faces.detect(image),
             elapsed_ms=(time.perf_counter() - started) * 1000,
+            mice=[detection for detection in found + zoomed if detection.label == "mouse"],
         )
         return reading

@@ -20,26 +20,29 @@ sudo systemctl stop dayanpi
 sudo systemctl start dayanpi
 ```
 
-It walks you through three 20-second phases with a 5-second countdown before each:
+It walks you through four 20-second phases with a 5-second countdown before each:
 
 1. **Working:** sit and work like normal.
-2. **Phone:** pick up your phone and use it like you normally would.
-3. **Away:** get up and walk out of view.
+2. **Mouse:** keep working with your hand on your mouse: move it, scroll, click.
+3. **Phone:** pick up your phone and use it like you normally would.
+4. **Away:** get up and walk out of view.
 
 About once a second it prints a line like this:
 
 ```text
-[working   7s] person 0.91      | phone -    | face turn +0.04 tilt 0.47   |  212 ms
+[mouse     7s] person 0.91      | phone 0.58>-    | mouse 0.71 | face turn +0.04 tilt 0.47   |  212 ms
 ```
 
-- **person / phone:** how sure the model is (0 to 1). `-` means it saw nothing.
+- **person / phone / mouse:** how sure the model is (0 to 1). `-` means it saw nothing. `0.58>-` means the model saw a phone at 0.58, and the [mouse veto](#the-mouse-veto) threw it out because a mouse outscored it in the same spot.
 - **turn:** how far your nose is left or right of center, in eye-widths. Around 0 means you're facing the camera.
 - **tilt:** where your nose sits between your eyes (0) and your mouth (1). This changes when you look down.
 - **ms:** how long one check took.
 
-At the end it prints a summary table. Everything lands in `focus_check/`:
+At the end it prints a summary table: for each phase, each check's best phone score as the median, the 90th percentile and the highest, before the mouse veto and after it (after is what the tracker gets). Under it is a suggested `PHONE_MIN`: the lowest 0.05 step above everything the working and mouse phases scored (never under 0.5), as long as at least 3 of 5 phone checks reach it, since that's what the tracker needs to say "on phone". If nothing fits it says "No PHONE_MIN separates them" instead of guessing. Send the summary to Claude to set `PHONE_MIN` from it. The check doesn't run the hand models, so its phone scores are the detector's, before the "in your hand" filter below.
 
-- `summary.txt`, plus one marked-up snapshot per phase (`working.jpg`, `phone.jpg`, `away.jpg`)
+Everything lands in `focus_check/`:
+
+- `summary.txt`, plus one marked-up snapshot per phase (`working.jpg`, `mouse.jpg`, `phone.jpg`, `away.jpg`), with mice boxed in purple
 - `frames/`: a clean, unmarked camera frame every 2 seconds (`working_00.jpg`, `phone_03.jpg`, ...). These are for re-testing the detector off the Pi. The drawn boxes on the snapshots confuse the model, so it needs the clean ones. Each run clears out the old frames.
 
 Want longer phases? Use `--seconds 30`.
@@ -109,13 +112,19 @@ Once the models are in `models/`, the site runs the detector by itself, about on
 | State | Means | Rule |
 | --- | --- | --- |
 | **focused** | At the desk, no phone in sight | You're seen in 2 checks in a row |
-| **on phone** | Phone in hand | Phone spotted in your hand in 3 of the last 5 checks. Back to focused after 5 checks without it |
+| **on phone** | Phone in hand | Phone spotted in your hand at 0.6 or more (`PHONE_MIN`) in 3 of the last 5 checks. Back to focused after 5 checks without it |
 | **away** | Nobody at the desk | 10 seconds without you |
 | **unknown** | Just started, or no camera frames for 30 s | |
 
 The numbers come from the real frames (a quick glance at the phone doesn't count; walking out of frame for a second doesn't count either). They're constants at the top of `dayanpi/focus/tracker.py` if they need tuning.
 
 **Only a phone in your hand counts.** A phone lying on the desk would otherwise count as "on phone" all day, so a phone only counts when its box touches one of your hands, or comes within a quarter of a hand's length of it. The hands come from the same models as the [hand signs](#hand-signs), and each camera checks its own phones against its own hands. If the hand models are missing (or crash), phones count anywhere in the picture, like before. On the camera peek, a phone only gets a box when it counts, so a phone on the desk with no box is working as intended. The margin is `NEAR_HAND_MARGIN` in `dayanpi/vision/hands.py`.
+
+### The mouse veto
+
+A hand on a mouse looks a lot like a hand on a phone, and it's right next to your hand by definition, so the rule above can't catch it. The model already sorts each box into its single best class (a box that's mostly "mouse" never counts as a phone), but it can still put a separate phone box on top of your mouse. So both passes look for mice too, and a phone doesn't count when a mouse box that scored at least as high sits on it: they overlap by more than 0.3 (intersection over union), or the phone's middle is inside the mouse's box. A weaker mouse, or a mouse somewhere else on the desk, leaves the phone alone. Each camera checks its own phones against its own mice, before the hand check, and the laptop camera in the site does exactly the same. It's `drop_mouse_phones` in `dayanpi/vision/detector.py` (`dropMousePhones` in `web/src/lib/vision/detector.ts`), and the overlap is `MOUSE_VETO_IOU`.
+
+`PHONE_MIN` went from 0.5 to 0.6 alongside it, as a starting point. The real number comes from [the detector check](#step-1-detector-check)'s mouse phase: rerun it whenever the camera moves or you get a new mouse or phone, and send Claude the summary.
 
 **What it counts for the day:** focus time, phone time, away time, pickups (every switch into "on phone"), and your best focus streak. The day rolls over at local midnight. A restart doesn't lose the day: the service rebuilds today's totals from the log when it starts (it can lose up to 30 s).
 

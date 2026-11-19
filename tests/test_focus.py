@@ -8,7 +8,7 @@ from dayanpi.focus import stats as focus_stats
 from dayanpi.focus import tracker as focus
 from dayanpi.focus.merge import merge_readings
 from dayanpi.vision.detector import Box, Detection, FaceReading, FrameReading, Point
-from dayanpi.focus.tracker import FocusLog, FocusTracker
+from dayanpi.focus.tracker import PHONE_MIN, FocusLog, FocusTracker
 
 BOX = Box(x1=10, y1=10, x2=50, y2=50)
 NOON = datetime(2026, 10, 29, 12, 0).timestamp()
@@ -82,6 +82,13 @@ def test_phone_needs_three_of_five_and_exits_after_five_misses():
     assert desk.work(4) == "phone"
     assert desk.work(1) == "working"
     assert desk.tracker.status(desk.now)["today"]["pickups"] == 1
+
+
+def test_a_phone_under_phone_min_never_counts():
+    assert PHONE_MIN == 0.6
+    desk = settled_desk()
+    assert desk.tick(make_reading(phone=0.59), 10) == "working"
+    assert desk.tick(make_reading(phone=PHONE_MIN), 3) == "phone"
 
 
 def test_one_phone_glimpse_does_not_count():

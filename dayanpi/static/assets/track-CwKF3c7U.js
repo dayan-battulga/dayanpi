@@ -1,0 +1,1 @@
+var e=.6,t={normal:null,idle:`Nobody's here, so it checks every 3 s`,busy:`This laptop is busy, so it checks every 2 s`,battery:`The battery's low, so it checks every 2 s`};function n(e,n,r,i){return[e===null?`Loading the models`:`${Math.round(e)} ms a check`,n===null?null:`memory ${Math.round(n/1e6)} MB`,r,t[i]].filter(e=>e!==null).join(` · `)}export{n,e as t};

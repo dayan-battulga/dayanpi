@@ -4,6 +4,7 @@ import { AuthFrame } from "@/components/auth/AuthFrame";
 import { openCamera, type CameraProblem } from "@/components/track/cameraTracker";
 import { describeDevice, findBackends, runSpeedTest, startCheckWorker, type CheckWorker } from "@/components/track/checkRuns";
 import { sendToLogin } from "@/lib/http";
+import { PHONE_MIN } from "@/lib/track";
 import {
   CHECKS_PER_BACKEND,
   describeLoop,
@@ -35,7 +36,6 @@ const CAMERA_PROBLEMS: Record<CameraProblem, string> = {
 };
 const LOOPS: Loop[] = ["page", "worker"];
 const BACKGROUND_MAX_MS = 20 * 60_000;
-const PHONE_MIN = 0.5; // the tracker's
 
 function describeCheck(choice: BackendChoice, record: CheckRecord, count: number): string {
   const phone = record.phone >= PHONE_MIN ? `phone ${record.phone.toFixed(2)}` : "no phone";

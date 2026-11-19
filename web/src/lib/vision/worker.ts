@@ -1,9 +1,10 @@
-import { scanDesk, ZOOM_PERSON_MIN, type FrameReading, type RunModel } from "@/lib/vision/detector";
+import { dropMousePhones, scanDesk, ZOOM_PERSON_MIN, type FrameReading, type RunModel } from "@/lib/vision/detector";
 import { findPhonesInHand, scanHands, type HandModels } from "@/lib/vision/hands";
 import type { Picture } from "@/lib/vision/image";
 
-// The per-frame part of dayanpi/focus/worker.py (read_frame and check_hands): one detector pass, then the hand
-// models, after which only phones near a hand still count. One camera, so merge_readings has nothing to merge.
+// The per-frame part of dayanpi/focus/worker.py (read_frame and check_hands): one detector pass, the phones a mouse
+// outscores in the same place dropped, then the hand models, after which only phones near a hand still count. One
+// camera, so merge_readings has nothing to merge.
 // Unlike the Pi, the hand models only run when the zoomed phone pass did (someone's there): the laptop runs this for
 // hours, and with nobody there there's no phone to keep and no sign worth reading.
 
@@ -28,7 +29,7 @@ async function checkHands(reading: FrameReading, picture: Picture, models: HandM
 export async function readFrame(picture: Picture, models: VisionModels): Promise<FrameReading> {
   const started = performance.now();
   const scan = await scanDesk(picture, models.objects);
-  const scanned = { ...scan, hands: [], handsFailed: false, elapsedMs: 0 };
+  const scanned = { people: scan.people, phones: dropMousePhones(scan.phones, scan.mice), hands: [], handsFailed: false, elapsedMs: 0 };
   const someoneThere = scan.people.some((person) => person.confidence >= ZOOM_PERSON_MIN);
   const reading = models.hands === null || !someoneThere ? scanned : await checkHands(scanned, picture, models.hands);
   const timed = { ...reading, elapsedMs: performance.now() - started };

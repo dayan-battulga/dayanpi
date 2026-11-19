@@ -24,7 +24,9 @@ from dayanpi.vision.detector import FrameReading, find_best_confidence
 logger = logging.getLogger(__name__)
 
 PERSON_MIN = 0.5
-PHONE_MIN = 0.5
+# A starting point over the 0.5 it was, since a hand on a mouse scored like a phone. The real number comes from
+# `python -m dayanpi.focus.check`'s mouse phase (docs/focus-tracker.md); web/src/lib/track.ts has a copy.
+PHONE_MIN = 0.6
 
 PHONE_WINDOW = 5  # checks
 PHONE_ENTER_HITS = 3  # hits in the window to count as "on phone"

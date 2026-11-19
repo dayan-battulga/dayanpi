@@ -41,8 +41,9 @@ class FakeStream:
 
 
 class FakeScanner:
-    def __init__(self, phone: float = 0.0, fail: bool = False) -> None:
+    def __init__(self, phone: float = 0.0, fail: bool = False, mouse: float = 0.0) -> None:
         self.phone = phone
+        self.mouse = mouse
         self.fail = fail
         self.scans = 0
 
@@ -52,7 +53,8 @@ class FakeScanner:
             raise RuntimeError("model exploded")
         box = Box(100, 100, 300, 400)
         phones = [Detection("phone", self.phone, box)] if self.phone else []
-        reading = FrameReading([Detection("person", 0.9, box)], phones, [], 120.0)
+        mice = [Detection("mouse", self.mouse, box)] if self.mouse else []
+        reading = FrameReading([Detection("person", 0.9, box)], phones, [], 120.0, mice=mice)
         return reading
 
 
@@ -66,6 +68,15 @@ def test_run_once_feeds_the_tracker_and_the_hook():
     assert seen[-1] == ("working", NOON + 2)
     assert worker.checks == 2
     assert tracker.status(NOON + 2)["camera_ok"] is True
+
+
+@pytest.mark.parametrize("mouse, state", [(0.9, "working"), (0.7, "phone")])
+def test_a_phone_a_mouse_outscores_in_the_same_place_never_reaches_the_tracker(mouse, state):
+    tracker = FocusTracker(started_at=NOON)
+    worker = FocusWorker(FakeStream(fake_jpeg()), FakeScanner(phone=0.8, mouse=mouse), tracker)
+    for second in range(1, 8):
+        update = worker.run_once(NOON + second)
+    assert update.state == state
 
 
 def test_no_frame_counts_as_no_reading():

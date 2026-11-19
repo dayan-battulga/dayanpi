@@ -8,7 +8,9 @@ from dayanpi.vision.detector import (
     Detection,
     Letterbox,
     decode_objects,
+    drop_mouse_phones,
     find_zoom_region,
+    measure_overlap,
     fit_to_input,
     read_face,
     shift_box,
@@ -45,16 +47,17 @@ def test_fit_to_input_shrinks_and_pads_wide_frames():
     assert letterbox.image[0, 0, 0] == detector.PAD_VALUE
 
 
-def test_decode_keeps_people_and_phones_only():
+def test_decode_keeps_people_phones_and_mice_only():
     output = make_output(
         [
             {"box": [320, 240, 100, 200], "scores": {detector.PERSON_CLASS_ID: 0.9}},
             {"box": [100, 100, 20, 40], "scores": {detector.PHONE_CLASS_ID: 0.6}},
             {"box": [500, 300, 80, 80], "scores": {5: 0.95}},
+            {"box": [400, 400, 30, 20], "scores": {detector.MOUSE_CLASS_ID: 0.5, detector.PHONE_CLASS_ID: 0.45}},
         ]
     )
     detections = decode_objects(output, PLAIN_LETTERBOX)
-    assert [d.label for d in detections] == ["person", "phone"]
+    assert [d.label for d in detections] == ["person", "phone", "mouse"]
     assert detections[0].box == Box(x1=270, y1=140, x2=370, y2=340)
     assert detections[1].confidence == pytest.approx(0.6)
 
@@ -186,6 +189,53 @@ def test_scanner_skips_the_zoom_without_a_clear_person():
 
     assert len(objects.shapes) == 1
     assert reading.phones == []
+
+
+def phone_at(confidence: float, x1: float, y1: float, x2: float, y2: float) -> Detection:
+    return Detection("phone", confidence, Box(x1, y1, x2, y2))
+
+
+def mouse_at(confidence: float, x1: float, y1: float, x2: float, y2: float) -> Detection:
+    return Detection("mouse", confidence, Box(x1, y1, x2, y2))
+
+
+def test_a_mouse_that_scores_at_least_as_high_on_top_of_a_phone_drops_it():
+    phone = phone_at(0.6, 100, 100, 140, 180)
+    assert drop_mouse_phones([phone], [mouse_at(0.7, 105, 110, 145, 185)]) == []
+    assert drop_mouse_phones([phone], [mouse_at(0.6, 105, 110, 145, 185)]) == [], "a tie goes to the mouse"
+
+
+def test_a_weaker_or_faraway_mouse_keeps_the_phone():
+    phone = phone_at(0.6, 100, 100, 140, 180)
+    assert drop_mouse_phones([phone], [mouse_at(0.55, 105, 110, 145, 185)]) == [phone]
+    assert drop_mouse_phones([phone], [mouse_at(0.9, 400, 400, 440, 430)]) == [phone]
+    assert drop_mouse_phones([phone], []) == [phone]
+
+
+def test_the_mouse_veto_is_iou_over_0_3_or_the_phones_center_inside_the_mouse():
+    small = phone_at(0.62, 100, 300, 120, 340)
+    big_mouse = mouse_at(0.8, 80, 280, 200, 400)
+    assert measure_overlap(small.box, big_mouse.box) < 0.3
+    assert drop_mouse_phones([small], [big_mouse]) == [], "its center is in the mouse box"
+    beside = phone_at(0.6, 300, 300, 340, 340)
+    assert measure_overlap(beside.box, Box(321, 300, 361, 340)) == pytest.approx(760 / 2440)
+    assert drop_mouse_phones([beside], [mouse_at(0.8, 321, 300, 361, 340)]) == [], "IoU 0.31, center just outside"
+    assert drop_mouse_phones([beside], [mouse_at(0.8, 322, 300, 362, 340)]) == [beside], "IoU 0.29, center outside"
+    assert measure_overlap(Box(0, 0, 10, 10), Box(20, 20, 30, 30)) == 0.0
+
+
+def test_scanner_finds_mice_in_both_passes_and_leaves_the_veto_to_the_worker():
+    person = Detection("person", 0.9, Box(x1=300, y1=150, x2=500, y2=450))
+    desk_mouse = mouse_at(0.4, 560, 400, 600, 430)
+    crop_phone = phone_at(0.6, 20, 200, 60, 260)
+    crop_mouse = mouse_at(0.7, 22, 205, 62, 262)
+    objects = FakeObjectDetector(full_frame=[person, desk_mouse], zoomed=[crop_phone, crop_mouse])
+
+    reading = DeskScanner(objects, FakeFaceDetector()).scan(np.zeros((480, 640, 3), np.uint8))
+
+    assert [(mouse.confidence, mouse.box) for mouse in reading.mice] == [(0.4, desk_mouse.box), (0.7, Box(x1=292, y1=340, x2=332, y2=397))]
+    assert [phone.confidence for phone in reading.phones] == [0.6], "the model's phones, before the veto"
+    assert drop_mouse_phones(reading.phones, reading.mice) == []
 
 
 class ColorPatchNet:

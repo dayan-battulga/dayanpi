@@ -2,8 +2,9 @@ import type { Hand } from "@/lib/vision/hands";
 import { cropPicture, padPicture, resizePicture, roundHalfEven, type Picture } from "@/lib/vision/image";
 
 // dayanpi/vision/detector.py for the browser: YOLO26 nano finds people in the whole frame, letterboxed into
-// 640x480, and phones in a second, zoomed-in pass around the main person. YuNet's faces aren't ported: the
-// tracker only logs their turn and tilt on its sample lines, and nothing reads those back.
+// 640x480, and phones in a second, zoomed-in pass around the main person. Both passes find mice too, for the mouse
+// veto (dropMousePhones). YuNet's faces aren't ported: the tracker only logs their turn and tilt on its sample lines,
+// and nothing reads those back.
 
 export const INPUT_WIDTH = 640;
 export const INPUT_HEIGHT = 480;
@@ -11,16 +12,20 @@ export const PAD_VALUE = 114;
 
 export const PERSON_CLASS_ID = 0;
 export const PHONE_CLASS_ID = 67;
+export const MOUSE_CLASS_ID = 64;
 // In this order: people first, like the Pi's dict.
 export const LABELS = new Map([
   [PERSON_CLASS_ID, "person"],
   [PHONE_CLASS_ID, "phone"],
+  [MOUSE_CLASS_ID, "mouse"],
 ]);
 export const BOX_VALUES = 4;
 export const CLASSES = 80;
 
 export const MIN_CONFIDENCE = 0.15;
 export const NMS_IOU = 0.5;
+// A phone isn't a phone when a mouse box that scored at least as high overlaps it this much (IoU), or holds its center.
+export const MOUSE_VETO_IOU = 0.3;
 
 export const ZOOM_PERSON_MIN = 0.5;
 export const ZOOM_MARGIN_SIDES = 0.15;
@@ -57,9 +62,11 @@ export interface Letterbox {
   padTop: number;
 }
 
+// The phones are the model's, before dropMousePhones (readFrame drops the mouse ones).
 export interface DeskScan {
   people: Detection[];
   phones: Detection[];
+  mice: Detection[];
 }
 
 // One model run: the input tensor and its shape in, the outputs out in the model's own order.
@@ -198,6 +205,32 @@ export function decodeObjects(output: Float32Array, letterbox: Letterbox): Detec
   return detections;
 }
 
+// Intersection over union, 0 for boxes that don't touch.
+export function measureOverlap(first: Box, second: Box): number {
+  const width = Math.min(first.x2, second.x2) - Math.max(first.x1, second.x1);
+  const height = Math.min(first.y2, second.y2) - Math.max(first.y1, second.y1);
+  const shared = width > 0 && height > 0 ? width * height : 0;
+  const union = (first.x2 - first.x1) * (first.y2 - first.y1) + (second.x2 - second.x1) * (second.y2 - second.y1) - shared;
+  const overlap = union > 0 ? shared / union : 0;
+  return overlap;
+}
+
+// The mouse scored at least as high and sits on the phone: over MOUSE_VETO_IOU, or the phone's center inside it.
+function isMouse(phone: Detection, mouse: Detection): boolean {
+  const centerX = (phone.box.x1 + phone.box.x2) / 2;
+  const centerY = (phone.box.y1 + phone.box.y2) / 2;
+  const holdsCenter = mouse.box.x1 <= centerX && centerX <= mouse.box.x2 && mouse.box.y1 <= centerY && centerY <= mouse.box.y2;
+  const vetoed = mouse.confidence >= phone.confidence && (holdsCenter || measureOverlap(phone.box, mouse.box) > MOUSE_VETO_IOU);
+  return vetoed;
+}
+
+// The phones no mouse box outscores in the same place: a hand on a mouse is the commonest fake phone at a desk. Both
+// lists have to come from the same camera's frame.
+export function dropMousePhones(phones: Detection[], mice: Detection[]): Detection[] {
+  const kept = phones.filter((phone) => !mice.some((mouse) => isMouse(phone, mouse)));
+  return kept;
+}
+
 // The person's box plus some margin (hands and lap stick out of it), in whole pixels.
 export function findZoomRegion(person: Box, frameWidth: number, frameHeight: number): Box {
   const width = person.x2 - person.x1;
@@ -223,23 +256,27 @@ export async function detectObjects(picture: Picture, runObjects: RunModel): Pro
   return detections;
 }
 
-// Phones only come from the zoomed pass, so no person means no zoomed pass.
-export async function findPhones(picture: Picture, people: Detection[], runObjects: RunModel): Promise<Detection[]> {
+// Everything the zoomed pass around the main person finds, moved back onto the frame; nothing without a clear person.
+export async function zoomIn(picture: Picture, people: Detection[], runObjects: RunModel): Promise<Detection[]> {
   const main = people.reduce<Detection | null>((best, person) => (best === null || person.confidence > best.confidence ? person : best), null);
-  let phones: Detection[] = [];
+  let zoomed: Detection[] = [];
   if (main !== null && main.confidence >= ZOOM_PERSON_MIN) {
     const region = findZoomRegion(main.box, picture.width, picture.height);
     const crop = cropPicture(picture, region.x1, region.y1, region.x2, region.y2);
-    phones = (await detectObjects(crop, runObjects))
-      .filter((found) => found.label === "phone")
-      .map((found) => ({ ...found, box: shiftBox(found.box, region.x1, region.y1) }));
+    zoomed = (await detectObjects(crop, runObjects)).map((found) => ({ ...found, box: shiftBox(found.box, region.x1, region.y1) }));
   }
-  return phones;
+  return zoomed;
 }
 
+// Phones only come from the zoomed pass, so no person means no zoomed pass; mice come from both.
 export async function scanDesk(picture: Picture, runObjects: RunModel): Promise<DeskScan> {
-  const people = (await detectObjects(picture, runObjects)).filter((detection) => detection.label === "person");
-  const phones = await findPhones(picture, people, runObjects);
-  const scan = { people, phones };
+  const found = await detectObjects(picture, runObjects);
+  const people = found.filter((detection) => detection.label === "person");
+  const zoomed = await zoomIn(picture, people, runObjects);
+  const scan = {
+    people,
+    phones: zoomed.filter((detection) => detection.label === "phone"),
+    mice: [...found, ...zoomed].filter((detection) => detection.label === "mouse"),
+  };
   return scan;
 }

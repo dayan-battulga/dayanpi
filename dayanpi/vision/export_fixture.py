@@ -29,7 +29,7 @@ FRAME_SIZES = [(640, 480), (768, 432), (1280, 720), (301, 217), (1000, 999), (90
 RESIZE_TARGETS = [(11, 9), (4, 3), (8, 6), (3, 10), (16, 12), (5, 2)]
 PERSON = detector.PERSON_CLASS_ID
 PHONE = detector.PHONE_CLASS_ID
-MOUSE = 64
+MOUSE = detector.MOUSE_CLASS_ID
 # Made-up YOLO anchors: (cx, cy, w, h, {class: score}). The rest of the anchors are noise under the cutoff.
 YOLO_ANCHORS = [
     (320, 240, 200, 300, {PERSON: 0.9}),
@@ -42,7 +42,8 @@ YOLO_ANCHORS = [
     (40, 300, 20, 20, {PERSON: 0.6}),
     (500, 400, 40, 80, {PHONE: 0.6}),
     (504, 404, 40, 80, {PHONE: 0.55}),  # on top of that phone: gone
-    (100, 400, 40, 30, {MOUSE: 0.7, PHONE: 0.65}),  # more mouse than phone: not a phone
+    (100, 400, 40, 30, {MOUSE: 0.7, PHONE: 0.65}),  # more mouse than phone: a mouse, not a phone
+    (104, 402, 36, 28, {PHONE: 0.5}),  # a phone of its own under that mouse: the mouse veto drops it
     (320, 240, 60, 90, {PHONE: 0.3}),  # inside the person: NMS is per class, so it stays
     (320, 20, 50, 50, {PERSON: 0.4}),  # in the letterbox's padding: lands above the frame
 ]
@@ -67,6 +68,16 @@ PALM_ANCHORS = [
 EXTRA_PALM_POINTS = [
     [[300, 200], [260, 180], [250, 200], [252, 214], [256, 226], [290, 230], [276, 220]],
     [[100, 50], [90, 90], [100, 95], [110, 92], [118, 88], [80, 60], [85, 75]],
+]
+# (phone box, its score, mouse box, its score), each pair far from the others.
+MOUSE_VETO_CASES = [
+    ((100, 100, 140, 180), 0.6, (105, 110, 145, 185), 0.7),  # the mouse scored higher on top of it: gone
+    ((300, 100, 340, 180), 0.6, (305, 110, 345, 185), 0.55),  # a weaker mouse: stays
+    ((500, 100, 540, 180), 0.6, (10, 400, 50, 440), 0.9),  # a stronger mouse somewhere else: stays
+    ((100, 300, 120, 340), 0.62, (80, 280, 200, 400), 0.62),  # a tie, IoU 0.06 but its center inside: gone
+    ((300, 300, 340, 340), 0.6, (321, 300, 361, 340), 0.8),  # IoU 0.311, center just outside: gone
+    ((500, 300, 540, 340), 0.6, (522, 300, 562, 340), 0.8),  # IoU 0.290, center outside: stays
+    ((200.5, 200.25, 230.75, 250.5), 0.66, (205.125, 199.5, 240.0, 248.875), 0.66),  # fractions, center inside
 ]
 HAND_CONFIDENCES = [0.93, 0.8, 0.79]
 NEAR_PHONES = [(150, 100, 170, 120), (161, 100, 180, 120), (160, 100, 180, 120), (60, 200, 79, 230), (400, 400, 420, 440), (285, 35, 300, 60)]
@@ -232,6 +243,18 @@ def describe_phones_in_hand() -> dict:
     return section
 
 
+def describe_mouse_veto() -> dict:
+    phones = [Detection(label="phone", confidence=score, box=Box(*box)) for box, score, _, _ in MOUSE_VETO_CASES]
+    mice = [Detection(label="mouse", confidence=score, box=Box(*box)) for _, _, box, score in MOUSE_VETO_CASES]
+    section = {
+        "phones": [describe_detection(phone) for phone in phones],
+        "mice": [describe_detection(mouse) for mouse in mice],
+        "overlaps": [detector.measure_overlap(phone.box, mouse.box) for phone, mouse in zip(phones, mice, strict=True)],
+        "kept": [describe_detection(phone) for phone in detector.drop_mouse_phones(phones, mice)],
+    }
+    return section
+
+
 def build_finger_hand(open_fingers: set[str], spread: float, turn_degrees: float = 0.0, depth: float = 0.0) -> np.ndarray:
     """A hand drawn by hand: wrist at the bottom, each finger straight up when open and curled back when closed."""
     joints = np.zeros((hands.JOINTS, 3))
@@ -300,6 +323,7 @@ def build_fixture() -> dict:
         "palms": palms,
         "hands": describe_hands(rng, [palm["points"] for palm in palms["palms"]]),
         "phones_in_hand": describe_phones_in_hand(),
+        "mouse_veto": describe_mouse_veto(),
         "shapes": describe_shapes(rng),
         "holds": describe_holds(rng),
     }

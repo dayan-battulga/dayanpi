@@ -3,6 +3,7 @@
 Skipped unless focus_check/frames/ exists (it's gitignored; dayanpi.focus.check writes it on the Pi).
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from dayanpi.vision import detector
 from dayanpi.focus.tracker import FocusTracker
 
 FRAMES_DIR = Path(__file__).resolve().parent.parent / "focus_check" / "frames"
-PHASES = ("working", "phone", "away")
+PHASES = ("working", "mouse", "phone", "away")
 
 
 def phase_frames(phase: str) -> list[Path]:
@@ -23,7 +24,7 @@ def phase_frames(phase: str) -> list[Path]:
     not (FRAMES_DIR.exists() and detector.OBJECT_MODEL_PATH.exists() and detector.FACE_MODEL_PATH.exists()),
     reason="needs focus_check/frames/ and the models",
 )
-def test_real_frames_walk_through_the_three_states():
+def test_real_frames_walk_through_the_states_and_a_hand_on_the_mouse_stays_working():
     import cv2
 
     scanner = detector.DeskScanner()
@@ -36,12 +37,14 @@ def test_real_frames_walk_through_the_three_states():
         # Each saved frame stands in for a few seconds of that phase.
         for path in frames:
             reading = scanner.scan(cv2.imread(str(path)))
+            reading = replace(reading, phones=detector.drop_mouse_phones(reading.phones, reading.mice))  # as the worker does
             for _ in range(3):
                 now += 1.0
                 state = tracker.update(reading, now).state
         seen[phase] = state
 
     assert seen["working"] == "working"
+    assert seen["mouse"] == "working"
     assert seen["phone"] == "phone"
     assert seen["away"] == "away"
     today = tracker.status(now)["today"]
