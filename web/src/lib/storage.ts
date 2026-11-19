@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = "dayanpi.";
+export const STORAGE_PREFIX = "dayanpi.";
 
 // Private windows and blocked site data throw on localStorage; the fallback is fine then.
 export function readStored(key: string, fallback: string | null): string | null {

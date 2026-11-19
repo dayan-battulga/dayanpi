@@ -1,13 +1,7 @@
+import { measureMemory } from "@/components/track/cameraTracker";
 import { CHECK_INTERVAL_MS, CHECKS_PER_BACKEND, startLoop, WARMUP_CHECKS, type BackendChoice, type CheckRecord, type Loop, type SpeedResult, type WorkerReply } from "@/lib/trackTest";
 
 // The camera test's browser side: the camera, the backends this browser has, and one check worker per run.
-
-export type CameraProblem = "chrome" | "denied" | "missing" | "busy";
-
-export interface CameraStart {
-  stream: MediaStream | null;
-  problem: CameraProblem | null;
-}
 
 export interface BackendChoices {
   choices: BackendChoice[];
@@ -20,29 +14,6 @@ export interface CheckWorker {
 
 // A worker that hasn't answered in this long has hung, most likely while loading a model.
 const STALL_MS = 120_000;
-
-// The Pi's webcam is 640x480; a laptop that can't do it sends what it has, and the pipeline letterboxes it.
-const CAMERA = { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
-
-function readCameraProblem(error: unknown): CameraProblem {
-  const name = error instanceof DOMException ? error.name : "";
-  const problem = name === "NotAllowedError" || name === "SecurityError" ? "denied" : name === "NotReadableError" || name === "AbortError" ? "busy" : "missing";
-  return problem;
-}
-
-export async function openCamera(): Promise<CameraStart> {
-  let start: CameraStart = { stream: null, problem: "chrome" };
-  // The worker gets frames through this, and only Chrome has it.
-  if (typeof MediaStreamTrackProcessor !== "undefined") {
-    try {
-      start = { stream: await navigator.mediaDevices.getUserMedia(CAMERA), problem: null };
-    } catch (error) {
-      // No navigator.mediaDevices at all lands here too, as a missing camera.
-      start = { stream: null, problem: readCameraProblem(error) };
-    }
-  }
-  return start;
-}
 
 // Threads need a cross-origin isolated page; ORT's own default is half the cores, at most 4.
 export async function findBackends(): Promise<BackendChoices> {
@@ -70,17 +41,6 @@ export async function describeDevice(track: MediaStreamTrack, gpu: string): Prom
     `camera ${settings.width}x${settings.height} at ${Math.round(settings.frameRate ?? 0)} fps · GPU: ${gpu}`,
   ];
   return lines;
-}
-
-// The page, the workers and their wasm, not the GPU. Chrome answers at its next garbage collection, within ~20 s.
-export async function measureMemory(): Promise<number | null> {
-  let bytes: number | null = null;
-  try {
-    bytes = (await performance.measureUserAgentSpecificMemory?.())?.bytes ?? null;
-  } catch {
-    // Not isolated, or not Chrome.
-  }
-  return bytes;
 }
 
 // One backend's checks on its own copy of the camera. "worker" runs the loop on the worker's timer, "page" on this

@@ -30,7 +30,7 @@ Always use the **`main`** branch on both machines.
 | `/login` | The sign-in page |
 | `/join/<code>` | Make an account from an invite link |
 | `/settings` | Profile (your name and password), Sharing (what the room sees of you), Camera (where your desk's checks come from), Voice and bedtime (your bedtime, where your peace sign speaks), Mac helper (the tracking switch and its tokens), and Room and invites for the owner |
-| `/track` | The tracker: this browser's camera feeds your own desk (Chrome, see [A friend's camera](#a-friends-camera-the-tracker)) |
+| `/track` | Goes to the Room: the camera that used to live here is in the site now (see [A friend's camera](#a-friends-camera)) |
 | `/track/test` | The camera test: is this laptop fast enough for the tracker (nothing goes to the Pi) |
 | `/api/login`, `/api/logout`, `/api/join` | Sign in, sign out, join with an invite (JSON only) |
 | `/api/me`, `/api/me/password`, `/api/tokens` | Your account, your password, your Mac helper tokens (at most 10 each; the 11th is a 409) |
@@ -52,8 +52,8 @@ Always use the **`main`** branch on both machines.
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
-| `/api/track/reading` | The tracker's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a small base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
-| `/api/track/pause` | The tracker's Pause (POST `{}`): your desk says paused until the next reading |
+| `/api/track/reading` | The browser camera's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a 640×360 base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
+| `/api/track/pause` | The camera's Turn off (POST `{}`): your desk says paused until the next reading |
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
 | `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
@@ -284,7 +284,7 @@ Up to 4 accounts in all: you (the owner) plus 3 members.
 
 A link works once, for 7 days. With 4 accounts, no invite works and you can't make new ones ("the room is full"). A link that's used up or past its week shows **This invite expired** instead of the form, and a full room shows **The room is full**, both with a way back to sign in. Someone who isn't on your tailnet can only open the link once [Funnel](#funnel-the-public-internet) is on.
 
-**Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras and the voice only feed yours; their desk gets its checks from their own laptop's camera instead, through the tracker ([below](#a-friends-camera-the-tracker)). Until that's running their desk says "No camera yet" with a link to it, and their time and apps don't count. Of everyone else they only see what each person shares ([What members see of each other](#what-members-see-of-each-other)).
+**Everyone has their own desk.** Each account gets its own focus log, to-do list, Mac tracking switch and day pages, in its own folder on the Pi: `data/users/<username>/` (yours too). A member uses theirs fully: their own to-dos, calendar and Mac line on `/me`, and their own Mac helper token reports to their desk. The Pi's cameras and the voice only feed yours; their desk gets its checks from their own laptop's camera instead ([below](#a-friends-camera)). Until that's on their desk says "No camera yet" with **Turn on camera**, and their time and apps don't count. Of everyone else they only see what each person shares ([What members see of each other](#what-members-see-of-each-other)).
 
 **What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, power), or touch invites and accounts.
 
@@ -292,20 +292,20 @@ A link works once, for 7 days. With 4 accounts, no invite works and you can't ma
 
 **When this first started:** the first start with everyone's own desk moved your old `data/focus_log/`, `data/todos.json`, `data/days/` and `data/mac_tracking.json` into `data/users/<your username>/`, once, and said so in the journal (`moved focus_log, todos.json, days, mac_tracking.json from ...`). It only ever moves, never copies or deletes. If something was already in both places, it moved nothing and logged an error instead, so you can sort it out by hand: `journalctl -u dayanpi --no-pager | grep "didn't move"`.
 
-### A friend's camera (the tracker)
+### A friend's camera
 
-A member's desk counts time from their own laptop's camera, through `/track`. Their video never leaves the laptop: the page runs the Pi's models right there in Chrome and sends the Pi only numbers, about once a second. Before the first time, it's worth having them run [the camera test](focus-tracker.md#the-camera-test-study-room-step-4-part-1) once.
+A member's desk counts time from their own laptop's camera, right inside the site: no page to keep open on its own anymore. Their video never leaves the laptop: Chrome runs the Pi's models right there and sends the Pi only numbers, about once a second, plus their seat's picture while they've turned Video on. Before the first time, it's worth having them run [the camera test](focus-tracker.md#the-camera-test-study-room-step-4-part-1) once.
 
 What to send them:
 
-1. Open **https://dayoon.tail279594.ts.net/track** in **Chrome** on the laptop, signed in to their account. (Type it, or use the link on their desk or in Settings → Camera. Other browsers can't do it.)
-2. Press **Allow camera**, and say yes when Chrome asks. The first time it downloads the models (about 18 MB), so the first checks take a few seconds.
-3. Check the preview: a box around you means it sees you, and the line under it says Focused, On your phone or Away, the same as your desk shows.
-4. **Keep that tab open.** It keeps going in another tab, behind other windows, or with the window minimized. It stops when the tab closes, the laptop sleeps (lid closed) or Chrome quits, and after 30 s of nothing their desk says "unknown".
-5. Taking a break or done for the day: **Pause**. The camera and the models stop, and their desk says tracking is paused. **Resume** starts it again.
-6. Long sessions: plug the laptop in. On a low battery it checks every 2 s instead of every second, and says so under the preview.
+1. Open **https://dayoon.tail279594.ts.net** in **Chrome** on the laptop and sign in. That's the Room. (Other browsers can't run the camera.)
+2. On their own seat, press **Turn on camera**, and say yes when Chrome asks. The seat says **Starting…** while the models load (the first time it downloads them, about 18 MB, so that takes a few seconds), then shows their camera live with **Camera on**. Only they see that; the room sees their picture only with Video on.
+3. **Keep a dayanpi tab open.** Any page works: the Room, their desk, Settings, someone else's desk. It keeps going behind other tabs and windows and with the window minimized. Closing every dayanpi tab stops it (that's a browser rule, not ours), and so do the laptop sleeping (lid closed) and Chrome quitting; 30 s later their desk says "unknown".
+4. Next time they open the site, the camera comes back on by itself, as long as Chrome still allows it. Two dayanpi tabs? Only one runs the camera, and the other says **Camera on in another tab**.
+5. Taking a break or done for the day: **Turn off** on their seat (or in Settings → Camera). The camera and the models stop, their desk says the camera's off, and it stays off next time until they turn it on again.
+6. Long sessions: plug the laptop in. On a low battery it checks every 2 s instead of every second; Settings → Camera says so in its load line, with the time per check and memory.
 
-If it says **Camera is blocked**: click the camera icon at the right end of Chrome's address bar, choose Allow, reload. **The camera is busy**: quit Zoom, FaceTime, Photo Booth or whatever else has it. Your own desk can use it too: Settings → Camera → This browser's camera (and back to the Pi's cameras when you're home).
+If it says **Camera is blocked**: click the camera icon at the right end of Chrome's address bar, choose Allow, reload. **The camera is busy**: quit Zoom, FaceTime, Photo Booth or whatever else has it. Your own desk can use it too: Settings → Camera → This browser's camera, then Turn on camera (and back to the Pi's cameras when you're home).
 
 ### Her peace sign's voice
 
@@ -314,7 +314,7 @@ Everyone's peace sign speaks to them: their own to-dos and their own bedtime. Yo
 1. Settings → **Voice and bedtime**. Set **Bedtime** (it saves as soon as she picks a time; until then it's midnight).
 2. *The peace sign speaks through* is already **This computer** (the Pi's speaker is greyed out: it's yours).
 3. Press **Test the voice**. She should hear "This is how your peace sign sounds." and see it in the pill at the top.
-4. From then on, a peace sign in front of the tracker plays on the page she has open: `/track` (already allowed, because she clicked Allow camera) or `/me` (click anywhere on it once). If a browser still won't, the pill at the top has a small play button.
+4. From then on, a peace sign in front of her camera plays on whichever dayanpi page she has open, even behind other tabs. Clicking Turn on camera counts as the click the browser wants; after a reload that turned the camera back on by itself, she may have to click the pill's small play button once.
 
 It needs the Pi's voice on (`DAYANPI_VOICE=piper`, [voice.md](voice.md)). With it off, the pill shows the words and nothing plays, and Settings says so.
 

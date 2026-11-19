@@ -24,6 +24,8 @@ export default defineConfig(({ mode }) => {
     server: {
       // /video also covers /video/side.
       proxy: env.DAYANPI_URL ? { "/api": toPi, "/video": toPi } : undefined,
+      // The Pi's own isolation headers (app.py), so the camera gets its threads here too.
+      headers: { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" },
     },
     test: {
       environment: "jsdom",

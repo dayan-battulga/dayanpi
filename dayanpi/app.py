@@ -240,7 +240,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
     }
     status |= build_camera_status(now) if desk is owner_desk else NO_CAMERA
     if source == "browser":
-        # The tracker takes /track's readings whenever they come, and its hand signs are the desk's own.
+        # The tracker takes the browser camera's readings whenever they come, and its hand signs are the desk's own.
         status |= {"enabled": True, "gesture": stamp_age(desk.browser.last_gesture, now)}
     return status
 
@@ -377,8 +377,8 @@ def shape_snapshot(request: Request) -> dict | None:
 
 
 def handle_focus_update(desk: Desk, update: FocusUpdate, now: float) -> None:
-    """After every check on a desk, from the worker or /track. Callouts go to the journal, and only mine to the
-    speaker, which is in my room."""
+    """After every check on a desk, from the worker or a browser's camera. Callouts go to the journal, and only mine to
+    the speaker, which is in my room."""
     for callout in update.callouts:
         logger.info("focus callout for %s, %s: %s", desk.username, callout.name, callout.text)
         if callout.speak and desk is owner_desk:
@@ -421,7 +421,7 @@ SIGN_ACTIONS = {"peace": say_todos}
 
 
 def handle_gesture(desk: Desk, name: str, now: float) -> None:
-    """When a hand sign fires on a desk, from the worker or /track."""
+    """When a hand sign fires on a desk, from the worker or a browser's camera."""
     details = SIGN_ACTIONS[name](desk, now) if name in SIGN_ACTIONS else {}
     desk.tracker.record_gesture(name, now, **details)
 
@@ -705,14 +705,11 @@ async def session_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     # Without it a browser can keep last week's focus.js against today's index.html after a git pull.
     response.headers.setdefault("Cache-Control", "no-cache")
-    # The tracker pages run the models on threads, which only an isolated page gets. Their workers load from /assets/,
-    # and a worker in an isolated page only starts if its own script says COEP too; any other page ignores it there.
-    path = request.scope["path"]
-    is_tracker_page = path == "/track" or path.startswith("/track/")
-    if is_tracker_page:
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    if is_tracker_page or path.startswith("/assets/"):
-        response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    # The camera runs from any page, and its models need threads, which only an isolated page gets; a worker in an
+    # isolated page only starts if its own script says COEP too. Everything the page loads comes from here, so
+    # require-corp blocks nothing, and on an API answer or an asset the headers do nothing.
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     return response
 
 
@@ -936,8 +933,8 @@ def set_mac_tracking(request: Request, change: MacTrackingChange):
 
 
 class TrackReading(BaseModel):
-    """One check from /track: what the tracker reads from it and how long it took. Never a picture, and nothing
-    else: an extra field is a 422."""
+    """One check from the browser's camera: what the tracker reads from it and how long it took, plus the seat's
+    picture when the last answer asked for one. Nothing else: an extra field is a 422."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -959,8 +956,8 @@ def require_browser_source(desk: Desk) -> None:
 
 
 def describe_tracking(desk: Desk, now: float) -> dict:
-    """What /track shows under the preview, from the Pi's own clock, and whether to send the seat's picture with the next
-    reading: only while the desk shares video and is at the desk."""
+    """The answer to the browser's camera, from the Pi's own clock: the desk's state, the peace sign's last message, and
+    whether to send the seat's picture with the next reading (only while the desk shares video and is at the desk)."""
     focus = desk.tracker.status(now)
     described = {
         "state": focus["state"],
@@ -991,7 +988,7 @@ def track_reading(request: Request, reading: TrackReading):
 
 @app.post("/api/track/pause")
 def pause_tracking(request: Request):
-    """/track's Pause: the desk says paused, not broken, until its next reading."""
+    """The camera's Turn off: the desk says paused, not broken, until its next reading."""
     desk = find_desk(request)
     require_browser_source(desk)
     now = time.time()

@@ -11,7 +11,7 @@ import { focusNewTodo } from "@/lib/todos";
 
 // My desk, at /me: the state and today up top, to-dos next to Apps, then the calendar.
 export function DeskPage() {
-  const { snapshot, receivedAt, now, macTracking } = useFrame();
+  const { snapshot, receivedAt, now, macTracking, camera } = useFrame();
   const focus = snapshot?.focus;
   const { segments, loaded } = useFocusSegments(focus?.state);
   const midnight = readLocalMidnight(now);
@@ -26,7 +26,7 @@ export function DeskPage() {
 
   return (
     <div className="live">
-      <FocusNow focus={focus} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} macTracking={macTracking} />
+      <FocusNow focus={focus} known={known} loaded={loaded} now={now} midnight={midnight} receivedAt={receivedAt} macTracking={macTracking} camera={camera} />
       <div className="desk-columns">
         <TodoList todos={focus?.todos} state={focus?.state ?? "unknown"} now={now} />
         <AppsCard now={now} />

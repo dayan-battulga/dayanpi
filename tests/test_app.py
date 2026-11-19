@@ -30,6 +30,7 @@ from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
 from dayanpi.focus.desks import Desks  # noqa: E402
+from dayanpi.focus.pictures import PICTURE_MAX_BASE64, PICTURE_MAX_BYTES  # noqa: E402
 from dayanpi.focus.sharing import DEFAULT_SHARING  # noqa: E402
 from dayanpi.focus.tracker import format_day  # noqa: E402
 from dayanpi.paths import MODELS_DIR  # noqa: E402
@@ -1458,17 +1459,19 @@ def test_the_models_route_serves_the_four_models_and_nothing_else():
     assert stranger().get("/api/models/yolo26n_480x640.onnx").status_code == 401
 
 
-def test_only_the_tracker_pages_are_cross_origin_isolated():
+def test_every_page_is_cross_origin_isolated_so_the_camera_runs_anywhere():
     client = let_in(stranger(), find_owner())
-    page = client.get("/track/test")
+    page = client.get("/")
     asset = next(path for path in re.findall(r'src="([^"]+\.js)"', page.text))
-    paths = ("/track", "/track/test", asset, "/me", "/", "/login", "/trackers", "/api/focus", "/api/track/pause", "/api/models/yolo26n_480x640.onnx")
-    isolated = {path: client.get(path).headers for path in paths}
-    coop = {path: headers.get("cross-origin-opener-policy") for path, headers in isolated.items()}
-    coep = {path: headers.get("cross-origin-embedder-policy") for path, headers in isolated.items()}
-    assert coop == {path: "same-origin" if path in ("/track", "/track/test") else None for path in isolated}
-    # A worker in an isolated page only starts when its own script says COEP too; the other pages ignore it on an asset.
-    assert coep == {path: "require-corp" if path in ("/track", "/track/test", asset) else None for path in isolated}
+    pages = [path for (method, _), (path, *_rest) in ACCESS.items() if method == "GET" and not path.startswith(("/api/", "/video", "/assets/"))]
+    # The camera's worker is an asset, and in an isolated page a worker only starts when its own script says COEP too.
+    paths = [*pages, "/", asset, "/api/focus", "/api/models/yolo26n_480x640.onnx"]
+    signed_out = ["/login", "/join/abc_DEF-123", "/me"]
+    headers = {path: client.get(path).headers for path in paths} | {f"signed out {path}": stranger().get(path, follow_redirects=False).headers for path in signed_out}
+    assert {path: (seen.get("cross-origin-opener-policy"), seen.get("cross-origin-embedder-policy")) for path, seen in headers.items()} == {
+        path: ("same-origin", "require-corp") for path in headers
+    }
+    assert {"/", "/me", "/settings", "/pi", "/track", "/track/test", "/sign", "/login"} <= set(pages) | {"/"}
 
 
 def test_without_a_session_pages_go_to_the_sign_in_and_the_api_says_401():
@@ -1862,7 +1865,7 @@ def test_a_browser_reading_feeds_the_senders_own_desk_about_once_a_second():
         {**SEEN, "phone": -0.1},
         {**SEEN, "elapsed_ms": 60_001},
         {**SEEN, "sign": "fist"},
-        {**SEEN, "picture": "A" * 50_000},  # a picture is allowed now (step 7), but never a big one
+        {**SEEN, "picture": "A" * (PICTURE_MAX_BASE64 + 1)},  # a picture is allowed (step 7), but never a big one
         {"person": 0.9, "phone": 0.0},
         {**SEEN, "person": "0.9x"},
     ],
@@ -2389,6 +2392,33 @@ def test_nothing_older_than_three_seconds(monkeypatch):
     assert app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())["picture"] is None
 
 
+def test_a_640_by_360_picture_is_kept_and_a_bigger_one_is_dropped():
+    sam = add_member("sam")
+    desk = desk_of(sam)
+    desk.sharing.update({"video": True})
+    client = let_in(stranger(), sam)
+    read_with_picture(client, as_base64(make_jpeg()))
+    desk.browser._tokens = 2
+    assert read_with_picture(client, as_base64(make_jpeg()))["state"] == "working", "a picture is only kept at the desk"
+    kept = []
+    for size in [(640, 360), (641, 360), (640, 361), (320, 180)]:
+        desk.browser._tokens = 2
+        reply = read_with_picture(client, as_base64(make_jpeg(*size)))
+        kept.append(desk.picture is not None and desk.picture["jpeg"] == make_jpeg(*size))
+        assert reply["seconds_in_state"] is not None, "the reading counts either way"
+    assert kept == [True, False, False, True], "the seat's own size (and an older, smaller page's) only"
+
+
+def test_a_reading_with_the_biggest_picture_fits_under_the_body_cap():
+    sam = add_member("sam")
+    client = let_in(stranger(), sam)
+    biggest = {"person": 0.123456789, "phone": 0.987654321, "sign": "peace", "elapsed_ms": 59_999.123456789, "picture": "A" * PICTURE_MAX_BASE64}
+    body = json.dumps(biggest).encode()
+    assert PICTURE_MAX_BYTES * 4 / 3 <= PICTURE_MAX_BASE64 and len(body) <= app.MAX_BODY_BYTES, f"{len(body)} bytes"
+    reply = client.post("/api/track/reading", content=body, headers={"Content-Type": "application/json"})
+    assert reply.status_code == 200, "not a 413 and not a 422: the picture isn't a JPEG, so it's dropped and the reading counts"
+
+
 @pytest.mark.parametrize("sent", ["not base64!", as_base64(b"GIF89a not a jpeg"), as_base64(make_jpeg(1280, 720))])
 def test_anything_but_a_small_jpeg_is_dropped_and_the_reading_still_counts(sent):
     sam = add_member("sam")
@@ -2472,7 +2502,7 @@ def test_my_tile_is_off_until_i_turn_video_on(monkeypatch):
     import numpy as np
 
     shrunk = cv2.imdecode(np.frombuffer(mine.picture["jpeg"], dtype=np.uint8), cv2.IMREAD_COLOR)
-    assert shrunk.shape[:2] == (180, 320), "shrunk on the Pi, cut to 16:9"
+    assert shrunk.shape[:2] == (360, 640), "the seat's size, cut to 16:9 on the Pi"
     mine.camera_source.set("browser")
     mine.picture = None
     app.take_owner_picture(time.time())

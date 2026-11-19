@@ -5,6 +5,7 @@ import { Dock } from "@/components/header/Dock";
 import { Header } from "@/components/header/Header";
 import { RoomBar, RoomRail } from "@/components/room/WhoIsHere";
 import { Toaster } from "@/components/ui/toaster";
+import { type Camera, useCamera } from "@/hooks/useCamera";
 import { useCommands, useShortcuts } from "@/hooks/useCommands";
 import { useGestureToast } from "@/hooks/useGestureToast";
 import { usePeaceVoice } from "@/hooks/usePeaceVoice";
@@ -23,8 +24,8 @@ const PAGES_WITH_ROOM = new Set(["/me", "/pi", "/settings"]);
 
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
-// What every page inside the frame gets: the one stream, who you are, a clock that never runs backwards, and the
-// Mac tracking pick (shared with ⌘K).
+// What every page inside the frame gets: the one stream, who you are, a clock that never runs backwards, the Mac
+// tracking pick (shared with ⌘K) and this browser's camera.
 export interface FrameData {
   snapshot: Snapshot | null;
   connection: Connection;
@@ -33,6 +34,7 @@ export interface FrameData {
   user: User | null;
   setUser: (user: User) => void;
   macTracking: MacTracking;
+  camera: Camera;
 }
 
 export function useFrame(): FrameData {
@@ -40,7 +42,8 @@ export function useFrame(): FrameData {
 }
 
 // Every signed-in page: the top bar, the page itself (which cross-fades when it changes), who's here (the sidebar from
-// 1280 px, the bottom bar down to a phone), the peace sign's pill, the dock on a phone, ⌘K and the toasts.
+// 1280 px, the bottom bar down to a phone), the peace sign's pill, the dock on a phone, ⌘K and the toasts. The camera
+// lives here too, so it keeps running from page to page and in the background.
 export function Frame() {
   const { snapshot, connection, receivedAt } = useSnapshot();
   const { user, setUser } = useMe();
@@ -60,8 +63,11 @@ export function Frame() {
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
   useNudgeToast(snapshot?.focus?.spoken);
-  const peaceVoice = usePeaceVoice(snapshot?.focus?.spoken);
-  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking };
+  const camera = useCamera(snapshot?.focus?.camera_source);
+  // A hidden tab's stream is closed, but the camera's readings still bring the peace sign's message, so its clip plays.
+  const shownSpoken = snapshot?.focus?.spoken;
+  const peaceVoice = usePeaceVoice((camera.spoken?.at ?? -1) > (shownSpoken?.at ?? -1) ? camera.spoken : shownSpoken);
+  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking, camera };
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
   const room = summarizeRoom(seats);
   const others = listOthersHere(seats, user?.username);

@@ -1,23 +1,15 @@
-import type { FrameReading } from "@/lib/vision/detector";
 import type { Pace, PaceReason } from "@/lib/trackPace";
 import type { FocusState, Spoken } from "@/lib/types";
 
-// The tracker at /track: what its page and its worker say to each other, and what the page shows from it.
+// The browser's camera: what the page (hooks/useCamera) and the tracker's worker say to each other, and what the page
+// shows from it.
 
-export const BOX_MIN = 0.5; // the tracker's PERSON_MIN and PHONE_MIN: a box only for what counts
-// The seat's picture (study room step 7): the Pi's own size and quality (focus/pictures.py), about 7 KB a frame.
-export const PICTURE_WIDTH = 320;
-export const PICTURE_HEIGHT = 180;
-export const PICTURE_QUALITY = 0.5;
+// The seat's picture: the Pi's own size, quality and limit (focus/pictures.py), about 20 KB a frame.
+export const PICTURE_WIDTH = 640;
+export const PICTURE_HEIGHT = 360;
+export const PICTURE_QUALITY = 0.6;
+export const PICTURE_MAX_BYTES = 44 * 1024;
 const BASE64_CHUNK = 0x8000; // String.fromCharCode takes its bytes as arguments, so not all at once
-
-export interface TrackBox {
-  kind: "person" | "phone";
-  x: number; // fractions of the frame
-  y: number;
-  width: number;
-  height: number;
-}
 
 // The Pi's answer to a reading, in its own clock, with the peace sign's last message, so this page can play its clip.
 export interface Tracked {
@@ -32,7 +24,7 @@ export type TrackerRequest = { type: "start"; frames: ReadableStream<VideoFrame>
 
 export type TrackerReply =
   | { type: "ready"; backend: string; loadMs: number }
-  | { type: "check"; ms: number; boxes: TrackBox[]; pace: Pace }
+  | { type: "check"; ms: number; pace: Pace }
   | ({ type: "tracked" } & Tracked)
   | { type: "signed-out" }
   | { type: "refused" }
@@ -55,14 +47,6 @@ export function findPictureCrop(width: number, height: number): { x: number; y: 
   return crop;
 }
 
-export function makeBoxes(reading: FrameReading, width: number, height: number): TrackBox[] {
-  const found = [...reading.people.map((person) => ({ kind: "person" as const, found: person })), ...reading.phones.map((phone) => ({ kind: "phone" as const, found: phone }))];
-  const boxes = found
-    .filter(({ found }) => found.confidence >= BOX_MIN)
-    .map(({ kind, found: { box } }) => ({ kind, x: box.x1 / width, y: box.y1 / height, width: (box.x2 - box.x1) / width, height: (box.y2 - box.y1) / height }));
-  return boxes;
-}
-
 const PACE_NOTES: Record<PaceReason, string | null> = {
   normal: null,
   idle: "Nobody's here, so it checks every 3 s",
@@ -70,7 +54,7 @@ const PACE_NOTES: Record<PaceReason, string | null> = {
   battery: "The battery's low, so it checks every 2 s",
 };
 
-// The load line under the preview: time per check and memory, and why it's checking less often.
+// Settings → Camera's load line: time per check and memory, and why it's checking less often.
 export function describeLoad(ms: number | null, memoryBytes: number | null, backend: string | null, reason: PaceReason): string {
   const parts = [
     ms === null ? "Loading the models" : `${Math.round(ms)} ms a check`,

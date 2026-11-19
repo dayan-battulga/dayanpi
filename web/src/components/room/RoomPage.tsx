@@ -12,8 +12,11 @@ import { orderSeats, summarizeRoom } from "@/lib/room";
 // account, yours first, and the open seats up to ROOM_SIZE. Everything on it comes from the stream's "room", which the
 // Pi builds from what each person shares. Someone else's seat opens the quick peek, and has Nudge when it's time.
 export function RoomPage() {
-  const { snapshot, user, now, receivedAt } = useFrame();
+  const { snapshot, user, now, receivedAt, camera } = useFrame();
   const room = snapshot?.room;
+  const focus = snapshot?.focus;
+  // Your seat's camera, for a desk on this browser's camera, unless another computer is already feeding it.
+  const showsCamera = focus?.camera_source === "browser" && (camera.step !== "off" || !focus.camera_ok || focus.camera_paused === true);
   const seats = orderSeats(room?.seats ?? [], user?.username);
   const summary = summarizeRoom(seats);
   const owner = user?.role === "owner";
@@ -48,6 +51,7 @@ export function RoomPage() {
               nudger={nudger}
               onPeek={() => setPeeking(seat.username)}
               video={seat.username === user?.username ? { shown: sharing.video, flip: () => void flipSwitch("video", !sharing.video) } : undefined}
+              camera={seat.username === user?.username && showsCamera ? camera : undefined}
             />
           ))}
           {alone ? <AloneSeat owner={owner} /> : Array.from({ length: open }, (_, index) => <EmptySeat key={index} owner={owner} />)}

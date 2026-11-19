@@ -1,4 +1,4 @@
-// How often /track checks, so a laptop running it for hours stays cool: once a second while someone's there, every
+// How often the browser's camera checks, so a laptop running it for hours stays cool: once a second while someone's there, every
 // 3 s once nobody's been seen for 10 s, and every 2 s when the laptop struggles or is on a low battery. The tracker's
 // rules cope with gaps that size: they count seconds, and a gap only counts up to 5 s (the Pi's MAX_STEP_S).
 

@@ -118,7 +118,9 @@ it("lets the owner switch the desk from the Pi's cameras to this browser's", asy
   await user.click(camera.getByRole("radio", { name: "This browser’s camera" }));
 
   expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
-  expect(camera.getByRole("link", { name: "the tracker" })).toHaveAttribute("href", "/track");
+  expect(camera.getByText("Camera off")).toBeInTheDocument();
+  expect(camera.getByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
+  expect(camera.queryByRole("link", { name: /tracker/ })).toBeNull();
   await waitFor(() => expect(sent.filter((request) => request.path === "/api/track/source").map((request) => [request.method, request.body])).toEqual([["POST", { source: "browser" }]]));
 });
 

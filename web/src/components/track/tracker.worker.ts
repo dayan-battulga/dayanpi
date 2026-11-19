@@ -1,5 +1,5 @@
 import { FrameKeeper, openModels } from "@/components/track/workerKit";
-import { makeBoxes, type TrackerReply, type TrackerRequest } from "@/lib/track";
+import type { TrackerReply, TrackerRequest } from "@/lib/track";
 import { CheckPacer, type Pace } from "@/lib/trackPace";
 import { startLoop } from "@/lib/trackTest";
 import { findBestConfidence } from "@/lib/vision/detector";
@@ -8,7 +8,7 @@ import { readFrame, type VisionModels } from "@/lib/vision/worker";
 
 // The tracker's checks: the Pi's pipeline on this worker's own timer (part 1 showed it keeps one a second in a hidden
 // tab, where the page's timer drops to one every 2 s), and each check's numbers straight to the Pi from here, so a
-// throttled page can't hold them up. The seat's small picture goes along only while the Pi's last answer asked for it
+// throttled page can't hold them up. The seat's picture goes along only while the Pi's last answer asked for it
 // (video shared, and at the desk); otherwise only numbers leave this worker.
 
 const PERSON_MIN = 0.5; // the tracker's
@@ -61,7 +61,7 @@ async function sendReading(body: object): Promise<void> {
 
 async function runCheck(): Promise<void> {
   const started = performance.now();
-  const picture = frames?.grab() ?? null;
+  const picture = (await frames?.grab()) ?? null;
   if (picture !== null && models !== null && pacer !== null) {
     try {
       const reading = await readFrame(picture, models);
@@ -72,7 +72,7 @@ async function runCheck(): Promise<void> {
       void sendReading(seatPicture != null ? { ...numbers, picture: seatPicture } : numbers);
       pacer.record(started, ms, person >= PERSON_MIN);
       pace = pacer.pace(performance.now());
-      reply({ type: "check", ms, boxes: makeBoxes(reading, picture.width, picture.height), pace });
+      reply({ type: "check", ms, pace });
     } catch (error) {
       reply({ type: "failed", message: String(error) });
     }

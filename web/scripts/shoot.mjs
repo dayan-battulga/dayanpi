@@ -15,6 +15,7 @@
 //   --fill="#name=Riley"     type into a field before the clicks (selector=text, split at the last =, repeatable)
 //   --click="text=Start"     click something on the real page before the shot (Playwright selector, repeatable)
 //   --press=Control+k        press keys on the real page before the shot (repeatable, after the clicks)
+//   --wait=4000              wait this many ms more before the shot (the camera's models take a few seconds to load)
 //   --label=palette          added to the file names, so different states don't overwrite each other
 //   --reduced-motion         both sides with the system's reduced motion on ("reduced" in the file names)
 //
@@ -197,13 +198,15 @@ function serveFixtures(fixture) {
         } else if (pathOnly.startsWith("/api/") || pathOnly.startsWith("/video")) {
           const routes = fixture.routes ?? {};
           const body = routes[`${request.method} ${url}`] ?? routes[url] ?? routes[`${request.method} ${pathOnly}`] ?? routes[pathOnly];
-          // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}}, and
+          // A reply that isn't a 200 is {"$status": 429, "$headers": {"Retry-After": "28"}, "body": {...}},
           // {"$file": "models/x.onnx"} is that file from the repo's models/ (the tracker's models) or design/fixtures/pictures/
-          // (the seats' made-up pictures), nothing else.
+          // (the seats' made-up pictures), nothing else, and {"$hang": true} never answers (a camera stuck on Starting…).
           const status = body?.$status ?? 200;
           const file = body?.$file === undefined ? null : path.resolve(repoDir, body.$file);
           if (body === undefined) {
             response.writeHead(404, { "content-type": "application/json" }).end("{}");
+          } else if (body.$hang === true) {
+            request.on("close", () => response.destroy());
           } else if (file !== null) {
             const allowed = FILE_FOLDERS.some((folder) => file.startsWith(folder + path.sep)) && existsSync(file);
             if (allowed) {
@@ -270,6 +273,7 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
     await page.keyboard.press(keys);
     await page.waitForTimeout(SETTLE_MS);
   }
+  await page.waitForTimeout(Number(actions.wait ?? 0));
   // A click scrolls its target into view even when it's already showing, and fixed things (dialogs) follow the scroll.
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: file, fullPage: true, animations: "disabled" });
@@ -345,10 +349,11 @@ async function main() {
       fills: readFlags(flags, "fill"),
       clicks: readFlags(flags, "click"),
       presses: readFlags(flags, "press"),
+      wait: readFlag(flags, "wait"),
       reducedMotion: flags.includes("--reduced-motion"),
     });
   } else {
-    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--label=name] [--reduced-motion]");
+    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--wait=ms] [--label=name] [--reduced-motion]");
     process.exitCode = 1;
   }
 }

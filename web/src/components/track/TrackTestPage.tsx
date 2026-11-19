@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AuthFrame } from "@/components/auth/AuthFrame";
-import { describeDevice, findBackends, openCamera, runSpeedTest, startCheckWorker, type CameraProblem, type CheckWorker } from "@/components/track/checkRuns";
+import { openCamera, type CameraProblem } from "@/components/track/cameraTracker";
+import { describeDevice, findBackends, runSpeedTest, startCheckWorker, type CheckWorker } from "@/components/track/checkRuns";
 import { sendToLogin } from "@/lib/http";
 import {
   CHECKS_PER_BACKEND,

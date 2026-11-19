@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeProblems, describeStartHour, isWaitingForTracker, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
+import { describeProblems, describeStartHour, isCameraMissing, layoutTimeline, mergeKnownSegments, readLocalMidnight } from "@/lib/timeline";
 import type { FocusStatus, Segment } from "@/lib/types";
 
 const MIDNIGHT = new Date(2026, 10, 15).getTime() / 1000;
@@ -68,14 +68,15 @@ describe("describeProblems", () => {
     );
   });
 
-  it("leaves a quiet browser camera to the tracker link, and says when it's paused", () => {
+  it("leaves a quiet or turned-off browser camera to its own line, with Turn on camera", () => {
     const browser = { ...fine, camera_source: "browser", camera_ok: false, voice: null } as FocusStatus;
     expect(describeProblems(browser)).toBe("");
-    expect(isWaitingForTracker(browser)).toBe(true);
-    expect(describeProblems({ ...browser, camera_paused: true })).toBe("Tracking is paused on the tracker page");
-    expect(isWaitingForTracker({ ...browser, camera_paused: true })).toBe(false);
-    expect(isWaitingForTracker({ ...browser, camera_ok: true })).toBe(false);
-    expect(isWaitingForTracker({ ...fine, camera_source: "pi", camera_ok: false } as FocusStatus)).toBe(false);
+    expect(describeProblems({ ...browser, camera_paused: true })).toBe("");
+    expect(isCameraMissing(browser)).toBe(true);
+    expect(isCameraMissing({ ...browser, camera_paused: true })).toBe(true);
+    expect(isCameraMissing({ ...browser, camera_ok: true, camera_paused: true })).toBe(true);
+    expect(isCameraMissing({ ...browser, camera_ok: true })).toBe(false);
+    expect(isCameraMissing({ ...fine, camera_source: "pi", camera_ok: false } as FocusStatus)).toBe(false);
   });
 });
 

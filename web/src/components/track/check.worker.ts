@@ -19,7 +19,7 @@ function reply(message: WorkerReply): void {
 async function runCheck(): Promise<void> {
   const started = performance.now();
   try {
-    const picture = frames?.grab() ?? null;
+    const picture = (await frames?.grab()) ?? null;
     const reading = picture === null || models === null ? null : await readFrame(picture, models);
     const at = performance.timeOrigin + started;
     reply({

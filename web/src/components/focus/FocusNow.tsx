@@ -2,10 +2,12 @@ import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
 import { AnimatePresence, m } from "motion/react";
 import { Timeline } from "@/components/focus/Timeline";
 import { MacLine } from "@/components/mac/MacLine";
+import { CameraControl } from "@/components/track/CameraControl";
+import type { Camera } from "@/hooks/useCamera";
 import type { MacTracking } from "@/hooks/useMacTracking";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SPRINGS } from "@/lib/motion";
-import { STATE_COPY, describeProblems, isWaitingForTracker } from "@/lib/timeline";
+import { STATE_COPY, describeProblems, isCameraMissing } from "@/lib/timeline";
 import type { FocusStatus, Segment } from "@/lib/types";
 
 const TWO_DIGITS = { minimumIntegerDigits: 2 };
@@ -79,14 +81,17 @@ interface FocusNowProps {
   midnight: number;
   receivedAt: number;
   macTracking: MacTracking;
+  camera: Camera;
 }
 
 // The top of the Desk, on the page with no card around it: the state word and its timer, today's timeline, the stats
-// with the Mac line, and a quiet line for anything that's wrong.
-export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macTracking }: FocusNowProps) {
+// with the Mac line, and a quiet line for anything that's wrong, with Turn on camera when the desk has no camera.
+export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macTracking, camera }: FocusNowProps) {
   const state = focus?.state ?? "unknown";
   const word = (STATE_COPY[state] ?? STATE_COPY.unknown).label;
   const problems = focus == null ? "" : describeProblems(focus);
+  // Not while it's on here or in another tab: the first readings are on their way.
+  const missesCamera = focus != null && isCameraMissing(focus) && camera.step !== "on" && camera.step !== "elsewhere";
   return (
     <section className="focus rise" data-state={state} aria-label="Focus">
       <div className="focus-head">
@@ -104,10 +109,9 @@ export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macT
         {focus != null && <StatsLine today={focus.today} />}
         <MacLine focus={focus} macTracking={macTracking} />
       </div>
-      {focus != null && isWaitingForTracker(focus) && (
+      {missesCamera && (
         <p className="focus-note">
-          {/* A full page load: the tracker needs its own headers. */}
-          No camera yet, so time isn't counted. <a href="/track">Open the tracker</a> in Chrome on your laptop to start.
+          {focus.camera_paused ? "Your camera is off, so time isn't counted." : "No camera yet, so time isn't counted."} <CameraControl camera={camera} place="line" />
         </p>
       )}
       {problems && <p className="focus-note">{problems}</p>}

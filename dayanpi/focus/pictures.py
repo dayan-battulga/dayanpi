@@ -11,13 +11,15 @@ import binascii
 import cv2
 import numpy as np
 
-PICTURE_WIDTH = 320
-PICTURE_HEIGHT = 180
-PICTURE_QUALITY = 50  # measured on real desk frames: about 6.6 KB each at 320 x 180
-# What a browser may send: a little over our own size, so a laptop that rounds differently still gets through.
-PICTURE_MAX_WIDTH = 640
-PICTURE_MAX_HEIGHT = 360
-PICTURE_MAX_BYTES = 32 * 1024
+PICTURE_WIDTH = 640
+PICTURE_HEIGHT = 360
+# The smallest of 60, 70 and 80 that still looks sharp on a seat on a 2x screen: about 20 KB on real desk frames.
+PICTURE_QUALITY = 60
+# What a browser may send. The tracker draws exactly our size, so nothing bigger; the bytes are about twice the real
+# frames, and their base64 plus the reading's numbers still fits app.MAX_BODY_BYTES.
+PICTURE_MAX_WIDTH = PICTURE_WIDTH
+PICTURE_MAX_HEIGHT = PICTURE_HEIGHT
+PICTURE_MAX_BYTES = 44 * 1024
 PICTURE_MAX_BASE64 = (PICTURE_MAX_BYTES * 4) // 3 + 4
 JPEG_START = b"\xff\xd8"
 # The start-of-frame markers, which carry the picture's size (C4, C8 and CC are other segments).
@@ -68,7 +70,7 @@ def shrink_frame(jpeg: bytes) -> bytes | None:
 
 
 def read_browser_picture(sent: str) -> bytes | None:
-    """The JPEG a browser sent, or None for anything that isn't a real JPEG of about the seat's size. It's served to
+    """The JPEG a browser sent, or None for anything that isn't a real JPEG at most the seat's size. It's served to
     other people as image/jpeg, so it has to decode as one."""
     try:
         jpeg = base64.b64decode(sent, validate=True)

@@ -1,7 +1,10 @@
 import { Plus, Video, VideoOff } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
 import { SeatPicture } from "@/components/room/SeatPicture";
+import { CameraControl } from "@/components/track/CameraControl";
+import type { Camera } from "@/hooks/useCamera";
 import type { Nudger } from "@/hooks/useNudge";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SEAT_WORDS, describeSeatLine, findDoneShare, readInitial } from "@/lib/room";
@@ -19,25 +22,43 @@ interface SeatCardProps {
   nudger: Nudger;
   onPeek: () => void; // someone else's seat opens the quick peek
   video?: { shown: boolean; flip: () => void }; // your own seat's Show/Hide my video (Settings → Sharing → Video)
+  camera?: Camera; // your own seat, while your desk is on this browser's camera
+}
+
+// Your own camera, live on your seat while it's on: straight from the camera, so nothing extra goes to the Pi. It sits
+// where the picture would, so it gets the picture's shade and white text.
+function LiveVideo({ stream }: { stream: MediaStream }) {
+  const video = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (video.current !== null) {
+      video.current.srcObject = stream;
+    }
+  }, [stream]);
+  return (
+    <span className="seat-picture" aria-hidden="true">
+      <video ref={video} className="seat-picture-frame seat-live" autoPlay muted playsInline />
+    </span>
+  );
 }
 
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, video }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, video, camera }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
   // Everyone in the room sees the rings leave a seat that was just nudged. They're gone long before the next nudge can
   // come (10 minutes), so each one mounts them fresh and they play once.
   const nudgedAgo = seat.nudge?.age_s == null ? null : seat.nudge.age_s + elapsed;
+  const live = camera?.step === "on" ? camera.preview : null;
   return (
     <article className="seat" data-state={seat.state} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
       {!mine && <button type="button" className="seat-peek" aria-label={`Peek at ${seat.name}`} aria-haspopup="dialog" onClick={onPeek} />}
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
       </span>
-      {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
+      {live != null ? <LiveVideo stream={live} /> : seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
       {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
         <span className="seat-ripples" aria-hidden="true">
           <span />
@@ -45,10 +66,15 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, v
         </span>
       )}
       <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
-      {video != null && (
-        <button type="button" className="video-toggle" aria-pressed={video.shown} aria-label={video.shown ? "Hide my video" : "Show my video"} onClick={video.flip}>
-          {video.shown ? <Video size={18} strokeWidth={1.8} aria-hidden="true" /> : <VideoOff size={18} strokeWidth={1.8} aria-hidden="true" />}
-        </button>
+      {(camera != null || video != null) && (
+        <div className="seat-tools">
+          {camera != null && <CameraControl camera={camera} place="seat" />}
+          {video != null && (
+            <button type="button" className="video-toggle" aria-pressed={video.shown} aria-label={video.shown ? "Hide my video" : "Show my video"} onClick={video.flip}>
+              {video.shown ? <Video size={18} strokeWidth={1.8} aria-hidden="true" /> : <VideoOff size={18} strokeWidth={1.8} aria-hidden="true" />}
+            </button>
+          )}
+        </div>
       )}
       {seat.focus_seconds != null && (
         <span className="seat-chip">

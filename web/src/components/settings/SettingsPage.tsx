@@ -24,7 +24,7 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 // At /settings, inside the frame (Settings.dc.html): the section list on the left (a row of pills on a phone) and the
 // picked section on the right, rising in each time you pick one. A link can ask for a section (the room's Invite).
 export function SettingsPage() {
-  const { user, setUser, macTracking, snapshot, now, receivedAt } = useFrame();
+  const { user, setUser, macTracking, snapshot, now, receivedAt, camera } = useFrame();
   const asked = (useLocation().state as { section?: SectionId } | null)?.section;
   const [section, setSection] = useState<SectionId>(asked ?? "profile");
   const owner = user?.role === "owner";
@@ -52,7 +52,7 @@ export function SettingsPage() {
           <div key={section} className="settings-section rise">
             {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
             {section === "sharing" && <SharingSection focus={snapshot?.focus} room={snapshot?.room} username={user.username} now={now} receivedAt={receivedAt} />}
-            {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} onOpenSharing={() => setSection("sharing")} />}
+            {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} camera={camera} onOpenSharing={() => setSection("sharing")} />}
             {section === "voice" && <VoiceSection focus={snapshot?.focus} owner={owner} now={now} />}
             {section === "mac" && <MacHelperSection macTracking={macTracking} />}
             {section === "room" && owner && <RoomSection />}

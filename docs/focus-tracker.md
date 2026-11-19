@@ -294,20 +294,30 @@ Someone who's been on their phone for 5 minutes or more gets a **Nudge** button:
 
 ### The seats' small pictures (study room step 7)
 
-With **Video** on (it starts off for everyone), your seat shows a small picture of you, about once a second, while you're working or on your phone. Away or unknown, there's no picture, just your initial. Each new frame fades in over the last one, so it feels like a calm live photo rather than video. Your own seat has a **Hide my video** / **Show my video** button at the top right (not on a phone), the same switch as Settings → Sharing → Video. The quick peek shows it in the person's face, their desk in its camera tile, and Settings' preview in your seat.
+With **Video** on (it starts off for everyone), your seat shows a picture of you, about once a second, while you're working or on your phone. Away or unknown, there's no picture, just your initial. Each new frame fades in over the last one, so it feels like a calm live photo rather than video. Your own seat has a **Hide my video** / **Show my video** button at the top right (not on a phone), the same switch as Settings → Sharing → Video. The quick peek shows it in the person's face, their desk in its camera tile, and Settings' preview in your seat.
 
 Where the picture comes from:
 
-- **A friend's laptop:** the tracker (`/track`) shrinks its camera to a 320×180 JPEG and sends it with its next reading, but only while the Pi's last answer said `send_picture` (Video on and at the desk). The tracker page says so under the preview while it's sending.
-- **Your desk on the Pi's cameras:** the Pi takes the front camera's latest frame once a second, cuts it to 16:9 and shrinks it to 320×180 (`focus/pictures.py`). Your full feeds (`/video`, `/video/side`, the Pi page's peek) don't change and stay behind the camera lock; this is a separate small copy that only exists while you've turned Video on. See [pi-camera.md](pi-camera.md#your-seats-picture).
+- **A friend's laptop:** the camera in the app ([below](#the-camera-in-the-app-study-room-step-4-part-2-moved-into-the-site)) cuts its 1280×720 camera to a 640×360 JPEG and sends it with its next reading, but only while the Pi's last answer said `send_picture` (Video on and at the desk). Their own seat shows their camera live instead, straight from the camera, so it never fetches their own picture back.
+- **Your desk on the Pi's cameras:** the Pi takes the front camera's latest frame once a second, cuts it to 16:9 and shrinks it to 640×360 (`focus/pictures.py`). The webcam is 640×480, so that's its full width with the top and bottom cut off. Your full feeds (`/video`, `/video/side`, the Pi page's peek) don't change and stay behind the camera lock; this is a separate small copy that only exists while you've turned Video on. See [pi-camera.md](pi-camera.md#your-seats-picture).
 
 What the Pi enforces (the page can't get around any of it):
 
 - It keeps only the latest picture per person, in memory (`Desk.picture`), never on disk, and drops it the moment Video goes off, the tracker pauses, or a reading says away or unknown.
-- A picture that arrives with Video off, or away, is dropped. Anything that isn't a real JPEG under 640×360 and 32 KB is dropped too, and the reading still counts.
+- A picture that arrives with Video off, or away, is dropped. Anything that isn't a real JPEG of at most 640×360 and 44 KB is dropped too, and the reading still counts. The browser doesn't even send one over 44 KB, since that much base64 would make the whole reading a 422. A reading with the biggest picture is about 60 KB, so it still fits under the Pi's 64 KB cap on writes.
 - `GET /api/people/<username>/picture` goes through the same gate as everything else (`share_parts`, the `picture` part needs Video): it answers only while they share video, are at the desk and the picture is at most 3 s old, otherwise a plain 404. It's signed-in only, like every `/api/` route, and `no-store`. The room stream only says when there's a new one (`picture: {at}`), and the page fetches each frame once.
 
-**How big:** 320×180 at JPEG quality 50 came out at 6.0–6.9 KB on real desk frames (6.6 KB on average, 8.8 KB as base64 in a reading). One person watching the room with four pictures takes about 26 KB/s, and each tracking laptop sends about 9 KB/s. If all four of you have the Room open at once, the Pi sends about 106 KB/s and takes in about 26 KB/s.
+**How big:** the quality is the smallest of 0.6, 0.7 and 0.8 that still looks sharp on a seat on a 2× screen. On the three real desk frames in `focus_check/`, cut to 640×360, all three looked the same at seat size (a 580 px seat stretches 640 pixels anyway; only the drawn-on labels showed a little ringing at 0.6), so it's 0.6: 19.5–19.8 KB a picture while someone's at the desk (Chrome and the Pi's OpenCV came out within 0.5 KB of each other; 0.7 was 23.5 KB, 0.8 was 29.4 KB). As base64 in a reading that's about 27 KB. The end-to-end run below served 21 KB pictures.
+
+With all four of you on the Room, each picture fetched once a second:
+
+| | today (640×360, 0.6) | before (320×180, 0.5) |
+| --- | --- | --- |
+| into the Pi | about 81 KB/s (3 laptops sending a reading with a picture; 108 KB/s if your desk's on a browser too) | about 26 KB/s |
+| out of the Pi | about 260 KB/s (13 pictures a second: each laptop fetches the 3 others, you fetch all 4), 320 KB/s at most (everyone watching from somewhere that isn't running their camera, like a phone) | about 106 KB/s |
+| both ways | about 340 KB/s, 430 KB/s at most | about 130 KB/s |
+
+Funnel's limits aren't published. If pictures start lagging over Funnel, 480×270 would roughly halve all of that (`PICTURE_WIDTH`/`PICTURE_HEIGHT` in `focus/pictures.py` and `web/src/lib/track.ts`).
 
 ### The group calendar
 
@@ -508,64 +518,77 @@ In rough order of how cheap they are:
 ### How it works (for changing it)
 
 - `GET /api/models/<name>` serves the four ONNX files in `models/` (signed in, read-only, cached for a year). Nothing else in that folder is reachable. A changed model needs a new file name, because browsers keep the old one.
-- The `/track/` pages get `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which is what gives WASM its threads. Files under `/assets/` get the embedder header too, because a worker inside an isolated page only starts when its own script says so; other pages ignore it there. An isolated page refuses anything from another site, which is fine: everything it loads comes off the Pi.
+- Every page gets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` (since the camera moved into the app, it runs from any page), which is what gives WASM its threads. Files under `/assets/` get them too, because a worker inside an isolated page only starts when its own script says so. An isolated page refuses anything from another site, which is fine: everything it loads comes off the Pi, so the Pi page's feeds, the voice clips and the seat pictures all still load.
 - The browser runs the same pipeline as the Pi, ported to TypeScript in `web/src/lib/vision/`: `detector.ts`, `hands.ts`, `gestures.ts`, and `worker.ts` (the per-frame part of `focus/worker.py`), with `image.ts` standing in for the few OpenCV calls. Same constants, same steps. The face model isn't ported: the tracker only logs its turn and tilt, and nothing reads them. ONNX Runtime Web runs the models, from npm (pinned to one exact version, so the 29.5 MB WASM file in `dayanpi/static/assets/` only changes when we upgrade on purpose), and only the workers load it, never a page.
 - **The port is checked against the Pi's code.** `.venv/bin/python -m dayanpi.vision.export_fixture` runs made-up model outputs, boxes and hands through the Python and saves what comes out to `web/src/lib/vision/python-fixture.json`; the TypeScript tests (`npm test`) run the same inputs and have to match. Change anything in `dayanpi/vision/` and `tests/test_vision_fixture.py` fails until you re-run the export, and then `npm test` tells you what the TypeScript side needs.
 - Each way of running the models gets its own worker (ONNX Runtime fixes its thread count once it starts). Camera frames get to the workers through Chrome's `MediaStreamTrackProcessor`, and like the Pi, a frame is never scanned twice.
 
-## The tracker (study room step 4, part 2)
+## The camera in the app (study room step 4, part 2, moved into the site)
 
-`/track` is the real thing: a member's laptop camera feeds their own desk the same way the Pi's cameras feed yours. Their state, today's totals, the timeline, the to-do time, the calendar and the day pages all work exactly like yours, because the Pi runs their numbers through the same tracker.
+A member's laptop camera feeds their own desk the same way the Pi's cameras feed yours. Their state, today's totals, the timeline, the to-do time, the calendar and the day pages all work exactly like yours, because the Pi runs their numbers through the same tracker. It used to be its own page, `/track`, that had to stay open in a tab; now it runs inside the site itself, and `/track` just goes to the Room. (`/track/test` is still the camera test.)
 
-**Only numbers leave the laptop.** The video stays in the browser (the preview says "Only you see this"). Each check sends the Pi what the tracker reads from a check: how sure it is there's a person, the best phone near a hand, the hand sign it saw (or none) and how long the check took. That's `POST /api/track/reading`, about once a second, for the sender's own desk only.
+**Only numbers leave the laptop**, plus the seat's picture while Video is on. The video stays in the browser. Each check sends the Pi what the tracker reads from it: how sure it is there's a person, the best phone near a hand, the hand sign it saw (or none) and how long the check took. That's `POST /api/track/reading`, about once a second, for the sender's own desk only.
 
-### How someone starts tracking
+### Turning it on
 
-[MANUAL.md](MANUAL.md#a-friends-camera-the-tracker) has the steps to send them. In short: Chrome, **https://dayoon.tail279594.ts.net/track**, **Allow camera**, keep the tab open. Their desk's line under the stats says "No camera yet... Open the tracker" with a link until the first readings arrive.
+**Turn on camera** shows for anyone whose desk is on the browser's camera, in three places: their own seat in the Room (next to Show/Hide my video), the Desk's "No camera yet" line, and Settings → Camera. Clicking it is what asks Chrome for the camera, right there; nothing ever asks without a click the first time. While the models load the seat says **Starting…**, then the seat shows their own camera live (straight from the camera, so nothing extra goes to the Pi) with a quiet **Camera on** and **Turn off**. Show/Hide my video doesn't change: that's the sharing switch, separate from the camera.
+
+The seat leaves it out while another computer is already feeding the desk (the readings are coming in and this one's camera is off), so a phone looking at the Room doesn't nag. Settings → Camera always has it.
+
+**Turn off** is the old Pause: the camera and the models stop, and the desk says paused ("Your camera is off" on the Desk, with Turn on camera) until the next reading.
+
+### It keeps going, and comes back by itself
+
+- **From page to page.** It lives in the frame every signed-in page shares, so it keeps running while you go between the Room, the Desk, Settings and someone's desk, and while the tab is behind other tabs or windows (the checks run on the worker's own timer, which part 1 showed holds one a second in a hidden tab).
+- **Only closing every dayanpi tab stops it.** That's a browser rule: a page can't keep the camera once its last tab is gone. The laptop sleeping or Chrome quitting stops it too, and 30 s later the desk says "unknown".
+- **Back on next time.** The browser remembers the camera was on (`localStorage`, `dayanpi.camera`). When the site opens again and Chrome still has the camera allowed for it, the camera starts without a click. If the permission's gone, Turn on camera shows again. Turn off forgets it.
+- **One tab at a time.** With two dayanpi tabs open, only one runs the camera (Web Locks). The other's seat says **Camera on in another tab**. When that tab closes, the next one takes over, if the camera's still remembered.
+- **When it can't start**, the seat and Settings → Camera say so with the old tracker page's words, short: Camera is blocked, No camera found, The camera is busy, This needs Chrome, or The tracker stopped, with **Try again** (none for Chrome). Settings adds what to do about it.
+- A peace sign's clip still plays in a hidden tab: the stream closes while the tab's hidden, but each reading's answer carries the message too. It plays right away after a click on the page (Turn on camera counts); after a reload that started the camera by itself, the pill may show its play button the first time.
 
 ### Where a desk's checks come from
 
 Settings → **Camera**: "This desk's Pi cameras" or "This browser's camera".
 
 - Only your desk can pick the Pi's cameras. A member's is always the browser (the Pi radio is greyed out, and the route says 403 if they try anyway).
-- Your desk starts on the Pi's cameras. Pick the browser and the Pi's worker stops scanning (no detector runs at all) and your desk takes `/track`'s readings instead, from any computer. Pick the Pi again and it's back.
-- Readings only count for a desk set to the browser. Your desk on the Pi gets a 409 ("this desk uses the Pi's cameras"), and `/track` says so, with a button to Settings.
+- Your desk starts on the Pi's cameras. Pick the browser and the Pi's worker stops scanning (no detector runs at all), Turn on camera shows up, and your desk takes the browser's readings instead, from any computer. Pick the Pi again and the browser's camera stops.
+- Readings only count for a desk set to the browser. Your desk on the Pi gets a 409 ("this desk uses the Pi's cameras").
 - The pick is saved in each desk's folder as `camera_source.json`.
 
 ### What the Pi does with a reading
 
 - It turns the numbers into the same reading its own cameras make (a person and a phone at those confidences) and runs it through that desk's tracker. Same rules, same log lines, same to-do time. `tests/test_browser_camera.py` checks that a run of browser readings and the same run of Pi readings end in the same states, segments and totals.
-- **The hand sign hold is the Pi's**, one per desk, so the page sends the sign it saw and the Pi decides when it fires (held 1 s, like yours). A peace sign on a member's desk is a `gesture` line in their log, and the pill shows on their own page with the to-do message (the template one). Nobody hears it yet: the speaker is in your room, so saying it out loud comes in step 5.
-- **Nothing coming in for 30 s means "unknown"**, like a stuck camera: once a second the Pi gives every browser desk that heard nothing for 1.5 s a check without a frame. A closed laptop or a closed tab ends up there.
-- **Pause** on `/track` stops the camera and the models, and tells the Pi. The desk goes to "unknown" right away (not after 30 s) and says "Tracking is paused on the tracker page" until the next reading.
-- **Every value is checked.** Person and phone must be 0 to 1, the time 0 to 60,000 ms, the sign one the Pi knows, and any other field (a picture, say) is a 422. More than about one a second is a 429: it allows one a second in the long run and two close together, so one late reading and the next on-time one both get through.
+- **The hand sign hold is the Pi's**, one per desk, so the page sends the sign it saw and the Pi decides when it fires (held 1 s, like yours).
+- **Nothing coming in for 30 s means "unknown"**, like a stuck camera: once a second the Pi gives every browser desk that heard nothing for 1.5 s a check without a frame.
+- **Turn off** tells the Pi (`POST /api/track/pause`). The desk goes to "unknown" right away (not after 30 s) and says paused until the next reading.
+- **Every value is checked.** Person and phone must be 0 to 1, the time 0 to 60,000 ms, the sign one the Pi knows, the picture at most 44 KB of base64'd JPEG, and any other field is a 422. More than about one a second is a 429.
 
 ### Keeping it light
 
 It runs for hours on someone's laptop, so it does as little as it can:
 
-- **WebGPU** when the laptop has it (part 1's fastest), otherwise WASM on 2 threads. One session per model, made once.
-- **Nobody there:** once nobody's been seen for 10 s it checks every 3 s, and goes back to every second on the first check that sees someone. The zoomed phone pass and the hand models only run on checks that see someone (with nobody there there's no phone to keep and no sign to read).
-- **Struggling:** if at least half the checks over a minute took over 600 ms or started late, or the battery is under 20% and unplugged, it checks every 2 s, and goes back after a good minute. The tracker's rules cope with gaps that size (a gap counts up to 5 s).
-- The line under the preview says what it's doing: time per check, memory, which way it runs the models, and why it's checking less often when it is.
-- **In the background**, part 1 showed the timer in a worker kept one check a second in a hidden tab, minimized and popped out, while a timer on the page fell to every 2 s when hidden. So the checks run on the worker's own timer, and the worker sends the readings itself. There's no Pop out button: the worker didn't need it.
+- **Nothing loads until the camera starts.** The models and ONNX Runtime only come with the worker, made when the camera turns on, never for someone whose camera is off (or whose desk is on the Pi's cameras).
+- **WebGPU** when the laptop has it, otherwise WASM on 2 threads. One session per model, made once.
+- **1280×720 for the picture, 640×480 at most for the checks.** The camera opens at 1280×720 (ideal) so the seat's picture is sharp, but each frame is shrunk on its way into the checks (`createImageBitmap`'s resize, 1.5 ms; drawing it whole took 3.2 ms and a 640×360 frame 1.7 ms), so the detector gets the same 640×480 letterbox as before. The picture is one more draw and one JPEG, only on checks that send one.
+- **Nobody there:** once nobody's been seen for 10 s it checks every 3 s, and goes back to every second on the first check that sees someone.
+- **Struggling:** if at least half the checks over a minute took over 600 ms or started late, or the battery is under 20% and unplugged, it checks every 2 s, and goes back after a good minute.
+- Settings → Camera has the load line: time per check, memory, which way it runs the models, and why it's checking less often when it is.
 
 ### What it costs (measured)
 
-A 30-minute run on a Mac (M2 Pro) in headless Chrome, with a fake camera looping 40 s at the desk, 25 s away and 15 s on the phone:
+Measured on a Mac (M2 Pro) in headless Chrome against the real app (on fake Pi stats), with Chrome's fake camera looping the three real desk frames from `focus_check/` (20 s working, 15 s away, 10 s on the phone), my desk on the browser's camera with Video on, and the Room open on the same page:
 
 | | |
 | --- | --- |
-| time per check | about 100 to 130 ms with someone there (WebGPU), 40 to 65 ms with nobody (just the one YOLO pass) |
-| checks | 1,535 in 30 min, every one answered; gaps: median 1.00 s, 9 in 10 under 1.03 s, the longest 3.2 s (nobody there) |
-| memory | 52 MB at the start, 45 MB at the end, never over 52 MB: no leak |
-| CPU | about half of one core for all of Chrome, the preview and the video decoding included |
+| time per check | 118 ms (median) with someone there at 640×360, 123 ms at 1280×720 (p90 128 vs 147 ms); 38–39 ms with nobody (just the one YOLO pass) at both sizes. That was before the grab used `createImageBitmap`, which takes 1.7 ms more off each 720p check; the rest of the gap is most likely Chrome decoding the fake camera's 720p MJPEG and drawing the live seat. The old 640×480 tracker: 110 ms on the same frames |
+| models | ready 1.3–1.8 s after Turn on camera (WebGPU, from Cache Storage) |
+| readings | one a second while someone's there (gaps: median 1.00 s, 9 in 10 under 1.03 s, the longest 3.1 s with nobody there), every one a 200 |
+| memory | 50 MB at the start, 52 MB at minute 19 (stopped there), between 48 and 55 MB the whole time: no climb. The old `/track` alone: 52 MB at the start, 45 MB after 30 minutes |
+| pictures | 640×360, 21 KB served, 28 KB as base64 in a reading; the biggest reading 28.5 KB, well under the 64 KB cap |
 
-The `/track/test` results this was built on (127 ms a check with WebGPU) say a laptop like that comes out about the same; run the test on a new laptop first. Headless Chrome counts every tab as in front, so the hidden-tab part of this run proves nothing; part 1's real Chrome run (the worker's timer held 1.00 s hidden, minimized and popped out) is the evidence for that.
+Headless Chrome counts every tab as in front, so this proves nothing about a hidden tab; part 1's real Chrome run (the worker's timer held 1.00 s hidden, minimized and popped out) is the evidence for that.
 
 ### How it works (for changing it)
 
-- Page: `web/src/components/track/TrackPage.tsx` (Track.dc.html's ask, running and blocked steps, plus paused and the other camera problems). Worker: `tracker.worker.ts`, which shares the frame reader and the model sessions with the camera test's worker through `workerKit.ts`. The pace rules are `web/src/lib/trackPace.ts`, the messages and the load line `web/src/lib/track.ts`.
-- Pi: `dayanpi/focus/browser_camera.py` (the rate limit, the pause, the desk's own sign hold, and the ticks), `dayanpi/focus/camera_source.py` (the saved pick), and the routes in `app.py`: `POST /api/track/reading`, `POST /api/track/pause` and `POST /api/track/source`, all in `MEMBER_WRITES`.
-- `/track` gets the same isolation headers as `/track/test`.
-
+- Browser: `web/src/components/track/cameraTracker.ts` (`CameraTracker`: the click, the lock, the remembered pick, the permission check, the worker and its battery and memory) and `web/src/hooks/useCamera.ts`, which `components/frame/Frame.tsx` calls once, so every page gets the same camera through `useFrame()`. `CameraControl.tsx` is the one control the seat, the Desk and Settings show. The worker is `tracker.worker.ts`, sharing the frame reader and the model sessions with the camera test's worker through `workerKit.ts`. The pace rules are `web/src/lib/trackPace.ts`, the messages and the load line `web/src/lib/track.ts`.
+- Pi: `dayanpi/focus/browser_camera.py` (the rate limit, the pause, the desk's own sign hold, and the ticks), `dayanpi/focus/camera_source.py` (the saved pick), `dayanpi/focus/pictures.py` (the picture's size and checks), and the routes in `app.py`: `POST /api/track/reading`, `POST /api/track/pause` and `POST /api/track/source`, all in `MEMBER_WRITES`.

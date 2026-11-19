@@ -87,23 +87,20 @@ export function describeStartHour(hour: number): string {
   return `${hour % 12 || 12} ${hour < 12 ? "am" : "pm"}`;
 }
 
-// A desk on a browser's camera that hears nothing from one, and isn't paused: the Desk links to /track instead.
-export function isWaitingForTracker(focus: FocusStatus): boolean {
-  const waiting = focus.camera_source === "browser" && !focus.camera_paused && !focus.camera_ok;
-  return waiting;
+// A desk on a browser's camera that hears nothing from one, or whose camera was turned off: the Desk offers Turn on
+// camera instead.
+export function isCameraMissing(focus: FocusStatus): boolean {
+  const missing = focus.camera_source === "browser" && (focus.camera_paused === true || !focus.camera_ok);
+  return missing;
 }
 
 // What's wrong that the Desk should mention under its stats, quietly; "" when nothing is.
 export function describeProblems(focus: FocusStatus): string {
   const problems: string[] = [];
-  // /track's checks have their own words: paused, or isWaitingForTracker's link.
-  if (focus.camera_source === "browser") {
-    if (focus.camera_paused) {
-      problems.push("Tracking is paused on the tracker page");
-    }
-  } else if (!focus.enabled) {
+  // The browser's camera has its own line, with Turn on camera (isCameraMissing).
+  if (focus.camera_source !== "browser" && !focus.enabled) {
     problems.push("The detector isn't running on the Pi");
-  } else if (!focus.camera_ok) {
+  } else if (focus.camera_source !== "browser" && !focus.camera_ok) {
     problems.push("No camera frames, so time isn't counted");
   }
   if (focus.voice?.problem) {
