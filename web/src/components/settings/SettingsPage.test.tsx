@@ -361,8 +361,27 @@ it("signs out", async () => {
   expect(loadPage).toHaveBeenCalledWith("/login");
 });
 
+it("picks your lamp color from six swatches, and your seat's preview takes it at once", async () => {
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "teal" as const };
+  const seat = makeSeat({ focus_seconds: 11538 });
+  const sent = serveSettings(MEMBER, [], { "POST /api/sharing": answer({ sharing: { ...sharing, lamp: "pink" }, seat: { ...seat, lamp: "pink" } }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send({ ...makeSnapshot(makeFocus({ sharing })), room: { seats: [seat] } });
+  await user.click(await screen.findByRole("button", { name: "Sharing" }));
+  const section = within(await screen.findByRole("region", { name: "Share with the room" }));
+  const swatches = within(section.getByRole("radiogroup", { name: "Lamp color" }));
+  expect(swatches.getAllByRole("radio").map((swatch) => swatch.getAttribute("aria-label"))).toEqual(["Teal", "Green", "Sky", "Yellow", "Pink", "White"]);
+  expect(swatches.getByRole("radio", { name: "Teal" })).toBeChecked();
+
+  await user.click(swatches.getByRole("radio", { name: "Pink" }));
+
+  expect(swatches.getByRole("radio", { name: "Pink" })).toBeChecked();
+  expect(document.querySelector(".share-tile")).toHaveAttribute("data-lamp", "pink");
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/sharing").map((request) => request.body)).toEqual([{ lamp: "pink" }]));
+});
+
 it("shares with the room what the switches say, and previews your seat as the room gets it", async () => {
-  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true };
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "teal" as const };
   const seat = makeSeat({ focus_seconds: 11538 });
   const sent = serveSettings(OWNER, undefined, {
     "POST /api/sharing": answer({ sharing: { ...sharing, apps: true }, seat: { ...seat, app: "Code" } }),

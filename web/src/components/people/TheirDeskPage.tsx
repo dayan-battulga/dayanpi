@@ -158,7 +158,7 @@ export function TheirDeskPage() {
     );
   } else if (seat != null && desk != null) {
     page = (
-      <div className="their-desk live" data-state={seat.state}>
+      <div className="their-desk live" data-state={seat.state} data-lamp={seat.lamp}>
         <div className="their-top">
           {back}
           <p className="their-shares">{describeShares(seat)}</p>

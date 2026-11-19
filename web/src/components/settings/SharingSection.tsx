@@ -1,14 +1,14 @@
 import { AnimatePresence, m } from "motion/react";
 import { SeatPicture } from "@/components/room/SeatPicture";
 import { Switch } from "@/components/ui/switch";
-import { useSharing } from "@/hooks/useSharing";
+import { type SharingSwitch, useSharing } from "@/hooks/useSharing";
 import { formatClock } from "@/lib/format";
 import { SPRINGS } from "@/lib/motion";
 import { listSharedPieces, readInitial } from "@/lib/room";
-import type { FocusStatus, Room, Sharing } from "@/lib/types";
+import type { FocusStatus, LampColor, Room } from "@/lib/types";
 
 // History isn't in the mockup; it sits after the to-dos like the rest. Status is always on, so it's a plain row.
-const SWITCHES: { key: keyof Sharing; label: string }[] = [
+const SWITCHES: { key: SharingSwitch; label: string }[] = [
   { key: "focus", label: "Focus time" },
   { key: "todos", label: "To-do list" },
   { key: "history", label: "History" },
@@ -16,6 +16,17 @@ const SWITCHES: { key: keyof Sharing; label: string }[] = [
   { key: "sites", label: "Sites" },
   { key: "video", label: "Video" },
   { key: "nudges", label: "Nudges" }, // whether others may nudge you; the button doesn't show for anyone while it's off
+];
+
+// Your lamp's color while focused; on the phone and away look the same for everyone. Each swatch gets its shade from
+// dashboard.css's [data-lamp] rules.
+const LAMPS: { value: LampColor; label: string }[] = [
+  { value: "teal", label: "Teal" },
+  { value: "green", label: "Green" },
+  { value: "sky", label: "Sky" },
+  { value: "yellow", label: "Yellow" },
+  { value: "pink", label: "Pink" },
+  { value: "white", label: "White" },
 ];
 
 const PIECE_IN = { opacity: 1, transition: SPRINGS.enter };
@@ -30,7 +41,7 @@ interface SharingSectionProps {
 }
 
 export function SharingSection({ focus, room, username, now, receivedAt }: SharingSectionProps) {
-  const { sharing, seat, seatAt, flipSwitch } = useSharing(focus, room, username, now, receivedAt);
+  const { sharing, seat, seatAt, flipSwitch, pickLamp } = useSharing(focus, room, username, now, receivedAt);
 
   return (
     <section aria-labelledby="settings-sharing">
@@ -44,6 +55,24 @@ export function SharingSection({ focus, room, username, now, receivedAt }: Shari
             Status
             <span className="setting-meta">Always on</span>
           </li>
+          <li className="setting-row">
+            <span id="lamp-color">Lamp color</span>
+            <div className="lamp-swatches" role="radiogroup" aria-labelledby="lamp-color">
+              {LAMPS.map((lamp) => (
+                <label key={lamp.value} className="lamp-swatch" data-lamp={lamp.value} title={lamp.label}>
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    name="lamp-color"
+                    value={lamp.value}
+                    aria-label={lamp.label}
+                    checked={sharing.lamp === lamp.value}
+                    onChange={() => void pickLamp(lamp.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </li>
           {SWITCHES.map((entry) => (
             <li key={entry.key} className="setting-row">
               {entry.label}
@@ -55,7 +84,7 @@ export function SharingSection({ focus, room, username, now, receivedAt }: Shari
           <p className="share-preview-label">What the room sees</p>
           {seat != null && (
             <>
-              <div className="share-tile" data-state={seat.state} aria-label={`Your seat: ${seat.name}`}>
+              <div className="share-tile" data-state={seat.state} data-lamp={sharing.lamp} aria-label={`Your seat: ${seat.name}`}>
                 <span className="share-initial" aria-hidden="true">
                   {readInitial(seat.name)}
                 </span>

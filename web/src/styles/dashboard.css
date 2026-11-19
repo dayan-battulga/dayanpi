@@ -1,5 +1,6 @@
 /* Two palettes that share one structure: Paper (light) and Graphite (dark).
-   Neutrals carry everything; color only ever means a state or a warning. */
+   Neutrals carry everything; color only ever means a state or a warning. .icon-palette takes Graphite's in either
+   theme: the wordmark's lamp, drawn in the tab icon's colors (the dark shades) like the icon. */
 
 :root,
 :root[data-theme="light"] {
@@ -15,6 +16,14 @@
   --work: #0e6e63;
   --phone: #c2410c;
   --away: #6d5bd0;
+  /* The lamp colors anyone can pick for "focused" (Settings → Sharing, focus/sharing.py's LAMP_COLORS): readable on
+     --bg and --surface, never near --phone or --away. Teal is --work; white is plain ink in this theme. */
+  --lamp-teal: var(--work);
+  --lamp-green: #3a8a1f;
+  --lamp-sky: #1f74c4;
+  --lamp-yellow: #8a7400;
+  --lamp-pink: #c4307f;
+  --lamp-white: #1f1f23;
   --warm: #8f5a06;
   --hot: #be123c;
   --scrim: rgb(17 17 19 / 24%);
@@ -22,7 +31,8 @@
   --shadow: 0 1px 2px rgb(17 17 19 / 4%), 0 14px 34px -16px rgb(17 17 19 / 16%);
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+.icon-palette {
   color-scheme: dark;
   --bg: #0a0a0c;
   --surface: #131316;
@@ -35,6 +45,13 @@
   --work: #34d3b9;
   --phone: #ff8a4c;
   --away: #a99bff;
+  /* The lamp colors' dark shades, which the tab icons (web/public/assets/icon-working-<name>.svg) are drawn in. */
+  --lamp-teal: var(--work);
+  --lamp-green: #7dd65a;
+  --lamp-sky: #5cb8ff;
+  --lamp-yellow: #f0e04a;
+  --lamp-pink: #ff7ac6;
+  --lamp-white: #ededef;
   --warm: #f5b83d;
   --hot: #ff5c7a;
   --scrim: rgb(0 0 0 / 50%);
@@ -2452,8 +2469,34 @@ button.todo-pill:active,
   --lamp: var(--muted);
 }
 
+/* Each person's picked "focused" color (Settings → Sharing), on everything that draws their lamp. Every one of those
+   says its own data-lamp, since a custom property inherits: Sam's teal inside your pink desk sign stays teal. */
+[data-lamp="teal"] {
+  --focus-lamp: var(--lamp-teal);
+}
+
+[data-lamp="green"] {
+  --focus-lamp: var(--lamp-green);
+}
+
+[data-lamp="sky"] {
+  --focus-lamp: var(--lamp-sky);
+}
+
+[data-lamp="yellow"] {
+  --focus-lamp: var(--lamp-yellow);
+}
+
+[data-lamp="pink"] {
+  --focus-lamp: var(--lamp-pink);
+}
+
+[data-lamp="white"] {
+  --focus-lamp: var(--lamp-white);
+}
+
 :is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li)[data-state="working"] {
-  --lamp: var(--work);
+  --lamp: var(--focus-lamp, var(--work));
 }
 
 :is(.seat, .here-face, .share-tile, .peek-inner, .rail-person, .rail-face, .bar-person, .their-desk, .sign, .sign-room li)[data-state="phone"] {
@@ -2698,6 +2741,38 @@ button.todo-pill:active,
 .share-switches {
   flex: 1 1 300px;
   min-width: 0;
+}
+
+/* Settings → Sharing's Lamp color: six round swatches, each in its own shade ([data-lamp]); the picked one ringed. */
+.lamp-swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.lamp-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--focus-lamp);
+  cursor: pointer;
+  transition:
+    box-shadow 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.lamp-swatch:active {
+  transform: scale(0.94);
+}
+
+.lamp-swatch:has(input:checked) {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--focus-lamp);
+}
+
+.lamp-swatch:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 5px;
 }
 
 .share-preview {

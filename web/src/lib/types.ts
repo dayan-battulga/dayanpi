@@ -94,6 +94,9 @@ export interface FocusStatus {
 }
 
 // Settings → Share with the room. Status (the state and its timer) always shows, so it isn't a switch.
+// The colors anyone can pick for their lamp while focused (focus/sharing.py's LAMP_COLORS, dashboard.css's --lamp-*).
+export type LampColor = "teal" | "green" | "sky" | "yellow" | "pink" | "white";
+
 export interface Sharing {
   focus: boolean;
   todos: boolean;
@@ -102,6 +105,7 @@ export interface Sharing {
   sites: boolean;
   video: boolean;
   nudges: boolean; // whether others may nudge you
+  lamp: LampColor; // your lamp's color while focused, which everyone sees
 }
 
 export type SharedPart = "focus" | "todos" | "apps" | "sites" | "video" | "history";
@@ -117,6 +121,7 @@ export interface Seat {
   seconds_in_state: number | null; // null while offline
   shares: SharedPart[]; // what they show, so a page can tell a piece turned on or off
   hidden: boolean; // someone tidied this offline seat out of the Room (POST /api/room/hide); false again once they're here
+  lamp: LampColor; // their lamp's color while focused; always sent, like their name
   focus_seconds?: number;
   todos?: { current: string | null; current_seconds: number | null; done: number; total: number };
   app?: string | null;

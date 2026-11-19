@@ -1,5 +1,5 @@
 {
-  "about": "For comparing / to design/mockups/Room.dc.html (the seats follow SeatsInfo.dc.html): the Desk's day, signed in as the owner, with Sam on the phone and Alex away. Dayan and Sam share their apps, Alex doesn't, and the fourth seat is open. Your desk is on this browser's camera (already feeding it), so the caption has the camera hint.",
+  "about": "For comparing / to design/mockups/Room.dc.html (the seats follow SeatsInfo.dc.html): the Desk's day, signed in as the owner, with Sam on the phone and Alex away. Dayan and Sam share their apps, Alex doesn't, and the fourth seat is open. Your desk is on this browser's camera (already feeding it), so the caption has the camera hint. My lamp is pink, so the compare shows a picked lamp color.",
   "now": "2026-11-16T19:12:18-06:00",
   "timezone": "America/Chicago",
   "mockupOptions": {
@@ -97,7 +97,8 @@
         "apps": true,
         "sites": false,
         "video": true,
-        "nudges": true
+        "nudges": true,
+        "lamp": "pink"
       }
     },
     "room": {
@@ -116,6 +117,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "pink",
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
@@ -146,6 +148,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "teal",
           "focus_seconds": 6480,
           "todos": {
             "current": "Read chapter 7",
@@ -174,6 +177,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "teal",
           "focus_seconds": 7500,
           "todos": {
             "current": "Flashcards, unit 4",

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, NEEDS, NUDGE_AFTER_S, NUDGE_EVERY_S, PICTURE_MAX_AGE_S, SharingSetting, build_seat, can_nudge, is_here, share_parts
+from dayanpi.focus.sharing import DEFAULT_SHARING, HERE_S, LAMP_COLORS, NEEDS, NUDGE_AFTER_S, NUDGE_EVERY_S, PICTURE_MAX_AGE_S, SharingSetting, build_seat, can_nudge, is_here, share_parts
 
 NOW = 1_800_000_000.0
 # A desk's full status, with something to find for every part.
@@ -26,13 +26,13 @@ PARTS = {"focus": ["focus_seconds", "6480"], "todos": ["current thing", '"todos"
 
 
 def share(**on) -> dict:
-    sharing = {key: False for key in DEFAULT_SHARING} | on
+    sharing = {key: False for key in DEFAULT_SHARING} | {"lamp": "teal"} | on
     return sharing
 
 
 def test_the_switches_start_with_focus_todos_and_history_on(tmp_path):
     assert SharingSetting(tmp_path / "sharing.json").read() == {
-        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True,
+        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True, "lamp": "teal",
     }
 
 
@@ -41,7 +41,7 @@ def test_the_switches_are_saved_and_read_back(tmp_path):
     setting = SharingSetting(path)
     assert setting.update({"apps": True, "focus": False, "status": False})
     saved = setting.read()
-    assert saved == DEFAULT_SHARING | {"apps": True, "focus": False}, "status isn't a switch"
+    assert saved == DEFAULT_SHARING | {"apps": True, "focus": False, "lamp": "teal"}, "status isn't a switch"
     assert not setting.update({"apps": True}), "nothing changed"
     assert SharingSetting(path).read() == saved
     assert json.loads(path.read_text()) == saved
@@ -50,7 +50,7 @@ def test_the_switches_are_saved_and_read_back(tmp_path):
 def test_an_unreadable_file_means_the_defaults(tmp_path, caplog):
     path = tmp_path / "sharing.json"
     path.write_text("{nope")
-    assert SharingSetting(path).read() == DEFAULT_SHARING
+    assert SharingSetting(path).read() == DEFAULT_SHARING | {"lamp": "teal"}
     assert "couldn't read" in caplog.text
 
 
@@ -74,6 +74,7 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "seconds_in_state": 365.0,
         "shares": ["focus", "todos", "apps", "sites", "video", "history"],
         "hidden": False,
+        "lamp": "teal",
         "focus_seconds": 6480.0,
         "todos": {"current": "current thing", "current_seconds": 2, "done": 1, "total": 3},
         "app": "SecretApp",
@@ -81,8 +82,20 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "nudge": {"wait_s": 0.0, "age_s": None},
         "picture": None,  # shares video, but no picture right now
     }
-    status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": [], "hidden": False}
-    assert build_seat("sam", "Sam", STATUS, share(), here=True) == status_only
+    status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": [], "hidden": False, "lamp": "pink"}
+    assert build_seat("sam", "Sam", STATUS, share(lamp="pink"), here=True) == status_only, "the lamp's color goes out with everything else off"
+
+
+def test_the_lamp_color_is_saved_and_only_a_preset_counts(tmp_path):
+    path = tmp_path / "sharing.json"
+    setting = SharingSetting(path)
+    assert setting.read()["lamp"] == "teal"
+    assert setting.update({"lamp": "pink"})
+    assert SharingSetting(path).read()["lamp"] == "pink", "read back as a restart would"
+    assert [color for color in LAMP_COLORS] == ["teal", "green", "sky", "yellow", "pink", "white"]
+    for saved in ('{"lamp": "red"}', '{"lamp": true}', '{"focus": "teal"}'):
+        path.write_text(saved)
+        assert (SharingSetting(path).read()["lamp"], SharingSetting(path).read()["focus"]) == ("teal", True), saved
 
 
 def test_sites_only_count_while_apps_is_on():

@@ -6,11 +6,12 @@ import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Wordmark } from "@/components/shared/Wordmark";
 import { SPRINGS } from "@/lib/motion";
 import { readInitial } from "@/lib/room";
-import type { Connection, FocusState, Seat, User } from "@/lib/types";
+import type { Connection, FocusState, LampColor, Seat, User } from "@/lib/types";
 
 interface HeaderProps {
   connection: Connection;
-  lamp: FocusState | null; // the wordmark's lamp: the tab icon's state
+  lampState: FocusState | null; // the wordmark's lamp: the tab icon's state
+  lampColor: LampColor; // and your lamp color, for focused
   user: User | null;
   phone: boolean;
   here?: Seat[] | null; // who's here, on the room's page only
@@ -45,7 +46,7 @@ function HereFaces({ here, label }: { here: Seat[]; label: string }) {
   return (
     <div className="here-faces">
       {here.map((seat) => (
-        <span key={seat.username} className="here-face" data-state={seat.state} aria-hidden="true">
+        <span key={seat.username} className="here-face" data-state={seat.state} data-lamp={seat.lamp} aria-hidden="true">
           {readInitial(seat.name)}
         </span>
       ))}
@@ -56,11 +57,11 @@ function HereFaces({ here, label }: { here: Seat[]; label: string }) {
 
 // The top bar on every signed-in page: the wordmark, the pages (in the dock instead on a phone), who's here on the
 // room's page, ⌘K (neither on a phone, like RoomPhone), the theme and you.
-export function Header({ connection, lamp, user, phone, here, hereLabel, onOpenPalette }: HeaderProps) {
+export function Header({ connection, lampState, lampColor, user, phone, here, hereLabel, onOpenPalette }: HeaderProps) {
   return (
     <header className="topbar">
       <span className="brand">
-        <Wordmark state={lamp} className="wordmark" />
+        <Wordmark state={lampState} lamp={lampColor} className="wordmark" />
         {connection === "reconnecting" && (
           <span role="status" className="reconnecting">
             Reconnecting

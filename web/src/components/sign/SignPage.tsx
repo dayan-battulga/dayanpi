@@ -26,7 +26,8 @@ export function SignPage() {
   const { user } = useMe();
   const now = useNow();
   useWakeLock();
-  const lamp = useTabIcon(snapshot?.focus?.state);
+  const lampColor = snapshot?.focus?.sharing?.lamp ?? "teal";
+  const lampState = useTabIcon(snapshot?.focus?.state, lampColor);
   const focus = snapshot?.focus;
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
   const summary = summarizeRoom(seats);
@@ -34,10 +35,10 @@ export function SignPage() {
   const todo = focus == null ? null : findCurrentTodo(focus);
   const open = Math.max(0, ROOM_SIZE - seats.length);
   return (
-    <main className="sign" data-state={state} data-connection={connection}>
+    <main className="sign" data-state={state} data-lamp={lampColor} data-connection={connection}>
       <div className="sign-glow" aria-hidden="true" />
       <div className="sign-top">
-        <Wordmark state={lamp} />
+        <Wordmark state={lampState} lamp={lampColor} />
         {seats.length > 0 && <span>{`${formatDuration(summary.focusSeconds)} ${summary.here.length > 1 ? "together" : "today"}`}</span>}
       </div>
       <div className="sign-middle">
@@ -54,7 +55,7 @@ export function SignPage() {
       </div>
       <ul className="sign-room" aria-label="The room">
         {seats.map((seat) => (
-          <li key={seat.username} data-state={seat.state} data-mine={seat.username === user?.username ? "" : undefined}>
+          <li key={seat.username} data-state={seat.state} data-lamp={seat.lamp} data-mine={seat.username === user?.username ? "" : undefined}>
             <span className="sign-lamp" aria-hidden="true" />
             {seat.username === user?.username ? "You" : seat.name}
             <span className="sr-only">{`, ${SEAT_WORDS[seat.state]}`}</span>

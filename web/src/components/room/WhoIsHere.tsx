@@ -39,7 +39,7 @@ export function RoomRail({ others, elapsed, together, collapsed, onCollapse }: R
         <PanelRightOpen size={18} strokeWidth={1.8} aria-hidden="true" />
       </button>
       {others.map((seat) => (
-        <Link key={seat.username} className="rail-face" data-state={seat.state} to={deskPath(seat)} title={[seat.name, seat.todos?.current].filter(Boolean).join(" · ")} aria-label={`Open ${seat.name}’s desk`}>
+        <Link key={seat.username} className="rail-face" data-state={seat.state} data-lamp={seat.lamp} to={deskPath(seat)} title={[seat.name, seat.todos?.current].filter(Boolean).join(" · ")} aria-label={`Open ${seat.name}’s desk`}>
           {readInitial(seat.name)}
         </Link>
       ))}
@@ -60,7 +60,7 @@ export function RoomRail({ others, elapsed, together, collapsed, onCollapse }: R
             const meta = describeTaskMeta(seat);
             return (
               <li key={seat.username} className="rail-row">
-                <Link className="rail-person" data-state={seat.state} to={deskPath(seat)} aria-label={`Open ${seat.name}’s desk`}>
+                <Link className="rail-person" data-state={seat.state} data-lamp={seat.lamp} to={deskPath(seat)} aria-label={`Open ${seat.name}’s desk`}>
                   <div className="rail-top">
                     <span className="rail-thumb" aria-hidden="true">
                       {readInitial(seat.name)}
@@ -105,7 +105,7 @@ export function RoomBar({ others, elapsed }: WhoIsHereProps) {
         const task = seat.todos?.current ?? null;
         const app = describeSeatLine({ ...seat, site: null }).app;
         return (
-          <Link key={seat.username} className="bar-person" data-state={seat.state} to={deskPath(seat)} aria-label={`Open ${seat.name}’s desk`}>
+          <Link key={seat.username} className="bar-person" data-state={seat.state} data-lamp={seat.lamp} to={deskPath(seat)} aria-label={`Open ${seat.name}’s desk`}>
             <span className="bar-face" aria-hidden="true">
               {readInitial(seat.name)}
             </span>

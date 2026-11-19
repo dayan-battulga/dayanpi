@@ -1,30 +1,32 @@
 import { useEffect, useState } from "react";
 import { request } from "@/lib/http";
-import type { FocusState } from "@/lib/types";
+import type { FocusState, LampColor } from "@/lib/types";
 
 export const HIDDEN_CHECK_S = 10; // while the tab is hidden its stream is closed, so the state is checked this often
 export const HIDDEN_CHECK_FOR_S = 60 * 60; // for the tab's first hour hidden, then not until it's back
 
-// The lamp's color per state, the dark theme's state colors in both themes since the icon's square is always dark: the
-// tab icons in web/public/assets are drawn in these, and the wordmark's d (shared/Wordmark) takes them from here.
-const LAMP_COLORS: Record<FocusState, string> = { working: "#34d3b9", phone: "#ff8a4c", away: "#a99bff", unknown: "#8e8e96" };
+// The lamp's color for a state, as the CSS that paints the wordmark's d (shared/Wordmark). It sits in .icon-palette,
+// where these are the dark theme's shades in both themes, the colors the tab icons are drawn in, since the icon's square
+// is always dark. Focused is your own lamp color; white is the wordmark's ink, so it reads as a plain d.
+const STATE_FILLS: Record<Exclude<FocusState, "working">, string> = { phone: "var(--phone)", away: "var(--away)", unknown: "var(--muted)" };
 
 // Signed out it's the gray one, like unknown.
-export function findLampColor(state: FocusState | null): string {
-  const color = LAMP_COLORS[state ?? "unknown"];
+export function findLampColor(state: FocusState | null, lamp: LampColor = "teal"): string {
+  const focused = lamp === "white" ? "currentColor" : `var(--lamp-${lamp})`;
+  const color = state === "working" ? focused : STATE_FILLS[state ?? "unknown"];
   return color;
 }
 
-// One SVG per state in web/public/assets: the "d" whose round part is your lamp.
-export function findTabIcon(state: FocusState | null): string {
-  const icon = `/assets/icon-${state ?? "unknown"}.svg`;
+// One SVG per state in web/public/assets, and one per lamp color for focused: the "d" whose round part is your lamp.
+export function findTabIcon(state: FocusState | null, lamp: LampColor = "teal"): string {
+  const icon = `/assets/icon-${state === "working" ? `working-${lamp}` : (state ?? "unknown")}.svg`;
   return icon;
 }
 
 // Points index.html's SVG icon at the state's file; the browser redraws the tab when the href changes.
-export function showTabIcon(state: FocusState | null): void {
+export function showTabIcon(state: FocusState | null, lamp: LampColor = "teal"): void {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]');
-  const icon = findTabIcon(state);
+  const icon = findTabIcon(state, lamp);
   if (link != null && link.getAttribute("href") !== icon) {
     link.setAttribute("href", icon);
   }
@@ -32,8 +34,8 @@ export function showTabIcon(state: FocusState | null): void {
 
 // The tab's icon follows your state: the stream's while the tab shows, and while it's hidden GET /api/focus every
 // HIDDEN_CHECK_S for up to HIDDEN_CHECK_FOR_S. Until the first state comes it stays index.html's. Returns the state it
-// shows (null before the first), for the wordmark's lamp.
-export function useTabIcon(streamed: FocusState | undefined): FocusState | null {
+// shows (null before the first), for the wordmark's lamp. lamp is your lamp color, for focused.
+export function useTabIcon(streamed: FocusState | undefined, lamp: LampColor = "teal"): FocusState | null {
   const [checked, setChecked] = useState<FocusState | null>(null);
   useEffect(() => {
     let timer: number | undefined;
@@ -67,8 +69,8 @@ export function useTabIcon(streamed: FocusState | undefined): FocusState | null 
   const state = checked ?? streamed;
   useEffect(() => {
     if (state !== undefined) {
-      showTabIcon(state);
+      showTabIcon(state, lamp);
     }
-  }, [state]);
+  }, [state, lamp]);
   return state ?? null;
 }

@@ -32,7 +32,7 @@ from dayanpi.focus.camera_source import PI_CAMERAS, SOURCES
 from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
 from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shrink_frame
-from dayanpi.focus.sharing import AT_DESK_STATES, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
+from dayanpi.focus.sharing import AT_DESK_STATES, LAMP_COLORS, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime
 from dayanpi.focus.todos import TEXT_MAX, TODOS_MAX, TodoListFull
@@ -1094,7 +1094,7 @@ def set_camera_source(request: Request, change: TrackSource):
 
 
 class SharingChange(BaseModel):
-    """Settings → Share with the room: the switches to change. Status is always on, so it isn't one."""
+    """Settings → Share with the room: the switches to change, and the lamp color. Status is always on, so it isn't one."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1105,6 +1105,7 @@ class SharingChange(BaseModel):
     sites: StrictBool | None = None
     video: StrictBool | None = None
     nudges: StrictBool | None = None
+    lamp: Literal[LAMP_COLORS] | None = None  # only the presets
 
 
 @app.post("/api/sharing")

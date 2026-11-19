@@ -95,7 +95,8 @@
         "apps": false,
         "sites": false,
         "video": false,
-        "nudges": true
+        "nudges": true,
+        "lamp": "teal"
       }
     },
     "room": {
@@ -112,6 +113,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "teal",
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
@@ -139,6 +141,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "teal",
           "focus_seconds": 6480,
           "todos": {
             "current": "Read chapter 7",
@@ -164,6 +167,7 @@
             "history"
           ],
           "hidden": false,
+          "lamp": "teal",
           "todos": {
             "current": "Flashcards, unit 4",
             "current_seconds": 900,
@@ -522,6 +526,7 @@
         "history"
       ],
       "hidden": false,
+      "lamp": "teal",
       "focus_seconds": 6480,
       "todos": {
         "current": "Read chapter 7",
@@ -660,6 +665,7 @@
         "history"
       ],
       "hidden": false,
+      "lamp": "teal",
       "todos": {
         "current": "Flashcards, unit 4",
         "current_seconds": 900,

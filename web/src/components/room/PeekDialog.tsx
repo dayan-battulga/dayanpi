@@ -102,7 +102,7 @@ export function PeekDialog({ seat, onClose, ...rest }: PeekDialogProps) {
   return (
     <PopDialog open={seat != null} onOpenChange={(open) => !open && onClose()} className="peek">
       {seat != null && (
-        <div className="peek-inner" data-state={seat.state}>
+        <div className="peek-inner" data-state={seat.state} data-lamp={seat.lamp}>
           <PeekCard seat={seat} {...rest} />
         </div>
       )}

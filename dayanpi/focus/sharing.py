@@ -1,7 +1,8 @@
 """What each person shows the room (Settings → Share with the room), and the one gate everything else goes through.
 
 Each desk keeps its switches in its folder's sharing.json, {"focus": true, "todos": true, ...}, saved whole on every
-change. Status (the state and its timer) always shows. Focus time, the to-do list, history and nudges start on; apps,
+change, next to "lamp": the color their lamp shows while they're focused (one of LAMP_COLORS, teal until picked), which
+anyone in the room sees like their name. Status (the state and its timer) always shows. Focus time, the to-do list, history and nudges start on; apps,
 sites and video start off, and sites only count while apps is on. A missing key means its default, and a file that
 can't be read means all the defaults, with one warning.
 
@@ -18,8 +19,10 @@ from dayanpi.utils.files import JsonSetting
 
 SHARING_FILE = "sharing.json"
 SEAT_FILE = "seat.json"  # {"hidden": bool}: someone tidied this offline seat out of the room
-# Nudges isn't something you show; it's whether others may nudge you. Video waits for step 7.
+# Nudges isn't something you show; it's whether others may nudge you.
 DEFAULT_SHARING = {"focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True}
+# The colors anyone can pick for their lamp while focused; dashboard.css has their shades (--lamp-<name>).
+LAMP_COLORS = ("teal", "green", "sky", "yellow", "pink", "white")
 SHOWN_SWITCHES = ("focus", "todos", "apps", "sites", "video", "history")  # what "Sam shares ..." lists, in its order
 HERE_S = 120.0  # someone is here while their site is open or their camera checked them this recently
 NUDGE_AFTER_S = 5 * 60  # on the phone this long before anyone can nudge them
@@ -38,6 +41,7 @@ NEEDS = {
     "seconds_in_state": (),
     "shares": (),
     "hidden": (),  # tidied out of the room while offline; their seat leaves the Room page, never their account
+    "lamp": (),  # their lamp's color while focused, public like their name
     "focus_seconds": ("focus",),
     "todos": ("todos",),
     "app": ("apps",),
@@ -60,13 +64,13 @@ NEEDS = {
 
 
 class SharingSetting(JsonSetting):
-    """read() is the switches; update(changes) changes the ones given."""
+    """read() is the switches and the lamp color; update(changes) changes the ones given."""
 
     def __init__(self, path: Path) -> None:
-        super().__init__(path, DEFAULT_SHARING)
+        super().__init__(path, DEFAULT_SHARING | {"lamp": LAMP_COLORS[0]})
 
     def accepts(self, key: str, value: object) -> bool:
-        return isinstance(value, bool)
+        return value in LAMP_COLORS if key == "lamp" else isinstance(value, bool)
 
 
 class SeatSetting(JsonSetting):
@@ -141,6 +145,7 @@ def build_seat(
             "seconds_in_state": lambda: status["seconds_in_state"] if here else None,
             "shares": lambda: list_shares(sharing),
             "hidden": lambda: hidden,
+            "lamp": lambda: sharing["lamp"],
             "focus_seconds": lambda: status["today"]["working_seconds"],
             "todos": lambda: summarize_todos(status["todos"]),
             "app": lambda: status["app"],

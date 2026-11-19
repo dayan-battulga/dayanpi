@@ -53,7 +53,7 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
   const nudgedAgo = seat.nudge?.age_s == null ? null : seat.nudge.age_s + elapsed;
   const live = camera?.step === "on" ? camera.preview : null;
   return (
-    <article className="seat" data-state={seat.state} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
+    <article className="seat" data-state={seat.state} data-lamp={seat.lamp} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
       {!mine && <button type="button" className="seat-peek" aria-label={`Peek at ${seat.name}`} aria-haspopup="dialog" onClick={onPeek} />}
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}

@@ -32,7 +32,7 @@ from dayanpi.focus import worker as focus_worker  # noqa: E402
 from dayanpi.focus.camera_source import CAMERA_SOURCE_FILE, CameraSourceSetting  # noqa: E402
 from dayanpi.focus.desks import Desks  # noqa: E402
 from dayanpi.focus.pictures import PICTURE_MAX_BASE64, PICTURE_MAX_BYTES  # noqa: E402
-from dayanpi.focus.sharing import DEFAULT_SHARING  # noqa: E402
+from dayanpi.focus.sharing import DEFAULT_SHARING, LAMP_COLORS  # noqa: E402
 from dayanpi.focus.tracker import format_day  # noqa: E402
 from dayanpi.paths import MODELS_DIR  # noqa: E402
 from dayanpi.utils.limits import NOTE_EVERY_S, RefusalNote, TokenBucket  # noqa: E402
@@ -178,7 +178,8 @@ def test_dashboard_serves_every_file_it_links():
 def test_every_tab_icon_loads_without_a_session():
     """The page swaps the SVG for your state's (hooks/useTabIcon), and the sign-in page shows the gray one."""
     types = {"svg": "image/svg+xml", "png": "image/png"}
-    for name in ("icon-working.svg", "icon-phone.svg", "icon-away.svg", "icon-unknown.svg", "icon-32.png", "apple-touch-icon.png"):
+    focused = [f"icon-working-{color}.svg" for color in LAMP_COLORS]  # one per lamp color
+    for name in (*focused, "icon-phone.svg", "icon-away.svg", "icon-unknown.svg", "icon-32.png", "apple-touch-icon.png"):
         response = stranger().get(f"/assets/{name}")
         assert (response.status_code, response.headers["content-type"].split(";")[0]) == (200, types[name.rsplit(".", 1)[-1]]), name
 
@@ -682,7 +683,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     for secret in ("secret plan", "SecretApp", "secret.example"):
         assert secret not in seen
     [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
-    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "nudge"}
+    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "nudge"}
 
     desk.sharing.update({"focus": True, "todos": True, "apps": True})
     make_room(monkeypatch, now)
@@ -705,19 +706,33 @@ def test_an_open_stream_puts_you_in_the_room(real_server, monkeypatch):
     assert (seat["here"], seat["state"]) == (True, "unknown")
 
 
+def test_each_person_picks_their_own_lamp_color_from_the_presets_and_the_room_always_gets_it(monkeypatch):
+    owner, member = find_owner(), add_member()
+    desk_of(owner)
+    client = let_in(stranger(), member)
+    picked = client.post("/api/sharing", json={"lamp": "pink", "focus": False, "todos": False, "history": False, "nudges": False})
+    assert (picked.status_code, picked.json()["sharing"]["lamp"], picked.json()["seat"]["lamp"]) == (200, "pink", "pink")
+    assert desk_of(owner).sharing.read()["lamp"] == "teal", "only your own desk"
+    for wrong in ({"lamp": "red"}, {"lamp": "#ff7ac6"}, {"lamp": 3}, {"lamp": "pink", "username": owner.username}):
+        assert client.post("/api/sharing", json=wrong).status_code == 422, wrong
+    room = make_room(monkeypatch, time.time())
+    assert [seat["lamp"] for seat in room["seats"]] == ["teal", "pink"], "sent with everything else hidden"
+    assert let_in(stranger(), owner).get(f"/api/people/{member.username}").json()["lamp"] == "pink"
+
+
 def test_the_sharing_route_saves_your_switches_and_your_seat_is_what_the_room_gets(monkeypatch):
     owner, member = find_owner(), add_member()
     desk_of(owner)
     client = let_in(stranger(), member)
     reply = client.post("/api/sharing", json={"apps": True, "todos": False})
     assert reply.status_code == 200
-    assert reply.json()["sharing"] == DEFAULT_SHARING | {"apps": True, "todos": False}
+    assert reply.json()["sharing"] == DEFAULT_SHARING | {"apps": True, "todos": False, "lamp": "teal"}
     assert client.get("/api/focus").json()["sharing"] == reply.json()["sharing"]
     room = make_room(monkeypatch, time.time())
     assert [seat["username"] for seat in room["seats"]] == [owner.username, member.username]
     without_timer = lambda seat: {key: value for key, value in seat.items() if key != "seconds_in_state"}  # noqa: E731
     assert without_timer(reply.json()["seat"]) == without_timer(room["seats"][1]), "Settings' preview is what the room gets"
-    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "focus_seconds", "app", "nudge"}
+    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "focus_seconds", "app", "nudge"}
     for bad in ({"status": False}, {"apps": "yes"}):
         assert client.post("/api/sharing", json=bad).status_code == 422
 
@@ -2209,7 +2224,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
     desk.sharing.update(switches)
     reply = let_in(stranger(), find_owner()).get("/api/people/sam")
     their = reply.json()
-    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture", "hidden"}
+    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture", "hidden", "lamp"}
     assert reply.status_code == 200
     assert set(their) - seat_keys == pieces
     for piece, texts in SECRETS.items():

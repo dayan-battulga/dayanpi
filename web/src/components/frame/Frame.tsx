@@ -70,7 +70,8 @@ export function Frame() {
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
   useNudgeToast(snapshot?.focus?.spoken);
-  const lamp = useTabIcon(snapshot?.focus?.state);
+  const lampColor = snapshot?.focus?.sharing?.lamp ?? "teal";
+  const lampState = useTabIcon(snapshot?.focus?.state, lampColor);
   const camera = useCamera(findCameraMode(snapshot?.focus));
   // A hidden tab's stream is closed, but the camera's readings still bring the peace sign's message, so its clip plays.
   const shownSpoken = snapshot?.focus?.spoken;
@@ -110,7 +111,8 @@ export function Frame() {
       <div className="frame-column">
         <Header
           connection={connection}
-          lamp={lamp}
+          lampState={lampState}
+          lampColor={lampColor}
           user={user}
           phone={phone}
           here={pathname === "/" ? room.here : null}

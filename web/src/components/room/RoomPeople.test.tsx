@@ -138,6 +138,37 @@ it("shows who's here in the bottom bar below 1280 px, and no sidebar", async () 
   expect(screen.queryByRole("complementary")).toBeNull();
 });
 
+it("shows each person's lamp color everywhere their lamp is: the seat, the faces up top, the peek and their desk", async () => {
+  const pinkSam = { ...SAM, state: "working" as const, lamp: "pink" as const };
+  const { user } = openApp("/", [ME, pinkSam, ALEX], { routes: { "GET /api/people/sam": answer({ ...SAMS_DESK, ...pinkSam }) } });
+  const sam = await screen.findByRole("article", { name: "Sam, focused" });
+  expect(sam).toHaveAttribute("data-lamp", "pink");
+  expect(screen.getByRole("article", { name: "Alex, away" })).toHaveAttribute("data-lamp", "teal");
+  expect(Array.from(document.querySelectorAll(".here-face"), (face) => face.getAttribute("data-lamp"))).toEqual(["teal", "pink", "teal"]);
+
+  await user.click(within(sam).getByRole("button", { name: "Peek at Sam" }));
+  expect((await screen.findByRole("dialog", { name: "Sam" })).querySelector(".peek-inner")).toHaveAttribute("data-lamp", "pink");
+  await user.click(screen.getByRole("link", { name: "Open Sam’s desk →" }));
+  await waitFor(() => expect(document.querySelector(".their-desk")).toHaveAttribute("data-lamp", "pink"));
+});
+
+it("shows a lamp color in the sidebar, open and folded", async () => {
+  sizeWindow(WIDE_QUERY);
+  const { user } = openApp("/me", [ME, { ...SAM, state: "working", lamp: "sky" }]);
+  const rail = await screen.findByRole("complementary", { name: "In the room" });
+  expect(within(rail).getByRole("link", { name: "Open Sam’s desk" })).toHaveAttribute("data-lamp", "sky");
+  await user.click(within(rail).getByRole("button", { name: "Hide the room panel" }));
+  expect(within(screen.getByRole("complementary", { name: "The room" })).getByRole("link", { name: "Open Sam’s desk" })).toHaveAttribute("data-lamp", "sky");
+});
+
+it("shows a lamp color in the bottom bar, and on the phone or away it's the same orange and violet for everyone", async () => {
+  sizeWindow(null);
+  openApp("/me", [ME, { ...SAM, lamp: "pink" }]);
+  const bar = await screen.findByRole("navigation", { name: "The room" });
+  const sam = within(bar).getByRole("link", { name: "Open Sam’s desk" });
+  expect([sam.getAttribute("data-lamp"), sam.getAttribute("data-state")]).toEqual(["pink", "phone"]); // dashboard.css: phone wins
+});
+
 it("leaves the bottom bar off on a phone, where the dock is", async () => {
   sizeWindow(PHONE_QUERY);
   openApp("/me", [ME, SAM]);

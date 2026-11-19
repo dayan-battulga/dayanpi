@@ -113,3 +113,14 @@ it("does without a wake lock quietly: a refusal, or none at all", async () => {
   sendFocus({ state: "working", seconds_in_state: 60 });
   expect(await screen.findByText("Focused")).toBeInTheDocument();
 });
+
+it("lights each lamp in that person's own color, mine across the whole sign", async () => {
+  openSign();
+  FakeEventSource.latest?.send({
+    ...makeSnapshot(makeFocus({ sharing: { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "yellow" } })),
+    room: { seats: [{ ...ROOM.seats[0], lamp: "yellow" }, { ...ROOM.seats[1], lamp: "pink" }, ROOM.seats[2]] },
+  });
+  const room = within(await screen.findByRole("list", { name: "The room" }));
+  expect(document.querySelector(".sign")).toHaveAttribute("data-lamp", "yellow"); // my state word, dot and glow
+  expect(room.getAllByRole("listitem").slice(0, 3).map((lamp) => lamp.getAttribute("data-lamp"))).toEqual(["yellow", "pink", "teal"]);
+});

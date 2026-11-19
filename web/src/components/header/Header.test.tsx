@@ -6,18 +6,19 @@ import { App } from "@/App";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { Header } from "@/components/header/Header";
 import { SignPage } from "@/components/sign/SignPage";
+import { DEFAULT_SHARING } from "@/hooks/useSharing";
 import { loadPage } from "@/lib/navigation";
-import type { FocusState, User } from "@/lib/types";
+import type { FocusState, LampColor, User } from "@/lib/types";
 import { answer, serveApi } from "@/test/fakeApi";
 import { FakeEventSource } from "@/test/fakeStream";
 import { MEMBER, OWNER, makeFocus, makeSnapshot } from "@/test/fixtures";
 
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 
-function renderHeader(user: User | null, lamp: FocusState | null = null) {
+function renderHeader(user: User | null, lamp: FocusState | null = null, color: LampColor = "teal") {
   render(
     <MemoryRouter initialEntries={["/me"]}>
-      <Header connection="connected" lamp={lamp} user={user} phone={false} onOpenPalette={() => {}} />
+      <Header connection="connected" lampState={lamp} lampColor={color} user={user} phone={false} onOpenPalette={() => {}} />
     </MemoryRouter>,
   );
   const clicker = userEvent.setup();
@@ -69,18 +70,22 @@ it("flips the theme from the sun/moon button and remembers it", async () => {
   expect(document.documentElement.dataset.theme).toBe("light");
 });
 
-// The wordmark's d: its round part is the tab icon's lamp.
-const lampColor = () => screen.getByRole("img", { name: "dayanpi" }).querySelector("circle")?.getAttribute("fill");
+// The wordmark's d: its round part is the tab icon's lamp, painted from the dark palette (.icon-palette), whose shades
+// lamps.test.ts checks against the tab icon files.
+const lampColor = () => screen.getByRole("img", { name: "dayanpi" }).querySelector<SVGCircleElement>("circle")?.style.fill;
 
 it.each([
-  ["working", "#34d3b9"],
-  ["phone", "#ff8a4c"],
-  ["away", "#a99bff"],
-  ["unknown", "#8e8e96"],
-  [null, "#8e8e96"],
-] as [FocusState | null, string][])("draws the wordmark's lamp for %s in the tab icon's color, read as dayanpi", (state, color) => {
-  renderHeader(OWNER, state);
-  expect(lampColor()).toBe(color);
+  ["working", "teal", "var(--lamp-teal)"],
+  ["working", "pink", "var(--lamp-pink)"],
+  ["working", "white", "currentcolor"], // the wordmark's own ink, a plain d (the style lowercases it)
+  ["phone", "pink", "var(--phone)"], // your color is only for focused
+  ["away", "pink", "var(--away)"],
+  ["unknown", "pink", "var(--muted)"],
+  [null, "teal", "var(--muted)"],
+] as [FocusState | null, LampColor, string][])("draws the wordmark's lamp for %s with a %s lamp in the tab icon's color, read as dayanpi", (state, color, fill) => {
+  renderHeader(OWNER, state, color);
+  expect(lampColor()).toBe(fill);
+  expect(screen.getByRole("img", { name: "dayanpi" }).querySelector("svg")).toHaveClass("icon-palette");
   expect(screen.getByRole("img", { name: "dayanpi" })).toHaveTextContent("ayanpi");
 });
 
@@ -92,14 +97,16 @@ it("lights the top bar's lamp from the same state as the tab icon, and the desk 
       <App />
     </MemoryRouter>,
   );
-  expect(lampColor()).toBe("#8e8e96"); // nothing from the stream yet
+  expect(lampColor()).toBe("var(--muted)"); // nothing from the stream yet
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ state: "phone" })));
-  await waitFor(() => expect(lampColor()).toBe("#ff8a4c"));
+  await waitFor(() => expect(lampColor()).toBe("var(--phone)"));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ state: "working", sharing: { ...DEFAULT_SHARING, lamp: "sky" } })));
+  await waitFor(() => expect(lampColor()).toBe("var(--lamp-sky)")); // your lamp color while focused
   shown.unmount();
 
   render(<SignPage />);
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ state: "away" })));
-  await waitFor(() => expect(lampColor()).toBe("#a99bff"));
+  await waitFor(() => expect(lampColor()).toBe("var(--away)"));
 });
 
 it("keeps the lamp gray signed out", () => {
@@ -108,5 +115,5 @@ it("keeps the lamp gray signed out", () => {
       <LoginPage />
     </MemoryRouter>,
   );
-  expect(lampColor()).toBe("#8e8e96");
+  expect(lampColor()).toBe("var(--muted)");
 });
