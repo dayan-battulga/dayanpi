@@ -176,18 +176,18 @@ it("asks Chrome for the camera only on a click, at 1280x720, and remembers it wa
 it("shows the seat's states: Turn on camera, Starting…, then your own camera live with Camera on and Turn off", async () => {
   pretendChrome();
   const { user } = openApp();
-  expect(await (await findMySeat()).findByRole("button", { name: "Show my video" })).toBeInTheDocument();
+  expect(await (await findMySeat()).findByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
   const worker = await turnOnFromSeat(user);
   expect(mySeat().getByRole("status")).toHaveTextContent("Starting…");
   expect(mySeat().queryByRole("button", { name: /Turn/ })).toBeNull();
-  expect(worker.sent[0]).toMatchObject({ type: "start", lowBattery: false });
+  expect(worker.sent[0]).toMatchObject({ type: "start", lowBattery: false, pictureOnly: false });
 
   worker.answer({ type: "ready", backend: "WebGPU", loadMs: 900 });
 
   expect(mySeat().getByRole("status")).toHaveTextContent("Camera on");
   expect(mySeat().getByRole("button", { name: "Turn off" })).toBeInTheDocument();
   expect(document.querySelector(".seat-live")).not.toBeNull(); // straight from the camera, not a picture from the Pi
-  expect(mySeat().getByRole("button", { name: "Show my video" })).toBeInTheDocument(); // the sharing switch, as before
+  expect(mySeat().queryByRole("button", { name: /my video/ })).toBeNull(); // that's Settings → Sharing's switch now
 });
 
 it.each([
@@ -218,7 +218,7 @@ it("says it needs Chrome without asking for the camera, and when the tracker sto
   });
   const tracker = new CameraTracker();
   tracker.attach();
-  tracker.setSource("browser");
+  tracker.setMode("track");
   tracker.turnOn();
   await waitFor(() => expect(FakeWorker.all).toHaveLength(1));
   FakeWorker.all[0].answer({ type: "failed", message: "out of memory" });
@@ -230,12 +230,12 @@ it("says it needs Chrome without asking for the camera, and when the tracker sto
 it("leaves your seat alone while another computer feeds your desk, and offers nothing to a desk on the Pi's cameras", async () => {
   pretendChrome();
   const fed = openApp("/", { ...NO_CAMERA, state: "working", camera_ok: true });
-  expect(await (await findMySeat()).findByRole("button", { name: "Show my video" })).toBeInTheDocument();
+  expect(await findMySeat()).toBeDefined();
   expect(mySeat().queryByRole("button", { name: "Turn on camera" })).toBeNull();
   fed.unmount();
 
-  openApp("/", { ...NO_CAMERA, camera_source: "pi" });
-  expect(await (await findMySeat()).findByRole("button", { name: "Show my video" })).toBeInTheDocument();
+  openApp("/", { ...NO_CAMERA, camera_source: "pi", picture_source: "pi" });
+  expect(await findMySeat()).toBeDefined();
   expect(mySeat().queryByRole("button", { name: "Turn on camera" })).toBeNull();
 });
 
@@ -303,7 +303,7 @@ it("runs in one tab at a time: the next says so, and takes over when that tab cl
   const second = new CameraTracker();
   for (const tab of [first, second]) {
     tab.attach();
-    tab.setSource("browser");
+    tab.setMode("track");
   }
   first.turnOn();
   await waitFor(() => expect(FakeWorker.all).toHaveLength(1));
@@ -327,7 +327,7 @@ it("doesn't take over in the next tab once the camera was turned off", async () 
   const second = new CameraTracker();
   for (const tab of [first, second]) {
     tab.attach();
-    tab.setSource("browser");
+    tab.setMode("track");
   }
   first.turnOn();
   await waitFor(() => expect(FakeWorker.all).toHaveLength(1));
@@ -392,4 +392,36 @@ it("sends /track, the old tracker page, to the room", async () => {
   openApp("/track");
   await waitFor(() => expect(screen.getByRole("status", { name: "Path" })).toHaveTextContent(/^\/$/));
   expect(await screen.findByRole("region", { name: "Seats" })).toBeInTheDocument();
+});
+
+// ----- the room picture alone (the owner's desk, tracked by the Pi) -----
+
+const PI_TRACKED: Partial<FocusStatus> = { ...NO_CAMERA, state: "working", camera_source: "pi", picture_source: "browser", camera_ok: true };
+
+it("takes only the seat's picture while the Pi tracks the desk: no models, and Turn off pauses nothing", async () => {
+  pretendChrome();
+  const { user, sent } = openApp("/", PI_TRACKED);
+  const worker = await turnOnFromSeat(user); // on your seat even though the Pi is feeding the desk
+  expect(worker.sent[0]).toMatchObject({ type: "start", pictureOnly: true });
+  worker.answer({ type: "ready", backend: null, loadMs: 0 });
+  expect(mySeat().getByRole("status")).toHaveTextContent("Camera on");
+  expect(document.querySelector(".seat-live")).not.toBeNull();
+
+  await user.click(mySeat().getByRole("button", { name: "Turn off" }));
+  expect(worker.terminated).toBe(true);
+  await settle();
+  expect(sent.map((request) => request.path)).not.toContain("/api/track/pause"); // the Pi still tracks
+});
+
+it("starts over when the picture moves: the picture-only camera stops once the Pi takes the picture back", async () => {
+  pretendChrome({ permission: "granted" });
+  const { user } = openApp("/", PI_TRACKED);
+  const worker = await turnOnFromSeat(user);
+  worker.answer({ type: "ready", backend: null, loadMs: 0 });
+
+  FakeEventSource.latest?.send({ ...makeSnapshot(makeFocus({ ...PI_TRACKED, picture_source: "pi" })), room: { seats: [makeSeat({ username: "sam", name: "Sam", state: "working" })] } });
+
+  expect(worker.terminated).toBe(true);
+  expect(FakeWorker.all).toHaveLength(1);
+  expect(mySeat().queryByRole("button", { name: /Turn/ })).toBeNull();
 });

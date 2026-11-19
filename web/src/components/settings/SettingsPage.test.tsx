@@ -47,6 +47,9 @@ async function openSection(user: ReturnType<typeof userEvent.setup>, name: strin
   return section;
 }
 
+// One of Settings → Camera's picks, by its legend.
+const choicesFor = (section: ReturnType<typeof within>, legend: string) => within(section.getByRole("group", { name: legend }));
+
 const sectionNames = () => within(screen.getByRole("navigation", { name: "Settings sections" })).getAllByRole("listitem").map((item) => item.textContent);
 
 afterEach(() => {
@@ -113,11 +116,12 @@ it("lets the owner switch the desk from the Pi's cameras to this browser's", asy
   const user = renderSettings();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi" })));
   const camera = await openSection(user, "Camera");
-  expect(camera.getByRole("radio", { name: "This desk’s Pi cameras" })).toBeChecked();
+  const tracking = choicesFor(camera, "Track focus with");
+  expect(tracking.getByRole("radio", { name: "This desk’s Pi cameras" })).toBeChecked();
 
-  await user.click(camera.getByRole("radio", { name: "This browser’s camera" }));
+  await user.click(tracking.getByRole("radio", { name: "This browser’s camera" }));
 
-  expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  expect(tracking.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
   expect(camera.getByText("Camera off")).toBeInTheDocument();
   expect(camera.getByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
   expect(camera.queryByRole("link", { name: /tracker/ })).toBeNull();
@@ -132,8 +136,27 @@ it("never lets a member pick the Pi's cameras", async () => {
   const pi = camera.getByRole("radio", { name: "This desk’s Pi cameras" });
   expect(pi).toBeDisabled();
   expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  expect(camera.queryByRole("group", { name: "Room picture from" })).toBeNull(); // a member's picture is always their browser's
   await user.click(pi);
   expect(sent.map((request) => request.path)).not.toContain("/api/track/source");
+});
+
+it("gives the owner a room picture choice that starts where the desk is tracked, and turns on this camera for it", async () => {
+  const sent = serveSettings(OWNER, undefined, { "POST /api/track/source": answer({ source: "pi", picture: "browser" }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi", picture_source: "pi" })));
+  const camera = await openSection(user, "Camera");
+  const picture = choicesFor(camera, "Room picture from");
+  expect(picture.getByRole("radio", { name: "The Pi’s front camera" })).toBeChecked();
+  expect(camera.queryByRole("button", { name: "Turn on camera" })).toBeNull();
+
+  await user.click(picture.getByRole("radio", { name: "This browser’s camera" }));
+
+  expect(picture.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  expect(choicesFor(camera, "Track focus with").getByRole("radio", { name: "This desk’s Pi cameras" })).toBeChecked(); // separate picks
+  expect(camera.getByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
+  expect(camera.queryByText(/Loading the models/)).toBeNull();
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/track/source").map((request) => request.body)).toEqual([{ picture: "browser" }]));
 });
 
 it("puts the pick back and says so when the Pi refuses it", async () => {
@@ -141,9 +164,10 @@ it("puts the pick back and says so when the Pi refuses it", async () => {
   const user = renderSettings();
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "browser" })));
   const camera = await openSection(user, "Camera");
-  await user.click(camera.getByRole("radio", { name: "This desk’s Pi cameras" }));
+  const tracking = choicesFor(camera, "Track focus with");
+  await user.click(tracking.getByRole("radio", { name: "This desk’s Pi cameras" }));
   expect(await camera.findByRole("alert")).toHaveTextContent("only the owner's desk has the Pi's cameras");
-  expect(camera.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
+  expect(tracking.getByRole("radio", { name: "This browser’s camera" })).toBeChecked();
 });
 
 it("saves your own bedtime and where the peace sign speaks, and tests the voice there", async () => {

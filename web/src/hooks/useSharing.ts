@@ -16,7 +16,7 @@ export interface SharingSwitches {
   flipSwitch: (key: keyof Sharing, on: boolean) => Promise<void>;
 }
 
-// Your sharing switches (Settings → Sharing, and the room's Show/Hide my video): a flip shows at once, the Pi's reply
+// Your sharing switches (Settings → Sharing): a flip shows at once, the Pi's reply
 // carries your seat as the room now gets it, and only the newest flip's answer counts.
 export function useSharing(focus: FocusStatus | undefined, room: Room | null | undefined, username: string | undefined, now: number, receivedAt: number): SharingSwitches {
   const streamed = room?.seats.find((entry) => entry.username === username) ?? null;

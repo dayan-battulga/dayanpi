@@ -1,4 +1,4 @@
-import { Plus, Video, VideoOff, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
@@ -22,7 +22,6 @@ interface SeatCardProps {
   nudger: Nudger;
   onPeek: () => void; // someone else's seat opens the quick peek
   onHide: () => void; // someone else's offline seat's ×
-  video?: { shown: boolean; flip: () => void }; // your own seat's Show/Hide my video (Settings → Sharing → Video)
   camera?: Camera; // your own seat, while your desk is on this browser's camera
 }
 
@@ -45,7 +44,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, video, camera }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -72,14 +71,9 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
           <X size={16} strokeWidth={1.8} aria-hidden="true" />
         </button>
       )}
-      {(camera != null || video != null) && (
+      {camera != null && (
         <div className="seat-tools">
-          {camera != null && <CameraControl camera={camera} place="seat" />}
-          {video != null && (
-            <button type="button" className="video-toggle" aria-pressed={video.shown} aria-label={video.shown ? "Hide my video" : "Show my video"} onClick={video.flip}>
-              {video.shown ? <Video size={18} strokeWidth={1.8} aria-hidden="true" /> : <VideoOff size={18} strokeWidth={1.8} aria-hidden="true" />}
-            </button>
-          )}
+          <CameraControl camera={camera} place="seat" />
         </div>
       )}
       {seat.focus_seconds != null && (

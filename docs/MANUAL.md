@@ -55,7 +55,8 @@ Always use the **`main`** branch on both machines.
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
 | `/api/track/reading` | The browser camera's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a 640×360 base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
 | `/api/track/pause` | The camera's Turn off (POST `{}`): your desk says paused until the next reading |
-| `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}` |
+| `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}`, and/or `{"picture": "pi"}` / `{"picture": "browser"}` for where your room picture comes from (owner only). Answers `{"source", "picture"}` |
+| `/api/track/picture` | Owner only: your seat's picture on its own, from a browser camera that only sends the picture (POST `{"picture": <640×360 base64 JPEG or null>}`, about one a second; 409 unless Room picture from is this browser). Answers `{"state", "send_picture"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
 | `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
 | `/api/voice/test` | Test the voice (POST `{}`): a short line wherever your peace sign speaks. Once every 10 s per desk (429 with `Retry-After` sooner) |
@@ -310,6 +311,15 @@ What to send them:
 
 If it says **Camera is blocked**: click the camera icon at the right end of Chrome's address bar, choose Allow, reload. **The camera is busy**: quit Zoom, FaceTime, Photo Booth or whatever else has it. Your own desk can use it too: Settings → Camera → This browser's camera, then Turn on camera (and back to the Pi's cameras when you're home).
 
+### Your room picture
+
+Only you get this one. Settings → Camera has a second pick under "Track focus with": **Room picture from**, either **The Pi's front camera** or **This browser's camera**. It starts out on whatever you track with, so nothing changes until you pick something, and it keeps following "Track focus with" until you do.
+
+- **Tracked by the Pi, picture from this browser:** your seat gets **Turn on camera**. Clicking it starts this browser's camera for the picture only: no models load, nothing gets checked, and once a second it sends just the picture, and only while the Pi says you're working or on your phone. Keep a dayanpi tab open, like a friend's camera. Turn off stops it and leaves your tracking alone.
+- **Tracked by the browser, picture from the Pi:** the browser checks you like before but stops sending its picture, and your tile comes from the front Pi camera instead. The Pi's cameras keep capturing while the browser tracks you, so they're there for that one picture a second.
+
+The rest doesn't change: Sharing → **Video** still decides whether anyone sees it, there's no picture while you're away, and nothing goes to disk. The Pi page's full feeds don't change either. Members don't get the choice: their picture is always their own browser's.
+
 ### Her peace sign's voice
 
 Everyone's peace sign speaks to them: their own to-dos and their own bedtime. Yours speaks on the Pi's speaker like before; a member's plays on their own computer, since the speaker's in your room. What to send her:
@@ -327,7 +337,7 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 
 - **Status** (working, on the phone, away, and for how long) always shows.
 - **Focus time**, **To-do list** and **History** start on.
-- **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. **Video** puts a small picture of you on your seat about once a second, only while you're working or on your phone: a friend's from the tracker on their laptop, yours from the front Pi camera, shrunk on the Pi ([pi-camera.md](pi-camera.md#your-seats-picture)). Your seat in the room has a Hide/Show my video button for the same switch.
+- **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. **Video** puts a small picture of you on your seat about once a second, only while you're working or on your phone: a friend's from the tracker on their laptop, yours from the front Pi camera, shrunk on the Pi ([pi-camera.md](pi-camera.md#your-seats-picture)), or from your browser if you picked that ([Your room picture](#your-room-picture)). This switch is the only place to show or hide it.
 - **Nudges** starts on: others can nudge you once you've been on your phone 5 minutes (at most once every 10). Off, nobody gets the button. A nudge speaks where your peace sign does (the Pi's speaker for you, their own computer for everyone else), so it needs the Pi's voice on like the peace sign ([voice.md](voice.md)); with it off they still get the toast.
 
 Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as the group line in their calendar's day pages.
@@ -406,7 +416,7 @@ Install the Tailscale app, sign in to the same account, and keep it connected. T
 
 ### Camera lock
 
-Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Pi page's cameras say **Only on your own devices** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always. The seats' small pictures (Settings → Sharing → Video) are a separate thing: a 320×180 copy each person, you included, chooses to show the room. They go through Funnel to signed-in room members, and the lock doesn't touch them.
+Serve tags every request from your own Tailscale devices with the Tailscale login it came from (a `Tailscale-User-Login` header), and throws away any copy a client tries to send. Requests through Funnel never have it. Set `DAYANPI_TAILSCALE_LOGIN` to your login, and `/video` and `/video/side` only answer you (the owner, signed in on the page, not a Mac token) on one of your own Tailscale devices. Anything else (a member, you over Funnel, a different login) gets a 404, as if there was no camera. The Pi page's cameras say **Only on your own devices** then, instead of showing a broken feed. Everything else on the page works over Funnel the same as always. The seats' small pictures (Settings → Sharing → Video) are a separate thing: a 640×360 copy each person, you included, chooses to show the room. They go through Funnel to signed-in room members, and the lock doesn't touch them.
 
 Find your login on the Pi:
 

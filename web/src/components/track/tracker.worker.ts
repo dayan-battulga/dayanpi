@@ -9,11 +9,13 @@ import { readFrame, type VisionModels } from "@/lib/vision/worker";
 // The tracker's checks: the Pi's pipeline on this worker's own timer (part 1 showed it keeps one a second in a hidden
 // tab, where the page's timer drops to one every 2 s), and each check's numbers straight to the Pi from here, so a
 // throttled page can't hold them up. The seat's picture goes along only while the Pi's last answer asked for it
-// (video shared, and at the desk); otherwise only numbers leave this worker.
+// (video shared, and at the desk); otherwise only numbers leave this worker. A picture-only camera (the Pi tracks the
+// desk, the picture is this browser's) loads no models: once a second it sends the picture alone, or asks whether to.
 
 const PERSON_MIN = 0.5; // the tracker's
 const MAX_THREADS = 2; // light enough to run for hours; part 1 had 2 threads close to 4
 const READING_MS_MAX = 60_000; // the Pi's
+const PICTURE_EVERY_MS = 1000;
 
 let frames: FrameKeeper | null = null;
 let models: VisionModels | null = null;
@@ -35,12 +37,13 @@ async function openBestModels(): Promise<{ models: VisionModels; backend: string
   return opened;
 }
 
-// One reading in flight at a time: one that would overtake a slow one is dropped, and the Pi's ticks cover the gap.
-async function sendReading(body: object): Promise<void> {
+// One reading (or picture) in flight at a time: one that would overtake a slow one is dropped, and the Pi's ticks cover
+// the gap.
+async function send(path: string, body: object): Promise<void> {
   if (!isSending) {
     isSending = true;
     try {
-      const response = await fetch("/api/track/reading", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (response.ok) {
         const tracked = await response.json();
         sendsPicture = tracked.send_picture === true;
@@ -69,7 +72,7 @@ async function runCheck(): Promise<void> {
       const ms = performance.now() - started;
       const seatPicture = sendsPicture ? await frames?.shrinkToPicture() : null;
       const numbers = { person, phone: findBestConfidence(reading.phones), sign: readSign(reading.hands), elapsed_ms: Math.min(ms, READING_MS_MAX) };
-      void sendReading(seatPicture != null ? { ...numbers, picture: seatPicture } : numbers);
+      void send("/api/track/reading", seatPicture != null ? { ...numbers, picture: seatPicture } : numbers);
       pacer.record(started, ms, person >= PERSON_MIN);
       pace = pacer.pace(performance.now());
       reply({ type: "check", ms, pace });
@@ -79,7 +82,23 @@ async function runCheck(): Promise<void> {
   }
 }
 
+// null asks the Pi whether to send one, and drops the last one it kept.
+async function sendPicture(): Promise<void> {
+  const picture = sendsPicture ? await frames?.shrinkToPicture() : null;
+  void send("/api/track/picture", { picture: picture ?? null });
+}
+
 async function start(request: Extract<TrackerRequest, { type: "start" }>): Promise<void> {
+  if (request.pictureOnly) {
+    frames = new FrameKeeper(request.frames);
+    reply({ type: "ready", backend: null, loadMs: 0 });
+    startLoop(sendPicture, () => PICTURE_EVERY_MS);
+  } else {
+    await startTracking(request);
+  }
+}
+
+async function startTracking(request: Extract<TrackerRequest, { type: "start" }>): Promise<void> {
   try {
     const loadStarted = performance.now();
     const opened = await openBestModels();

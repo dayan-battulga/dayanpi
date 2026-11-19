@@ -35,7 +35,7 @@ function findAction(camera: Camera): Action | null {
 
 // Turn on camera, Turn off or Try again, and a quiet word on where the camera's at: one control for your seat in the
 // Room, the Desk's line and Settings → Camera, each styled in place (dashboard.css .camera-control[data-place]). On
-// the seat it follows Show/Hide my video's look, with an icon that stands alone on a phone.
+// the seat it's a round pill, with an icon that stands alone on a phone.
 export function CameraControl({ camera, place }: { camera: Camera; place: Place }) {
   const action = findAction(camera);
   const problem = camera.problem === null ? null : CAMERA_PROBLEMS[camera.problem];

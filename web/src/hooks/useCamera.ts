@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { CameraTracker, type CameraSource, type CameraView } from "@/components/track/cameraTracker";
+import { CameraTracker, type CameraMode, type CameraView } from "@/components/track/cameraTracker";
 
 export interface Camera extends CameraView {
   turnOn: () => void; // a click: asks Chrome for the camera
@@ -7,8 +7,8 @@ export interface Camera extends CameraView {
 }
 
 // The browser's camera, kept by the frame so it runs while you move between pages (components/track/cameraTracker.ts).
-// source is the desk's camera_source from the stream; it does nothing for a desk on the Pi's cameras.
-export function useCamera(source: CameraSource): Camera {
+// mode is findCameraMode of the stream's focus; it does nothing for a desk whose checks and picture are both the Pi's.
+export function useCamera(mode: CameraMode): Camera {
   const [tracker] = useState(() => new CameraTracker());
   const view = useSyncExternalStore(tracker.subscribe, tracker.getView);
   useEffect(() => {
@@ -16,8 +16,8 @@ export function useCamera(source: CameraSource): Camera {
     return tracker.detach;
   }, [tracker]);
   useEffect(() => {
-    tracker.setSource(source);
-  }, [tracker, source]);
+    tracker.setMode(mode);
+  }, [tracker, mode]);
   const camera = { ...view, turnOn: tracker.turnOn, turnOff: tracker.turnOff };
   return camera;
 }

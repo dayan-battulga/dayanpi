@@ -34,6 +34,7 @@
       "site": null,
       "mac_tracking": true,
       "camera_source": "browser",
+      "picture_source": "browser",
       "camera_paused": false,
       "bedtime": "00:00",
       "voice_output": "pi",

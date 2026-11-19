@@ -22,10 +22,11 @@ export interface Tracked {
   send_picture?: boolean; // the Pi wants the seat's picture with the next reading: video shared, and at the desk
 }
 
-export type TrackerRequest = { type: "start"; frames: ReadableStream<VideoFrame>; lowBattery: boolean } | { type: "battery"; low: boolean };
+// pictureOnly: the Pi tracks the desk and this camera only sends the seat's picture, so no models load.
+export type TrackerRequest = { type: "start"; frames: ReadableStream<VideoFrame>; lowBattery: boolean; pictureOnly: boolean } | { type: "battery"; low: boolean };
 
 export type TrackerReply =
-  | { type: "ready"; backend: string; loadMs: number }
+  | { type: "ready"; backend: string | null; loadMs: number } // no backend for a picture-only camera
   | { type: "check"; ms: number; pace: Pace }
   | ({ type: "tracked" } & Tracked)
   | { type: "signed-out" }

@@ -532,6 +532,11 @@ ol {
   letter-spacing: -0.04em;
 }
 
+/* The wordmark's d (shared/Wordmark.tsx): its lamp eases to your new state's color. */
+.wordmark-lamp {
+  transition: fill 0.4s var(--ease);
+}
+
 .reconnecting {
   display: inline-flex;
   align-items: center;
@@ -4008,7 +4013,7 @@ button.todo-pill:active,
   -webkit-backdrop-filter: blur(8px);
 }
 
-/* Your own seat's tools, top right: the camera's control, then Show/Hide my video (Room.dc.html). */
+/* Your own seat's tools, top right: the camera's control. Showing your video is Settings → Sharing's switch. */
 .seat-tools {
   position: absolute;
   top: 14px;
@@ -4019,35 +4024,8 @@ button.todo-pill:active,
   gap: 8px;
 }
 
-/* Show/Hide my video: on a picture it's frosted dark, otherwise a plain sunken circle. */
-.video-toggle {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--sunken);
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    transform 0.2s var(--ease),
-    background-color 0.3s var(--ease);
-}
-
-.video-toggle:active {
-  transform: scale(0.97);
-}
-
-.seat:has(.seat-picture-frame) .video-toggle {
-  background: rgb(0 0 0 / 32%);
-  color: #ffffff;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-/* The camera's control (components/track/CameraControl.tsx). On the seat it follows Show/Hide my video: a 44 px pill,
-   sunken, frosted dark on a picture or your live camera. Its quiet word (Starting…, Camera on, a problem) has no fill. */
+/* The camera's control (components/track/CameraControl.tsx). On the seat it's a 44 px pill, sunken, frosted dark on a
+   picture or your live camera. Its quiet word (Starting…, Camera on, a problem) has no fill. */
 .camera-control {
   display: inline-flex;
   align-items: center;
@@ -4106,7 +4084,7 @@ button.todo-pill:active,
   text-shadow: 0 1px 6px rgb(0 0 0 / 45%);
 }
 
-/* On a phone the seat is too narrow for words (and has no Show/Hide my video): icons in 36 px circles, the words kept
+/* On a phone the seat is too narrow for words: icons in 36 px circles, the words kept
    for screen readers, and the quiet word only when there's no button next to it. */
 @media (max-width: 639px) {
   .seat-tools {
@@ -4243,10 +4221,6 @@ button.todo-pill:active,
     color: inherit;
   }
 
-  /* RoomPhone's seats have no video button; Settings → Sharing has the switch. */
-  .video-toggle {
-    display: none;
-  }
 }
 
 /* ---------- motion ---------- */

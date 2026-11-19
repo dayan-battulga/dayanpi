@@ -3,12 +3,14 @@ import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { AccountMenu } from "@/components/header/AccountMenu";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { Wordmark } from "@/components/shared/Wordmark";
 import { SPRINGS } from "@/lib/motion";
 import { readInitial } from "@/lib/room";
-import type { Connection, Seat, User } from "@/lib/types";
+import type { Connection, FocusState, Seat, User } from "@/lib/types";
 
 interface HeaderProps {
   connection: Connection;
+  lamp: FocusState | null; // the wordmark's lamp: the tab icon's state
   user: User | null;
   phone: boolean;
   here?: Seat[] | null; // who's here, on the room's page only
@@ -54,11 +56,11 @@ function HereFaces({ here, label }: { here: Seat[]; label: string }) {
 
 // The top bar on every signed-in page: the wordmark, the pages (in the dock instead on a phone), who's here on the
 // room's page, ⌘K (neither on a phone, like RoomPhone), the theme and you.
-export function Header({ connection, user, phone, here, hereLabel, onOpenPalette }: HeaderProps) {
+export function Header({ connection, lamp, user, phone, here, hereLabel, onOpenPalette }: HeaderProps) {
   return (
     <header className="topbar">
       <span className="brand">
-        <span className="wordmark">dayanpi</span>
+        <Wordmark state={lamp} className="wordmark" />
         {connection === "reconnecting" && (
           <span role="status" className="reconnecting">
             Reconnecting

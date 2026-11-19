@@ -1,4 +1,5 @@
 import { StateTimer } from "@/components/focus/FocusNow";
+import { Wordmark } from "@/components/shared/Wordmark";
 import { useMe } from "@/hooks/useMe";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
@@ -25,7 +26,7 @@ export function SignPage() {
   const { user } = useMe();
   const now = useNow();
   useWakeLock();
-  useTabIcon(snapshot?.focus?.state);
+  const lamp = useTabIcon(snapshot?.focus?.state);
   const focus = snapshot?.focus;
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
   const summary = summarizeRoom(seats);
@@ -36,7 +37,7 @@ export function SignPage() {
     <main className="sign" data-state={state} data-connection={connection}>
       <div className="sign-glow" aria-hidden="true" />
       <div className="sign-top">
-        <span>dayanpi</span>
+        <Wordmark state={lamp} />
         {seats.length > 0 && <span>{`${formatDuration(summary.focusSeconds)} ${summary.here.length > 1 ? "together" : "today"}`}</span>}
       </div>
       <div className="sign-middle">

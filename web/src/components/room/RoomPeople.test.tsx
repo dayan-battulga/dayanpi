@@ -184,20 +184,12 @@ it("shows a seat's picture, fading each new frame in over the last, and the init
   expect(within(sam).getByText("S")).toHaveClass("seat-initial");
 });
 
-it("hides and shows your video from your own seat, the same switch as Settings → Sharing → Video", async () => {
+it("has no video button on your own seat: Settings → Sharing → Video is the one switch", async () => {
   const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: true, nudges: true };
-  const { user, sent } = openApp("/", [ME, SAM], {
-    focus: { sharing },
-    routes: { "POST /api/sharing": answer({ sharing: { ...sharing, video: false }, seat: { ...ME, picture: undefined } }) },
-  });
-  const hide = await screen.findByRole("button", { name: "Hide my video" });
-  expect(hide).toHaveAttribute("aria-pressed", "true");
-  expect(within(screen.getByRole("article", { name: "Sam, on the phone" })).queryByRole("button", { name: /my video/ })).toBeNull();
-
-  await user.click(hide);
-
-  expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/sharing", body: { video: false } });
-  expect(screen.getByRole("button", { name: "Show my video" })).toHaveAttribute("aria-pressed", "false");
+  openApp("/", [ME, SAM], { focus: { sharing } });
+  const mine = await screen.findByRole("article", { name: `${ME.name}, you` });
+  expect(within(mine).queryByRole("button", { name: /my video/ })).toBeNull();
+  expect(document.querySelector(".video-toggle")).toBeNull();
 });
 
 // ----- hiding an offline seat -----

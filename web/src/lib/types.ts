@@ -77,6 +77,7 @@ export interface FocusStatus {
   side_camera: boolean;
   camera_access?: CameraAccess;
   camera_source?: "pi" | "browser"; // where the desk's checks come from: the Pi's cameras (mine only) or /track
+  picture_source?: "pi" | "browser"; // where the seat's picture comes from: the front Pi camera (mine only) or this browser
   camera_paused?: boolean; // /track's Pause, until its next reading
   overlay: Overlay | null;
   side_overlay: Overlay | null;

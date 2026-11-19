@@ -141,8 +141,8 @@ PICTURE_PATH = re.compile(r"/api/people/[^/]+/picture")
 
 class QuietAccessFilter(logging.Filter):
     """uvicorn's access log, without what comes every second while the room is open: each seat's picture (its 404 is
-    just "not sharing right now"), the tracker's readings that worked, and every 429, since the limits write their own
-    line a minute instead. Sign-ins, joins, every other write and the other errors all stay."""
+    just "not sharing right now"), the tracker's readings and pictures that worked, and every 429, since the limits
+    write their own line a minute instead. Sign-ins, joins, every other write and the other errors all stay."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
@@ -152,7 +152,7 @@ class QuietAccessFilter(logging.Filter):
             keep = not (
                 code == 429
                 or (method == "GET" and code in (200, 404) and PICTURE_PATH.fullmatch(path) is not None)
-                or (method == "POST" and path == "/api/track/reading" and 200 <= code < 300)
+                or (method == "POST" and path in ("/api/track/reading", "/api/track/picture") and 200 <= code < 300)
             )
         return keep
 
@@ -187,6 +187,14 @@ def build_camera_status(now: float) -> dict:
 def find_camera_source(desk: Desk) -> str:
     """"pi" or "browser". Only the owner's desk can have the Pi's cameras, and has them until the owner picks a browser."""
     source = "pi" if desk is owner_desk and desk.camera_source.source != "browser" else "browser"
+    return source
+
+
+def find_picture_source(desk: Desk) -> str:
+    """Where the seat's picture comes from: "pi" (the front Pi camera) or "browser". Only the owner's desk has a choice;
+    until I pick, it's wherever my checks come from."""
+    picked = desk.camera_source.picture if desk is owner_desk else "browser"
+    source = find_camera_source(desk) if picked is None else picked
     return source
 
 
@@ -230,6 +238,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         "todos": desk.todos.snapshot(now),
         "mac_tracking": desk.mac_tracking.enabled,
         "camera_source": source,
+        "picture_source": find_picture_source(desk),
         "camera_paused": source == "browser" and desk.browser.paused,
         "spoken": describe_spoken(desk, now),
         "bedtime": format_bedtime(find_bedtime(desk)),
@@ -263,10 +272,11 @@ def keep_picture(desk: Desk, jpeg: bytes | None, state: str, now: float) -> None
 
 
 def take_owner_picture(now: float) -> None:
-    """My tile: the front Pi camera's latest frame, shrunk, once a second, only while my desk is on the Pi's cameras, I
-    share video and I'm at the desk. The full feeds stay behind the camera lock; this is a separate small copy."""
+    """My tile: the front Pi camera's latest frame, shrunk, once a second, only while my picture comes from the Pi, I
+    share video and I'm at the desk. The camera keeps capturing while the browser tracks me, so this works then too.
+    The full feeds stay behind the camera lock; this is a separate small copy."""
     desk = owner_desk
-    if desk is not None and find_camera_source(desk) == "pi":
+    if desk is not None and find_picture_source(desk) == "pi":
         state = desk.tracker.status(now)["state"]
         wants = desk.sharing.read()["video"] and state in AT_DESK_STATES
         frame = stream.latest_frame() if wants else None
@@ -951,7 +961,21 @@ class TrackReading(BaseModel):
 
 
 class TrackSource(BaseModel):
-    source: Literal[SOURCES]
+    """Settings → Camera: where the checks come from, and (the owner's only) where the seat's picture comes from."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal[SOURCES] | None = None
+    picture: Literal[SOURCES] | None = None
+
+
+class TrackPicture(BaseModel):
+    """The seat's picture on its own, for a desk the Pi tracks but whose picture is this browser's: base64 JPEG, or
+    null to only ask whether to send one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    picture: Annotated[str, StringConstraints(max_length=PICTURE_MAX_BASE64)] | None = None
 
 
 def require_browser_source(desk: Desk) -> None:
@@ -959,16 +983,23 @@ def require_browser_source(desk: Desk) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="this desk uses the Pi's cameras")
 
 
+def wants_browser_picture(desk: Desk, state: str) -> bool:
+    """Whether the browser should send the seat's picture: it's the desk's picture source, video is shared and the desk
+    is at the desk."""
+    wants = find_picture_source(desk) == "browser" and desk.sharing.read()["video"] and state in AT_DESK_STATES
+    return wants
+
+
 def describe_tracking(desk: Desk, now: float) -> dict:
     """The answer to the browser's camera, from the Pi's own clock: the desk's state, the peace sign's last message, and
-    whether to send the seat's picture with the next reading (only while the desk shares video and is at the desk)."""
+    whether to send the seat's picture with the next reading."""
     focus = desk.tracker.status(now)
     described = {
         "state": focus["state"],
         "seconds_in_state": focus["seconds_in_state"],
         "paused": desk.browser.paused,
         "spoken": describe_spoken(desk, now),
-        "send_picture": desk.sharing.read()["video"] and focus["state"] in AT_DESK_STATES,
+        "send_picture": wants_browser_picture(desk, focus["state"]),
     }
     return described
 
@@ -983,7 +1014,8 @@ def track_reading(request: Request, reading: TrackReading):
     if taken is None:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="one reading a second")
     handle_focus_update(desk, taken.update, now)
-    keep_picture(desk, None if reading.picture is None else read_browser_picture(reading.picture), taken.update.state, now)
+    if find_picture_source(desk) == "browser":  # otherwise the Pi's front camera makes it
+        keep_picture(desk, None if reading.picture is None else read_browser_picture(reading.picture), taken.update.state, now)
     if taken.gesture is not None:
         logger.info("gesture on %s's desk: %s", desk.username, taken.gesture)
         handle_gesture(desk, taken.gesture, now)
@@ -1001,15 +1033,31 @@ def pause_tracking(request: Request):
     return describe_tracking(desk, now)
 
 
+@app.post("/api/track/picture")
+def track_picture(request: Request, sent: TrackPicture):
+    """The seat's picture from a browser that only sends pictures, about one a second: my desk, while the Pi tracks it
+    and the picture is the browser's. Owner only (not in MEMBER_WRITES), since a member's reading carries theirs."""
+    desk = find_desk(request)
+    if find_picture_source(desk) != "browser":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="this desk's picture comes from the Pi's camera")
+    now = time.time()
+    state = desk.tracker.status(now)["state"]
+    keep_picture(desk, None if sent.picture is None else read_browser_picture(sent.picture), state, now)
+    return {"state": state, "send_picture": wants_browser_picture(desk, state)}
+
+
 @app.post("/api/track/source")
 def set_camera_source(request: Request, change: TrackSource):
-    """Settings → Camera. Only the owner's desk can have the Pi's cameras."""
+    """Settings → Camera. Only the owner's desk can have the Pi's cameras, or pick where its picture comes from."""
     desk = find_desk(request)
-    if change.source == "pi" and auth_routes.read_viewer(request).user.role != "owner":
+    owner = auth_routes.read_viewer(request).user.role == "owner"
+    if change.source == "pi" and not owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the owner's desk has the Pi's cameras")
-    if desk.camera_source.set(change.source):
-        logger.info("%s's desk now takes its checks from the %s", desk.username, "Pi's cameras" if change.source == "pi" else "browser")
-    return {"source": find_camera_source(desk)}
+    if change.picture is not None and not owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="your picture is always your browser's")
+    if desk.camera_source.update(change.model_dump(exclude_none=True)):
+        logger.info("%s's desk: checks from the %s, picture from the %s", desk.username, find_camera_source(desk), find_picture_source(desk))
+    return {"source": find_camera_source(desk), "picture": find_picture_source(desk)}
 
 
 class SharingChange(BaseModel):

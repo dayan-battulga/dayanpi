@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useFrame } from "@/components/frame/Frame";
 import { PeekDialog } from "@/components/room/PeekDialog";
 import { AloneSeat, EmptySeat, SeatCard } from "@/components/room/SeatCard";
+import { findCameraMode } from "@/components/track/cameraTracker";
 import { useNudge } from "@/hooks/useNudge";
 import { useSeatHiding } from "@/hooks/useSeatHiding";
-import { useSharing } from "@/hooks/useSharing";
 import { ROOM_SIZE } from "@/lib/account";
 import { formatDuration } from "@/lib/format";
 import { orderSeats, summarizeRoom } from "@/lib/room";
@@ -16,8 +16,10 @@ export function RoomPage() {
   const { snapshot, user, now, receivedAt, camera } = useFrame();
   const room = snapshot?.room;
   const focus = snapshot?.focus;
-  // Your seat's camera, for a desk on this browser's camera, unless another computer is already feeding it.
-  const showsCamera = focus?.camera_source === "browser" && (camera.step !== "off" || !focus.camera_ok || focus.camera_paused === true);
+  // Your seat's camera: for a desk on this browser's camera unless another computer is already feeding it, and always
+  // for one that only takes its picture from here.
+  const mode = findCameraMode(focus);
+  const showsCamera = mode === "picture" || (mode === "track" && (camera.step !== "off" || focus?.camera_ok !== true || focus.camera_paused === true));
   const everyone = orderSeats(room?.seats ?? [], user?.username);
   const hiding = useSeatHiding(everyone, now);
   // A hidden seat leaves the room but keeps its account's place, so it never turns into an open seat. Never your own:
@@ -29,8 +31,6 @@ export function RoomPage() {
   const open = Math.max(0, ROOM_SIZE - everyone.length);
   const elapsed = Math.max(0, now - receivedAt);
   const nudger = useNudge();
-  // Your seat's Show/Hide my video is Settings → Sharing → Video, held the same way.
-  const { sharing, flipSwitch } = useSharing(snapshot?.focus, room, user?.username, now, receivedAt);
   const [peeking, setPeeking] = useState<string | null>(null);
   // The peek follows the live seat, and closes if they leave the room.
   const peeked = seats.find((seat) => seat.username === peeking) ?? null;
@@ -56,7 +56,6 @@ export function RoomPage() {
               nudger={nudger}
               onPeek={() => setPeeking(seat.username)}
               onHide={() => void hiding.hide(seat)}
-              video={seat.username === user?.username ? { shown: sharing.video, flip: () => void flipSwitch("video", !sharing.video) } : undefined}
               camera={seat.username === user?.username && showsCamera ? camera : undefined}
             />
           ))}

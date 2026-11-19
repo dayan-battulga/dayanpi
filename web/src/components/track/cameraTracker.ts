@@ -2,18 +2,21 @@ import { request, sendToLogin } from "@/lib/http";
 import { STORAGE_PREFIX, readStored, writeStored } from "@/lib/storage";
 import type { TrackerReply } from "@/lib/track";
 import { LOW_BATTERY, type PaceReason } from "@/lib/trackPace";
-import type { Spoken } from "@/lib/types";
+import type { FocusStatus, Spoken } from "@/lib/types";
 
 // The browser's camera, for every page inside the frame (hooks/useCamera keeps one per frame): Chrome is only asked on
 // a click, then the tracker's worker (tracker.worker.ts) runs the models and sends the Pi each check's numbers, and the
 // video never leaves this computer. It comes back by itself when this browser remembers it was on and Chrome still
 // allows the camera, and only one dayanpi tab runs it (Web Locks): the others wait in line and the next one takes over
-// when that tab closes.
+// when that tab closes. A desk the Pi tracks can still take its seat's picture from here: then the worker loads no
+// models and only sends the picture.
 
 export type CameraProblem = "chrome" | "denied" | "missing" | "busy";
 export type CameraStep = "off" | "starting" | "on" | "elsewhere" | "problem";
 export type CameraTrouble = CameraProblem | "failed";
-export type CameraSource = "pi" | "browser" | undefined;
+// "track": the checks (and the seat's picture, when it's this browser's). "picture": the Pi tracks the desk and this
+// camera only sends the seat's picture. null: neither. undefined: the stream hasn't said yet.
+export type CameraMode = "track" | "picture" | null | undefined;
 
 export interface CameraStart {
   stream: MediaStream | null;
@@ -50,6 +53,12 @@ const REMEMBERED = "camera"; // "on" while this browser should bring the camera 
 const MEMORY_EVERY_MS = 60_000;
 const NO_LOAD: CameraLoad = { ms: null, memory: null, backend: null, reason: "normal" };
 const OFF: CameraView = { step: "off", problem: null, preview: null, load: NO_LOAD, spoken: null };
+
+export function findCameraMode(focus: FocusStatus | undefined): CameraMode {
+  const source = focus?.camera_source;
+  const mode = source === undefined ? undefined : source === "browser" ? "track" : focus?.picture_source === "browser" ? "picture" : null;
+  return mode;
+}
 
 function readCameraProblem(error: unknown): CameraProblem {
   const name = error instanceof DOMException ? error.name : "";
@@ -106,7 +115,7 @@ function isLowBattery(battery: BatteryManager | null): boolean {
 export class CameraTracker {
   private view: CameraView = OFF;
   private readonly listeners = new Set<() => void>();
-  private source: CameraSource = undefined;
+  private mode: CameraMode = undefined;
   // Bumped on every attach and detach, so an answer that comes back after the frame unmounted does nothing.
   private generation = 0;
   private attached = false;
@@ -144,13 +153,15 @@ export class CameraTracker {
     this.update(OFF);
   };
 
-  // The desk's camera_source from the stream. Only a desk on the browser runs this camera.
-  setSource = (source: CameraSource) => {
-    this.source = source;
-    if (source === "pi") {
+  // From the stream (findCameraMode). A new mode starts over, like a fresh frame: the camera stops, and comes back in
+  // the new mode when this browser remembers it was on.
+  setMode = (mode: CameraMode) => {
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.generation += 1;
+      this.claiming = false;
       this.stopCamera();
       this.update(OFF);
-    } else {
       this.resume();
     }
   };
@@ -162,13 +173,16 @@ export class CameraTracker {
     }
   };
 
-  // Today's Pause: the camera and the models stop, the desk says paused, and this browser forgets it was on.
+  // Today's Pause: the camera and the models stop, the desk says paused (when this camera tracks it), and this browser
+  // forgets it was on.
   turnOff = () => {
     // Before letting go of the lock, so the tab next in line sees it's off.
     writeStored(REMEMBERED, "off");
     this.stopCamera();
     this.update(OFF);
-    void request("POST", "/api/track/pause", {});
+    if (this.mode === "track") {
+      void request("POST", "/api/track/pause", {});
+    }
   };
 
   private update(changes: Partial<CameraView>): void {
@@ -182,9 +196,9 @@ export class CameraTracker {
     }
   };
 
-  // Without a click: only when this browser remembers the camera was on, and only for a desk on the browser.
+  // Without a click: only when this browser remembers the camera was on, and only while the desk wants this camera.
   private resume(): void {
-    if (this.attached && !this.claiming && this.source === "browser" && this.view.step === "off" && isRemembered()) {
+    if (this.attached && !this.claiming && this.mode != null && this.view.step === "off" && isRemembered()) {
       this.claim(false);
     }
   }
@@ -209,14 +223,14 @@ export class CameraTracker {
         return this.runWithLock(true, false, generation);
       })
       .catch(() => {
-        // Left the line: the frame unmounted, or the desk went to the Pi's cameras.
+        // Left the line: the frame unmounted, or the camera's mode changed.
       });
   }
 
   // The lock's callback: the lock is ours until the promise it returns settles, which is when the camera stops.
   private async runWithLock(held: boolean, clicked: boolean, generation: number): Promise<void> {
     const wanted = held && (clicked || (isRemembered() && (await isCameraAllowed())));
-    const current = generation === this.generation && this.source === "browser";
+    const current = generation === this.generation && this.mode != null;
     if (!held && current) {
       this.claiming = false;
       this.update({ ...OFF, step: "elsewhere" });
@@ -250,7 +264,7 @@ export class CameraTracker {
     this.update({ ...OFF, step: "starting" });
     const battery = (await navigator.getBattery?.().catch(() => null)) ?? null;
     const opened = await openCamera(TRACKER_CAMERA);
-    const current = generation === this.generation && this.source === "browser";
+    const current = generation === this.generation && this.mode != null;
     if (!current || opened.stream === null) {
       opened.stream?.getTracks().forEach((track) => track.stop());
       if (current) {
@@ -261,11 +275,12 @@ export class CameraTracker {
       const [track] = opened.stream.getVideoTracks();
       const copy = track.clone();
       const frames = new (MediaStreamTrackProcessor as NonNullable<typeof MediaStreamTrackProcessor>)({ track: copy }).readable;
-      // The models and ONNX Runtime only load here, in the worker, never for someone whose camera is off.
+      // The models and ONNX Runtime only load here, in the worker, never for someone whose camera is off or only sends
+      // the picture.
       const worker = new Worker(new URL("./tracker.worker.ts", import.meta.url), { type: "module", name: "tracker" });
       worker.onmessage = (event: MessageEvent<TrackerReply>) => this.handleReply(event.data);
       worker.onerror = () => this.stopWith("failed");
-      worker.postMessage({ type: "start", frames, lowBattery: isLowBattery(battery) }, [frames]);
+      worker.postMessage({ type: "start", frames, lowBattery: isLowBattery(battery), pictureOnly: this.mode === "picture" }, [frames]);
       if (battery !== null) {
         // Assigned, not added: Chrome hands back the same battery every time.
         battery.onlevelchange = battery.onchargingchange = () => worker.postMessage({ type: "battery", low: isLowBattery(battery) });
@@ -289,7 +304,7 @@ export class CameraTracker {
     } else if (reply.type === "signed-out") {
       sendToLogin();
     } else {
-      // A 409: the desk went to the Pi's cameras, which the stream will say too.
+      // A 409: the desk (or its picture) went to the Pi's cameras, which the stream will say too.
       this.stopWith(reply.type === "refused" ? null : "failed");
     }
   }

@@ -1382,6 +1382,7 @@ ACCESS = {
     ("POST", "/api/track/reading"): ("/api/track/reading", {"person": 2, "phone": 0, "elapsed_ms": 1}, 401, 422, 422),
     ("POST", "/api/track/pause"): ("/api/track/pause", {}, 401, 200, 200),  # no startup here, so my desk is on a browser too
     ("POST", "/api/track/source"): ("/api/track/source", {"source": "webcam"}, 401, 422, 422),
+    ("POST", "/api/track/picture"): ("/api/track/picture", {"picture": 5}, 401, 403, 422),  # owner only
     ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
@@ -1702,6 +1703,7 @@ def test_the_access_log_leaves_out_what_comes_every_second():
             ("GET", "/api/people/sam/picture?at=1763250000.5", 200),
             ("GET", "/api/people/sam/picture?at=1763250001.5", 404),  # not sharing right now
             ("POST", "/api/track/reading", 200),
+            ("POST", "/api/track/picture", 200),
             ("POST", "/api/todos", 429),
             ("POST", "/api/login", 429),
             ("POST", "/api/track/reading", 429),
@@ -1902,8 +1904,8 @@ def test_readings_only_count_for_a_desk_on_the_browser_and_only_my_desk_can_pick
     assert (on_the_pi.status_code, on_the_pi.json()) == (409, {"detail": "this desk uses the Pi's cameras"})
     assert paused_on_the_pi.status_code == 409
     assert (member_pi.status_code, member_pi.json()) == (403, {"detail": "only the owner's desk has the Pi's cameras"})
-    assert (member_browser.status_code, member_browser.json()) == (200, {"source": "browser"})
-    assert (picked.json(), source_after, on_the_browser.status_code, back) == ({"source": "browser"}, "browser", 200, {"source": "pi"})
+    assert (member_browser.status_code, member_browser.json()) == (200, {"source": "browser", "picture": "browser"})
+    assert (picked.json(), source_after, on_the_browser.status_code, back) == ({"source": "browser", "picture": "browser"}, "browser", 200, {"source": "pi", "picture": "pi"})
     assert feeding_before is None, "no models in the tests, so no worker"
 
 
@@ -2560,6 +2562,92 @@ def test_my_tile_is_off_until_i_turn_video_on(monkeypatch):
     mine.picture = None
     app.take_owner_picture(time.time())
     assert mine.picture is None, "on the browser's camera, the browser sends it instead"
+
+
+def pick_my_pictures(monkeypatch, source, picture):
+    """My desk tracked by `source`, my picture from `picture` (None: not picked), video on, on the phone at the desk,
+    and a Pi camera with a 640x480 frame."""
+    mine = use_owner_desk(monkeypatch)
+    mine.camera_source.update({"source": source, "picture": picture})
+    mine.sharing.update({"video": True})
+    monkeypatch.setattr(app.stream, "latest_frame", lambda: make_jpeg(640, 480), raising=False)
+    put_on_the_phone(monkeypatch, mine)
+    return mine
+
+
+def send_picture_only(client, picture: str | None):
+    return client.post("/api/track/picture", json={"picture": picture})
+
+
+def test_only_my_desk_picks_where_its_picture_comes_from_and_it_starts_out_following_the_checks():
+    with open_client() as client, open_client("member") as member:
+        first = client.get("/api/focus").json()["picture_source"]
+        tracked_by_browser = client.post("/api/track/source", json={"source": "browser"}).json()
+        picked = client.post("/api/track/source", json={"picture": "pi"}).json()
+        back_to_the_pi = client.post("/api/track/source", json={"source": "pi"}).json()
+        member_pick = member.post("/api/track/source", json={"picture": "browser"})
+        member_status = member.get("/api/focus").json()
+    assert first == "pi", "until I pick, the picture comes from wherever my checks do"
+    assert tracked_by_browser == {"source": "browser", "picture": "browser"}
+    assert (picked, back_to_the_pi) == ({"source": "browser", "picture": "pi"}, {"source": "pi", "picture": "pi"})
+    assert (member_pick.status_code, member_pick.json()) == (403, {"detail": "your picture is always your browser's"})
+    assert (member_status["camera_source"], member_status["picture_source"]) == ("browser", "browser")
+
+
+def test_tracked_by_the_pi_with_the_pi_picture_my_tile_is_the_pi_cameras(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "pi", None)
+    app.take_owner_picture(time.time())
+    assert mine.picture is not None and mine.picture["jpeg"] != make_jpeg(640, 480), "the Pi's frame, shrunk"
+    reply = send_picture_only(let_in(stranger(), find_owner()), as_base64(make_jpeg()))
+    assert (reply.status_code, reply.json()) == (409, {"detail": "this desk's picture comes from the Pi's camera"})
+
+
+def test_tracked_by_the_pi_with_the_browser_picture_the_browser_sends_it_alone(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "pi", "browser")
+    client = let_in(stranger(), find_owner())
+    app.take_owner_picture(time.time())
+    assert mine.picture is None, "the Pi camera leaves my tile to the browser"
+    asked = send_picture_only(client, None)
+    assert (asked.status_code, asked.json()) == (200, {"state": "phone", "send_picture": True})
+    assert send_picture_only(client, as_base64(make_jpeg())).json()["send_picture"] is True
+    served = client.get(f"/api/people/{find_owner().username}/picture")
+    assert (served.status_code, served.content) == (200, make_jpeg())
+    send_picture_only(client, as_base64(make_jpeg(641, 360)))
+    assert mine.picture is None, "checked like the reading's: too big is dropped, and the old one with it"
+    assert client.post("/api/track/reading", json={"person": 0.9, "phone": 0, "elapsed_ms": 1}).status_code == 409, "the Pi tracks"
+
+    real = mine.tracker.status
+    monkeypatch.setattr(mine.tracker, "status", lambda now: {**real(now), "state": "away", "last_check": {"at": now}})
+    away = send_picture_only(client, as_base64(make_jpeg()))
+    assert (away.json(), mine.picture) == ({"state": "away", "send_picture": False}, None), "no picture while I'm away"
+
+
+def test_tracked_by_the_browser_with_the_pi_picture_the_pi_camera_still_takes_it(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "browser", "pi")
+    client = let_in(stranger(), find_owner())
+    app.take_owner_picture(time.time())
+    tile = mine.picture
+    assert tile is not None, "the Pi's cameras take my picture while the browser tracks me"
+    reading = client.post("/api/track/reading", json={"person": 0.9, "phone": 0, "elapsed_ms": 1, "picture": as_base64(make_jpeg())})
+    assert (reading.status_code, reading.json()["send_picture"]) == (200, False)
+    assert mine.picture == tile, "a reading neither replaces nor drops the Pi's picture"
+    assert send_picture_only(client, as_base64(make_jpeg())).status_code == 409
+
+
+def test_tracked_by_the_browser_with_the_browser_picture_the_reading_carries_it(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "browser", None)
+    client = let_in(stranger(), find_owner())
+    app.take_owner_picture(time.time())
+    assert mine.picture is None
+    reading = client.post("/api/track/reading", json={"person": 0.9, "phone": 0, "elapsed_ms": 1})
+    assert reading.json()["send_picture"] is True
+
+
+def test_a_member_cant_send_a_picture_on_its_own():
+    sam = add_member("sam")
+    desk_of(sam).sharing.update({"video": True})
+    reply = send_picture_only(let_in(stranger(), sam), as_base64(make_jpeg()))
+    assert reply.status_code == 403 and desk_of(sam).picture is None, "a member's picture rides on their readings"
 
 
 def run_producer_once(seconds: float = 1.3) -> None:

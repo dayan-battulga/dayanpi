@@ -5,8 +5,17 @@ import type { FocusState } from "@/lib/types";
 export const HIDDEN_CHECK_S = 10; // while the tab is hidden its stream is closed, so the state is checked this often
 export const HIDDEN_CHECK_FOR_S = 60 * 60; // for the tab's first hour hidden, then not until it's back
 
-// One SVG per state in web/public/assets: the "d" whose round part is your lamp, in the dark theme's state colors since
-// its square is always dark. Signed out it's the gray one, like unknown.
+// The lamp's color per state, the dark theme's state colors in both themes since the icon's square is always dark: the
+// tab icons in web/public/assets are drawn in these, and the wordmark's d (shared/Wordmark) takes them from here.
+const LAMP_COLORS: Record<FocusState, string> = { working: "#34d3b9", phone: "#ff8a4c", away: "#a99bff", unknown: "#8e8e96" };
+
+// Signed out it's the gray one, like unknown.
+export function findLampColor(state: FocusState | null): string {
+  const color = LAMP_COLORS[state ?? "unknown"];
+  return color;
+}
+
+// One SVG per state in web/public/assets: the "d" whose round part is your lamp.
 export function findTabIcon(state: FocusState | null): string {
   const icon = `/assets/icon-${state ?? "unknown"}.svg`;
   return icon;
@@ -22,8 +31,9 @@ export function showTabIcon(state: FocusState | null): void {
 }
 
 // The tab's icon follows your state: the stream's while the tab shows, and while it's hidden GET /api/focus every
-// HIDDEN_CHECK_S for up to HIDDEN_CHECK_FOR_S. Until the first state comes it stays index.html's.
-export function useTabIcon(streamed: FocusState | undefined): void {
+// HIDDEN_CHECK_S for up to HIDDEN_CHECK_FOR_S. Until the first state comes it stays index.html's. Returns the state it
+// shows (null before the first), for the wordmark's lamp.
+export function useTabIcon(streamed: FocusState | undefined): FocusState | null {
   const [checked, setChecked] = useState<FocusState | null>(null);
   useEffect(() => {
     let timer: number | undefined;
@@ -60,4 +70,5 @@ export function useTabIcon(streamed: FocusState | undefined): void {
       showTabIcon(state);
     }
   }, [state]);
+  return state ?? null;
 }

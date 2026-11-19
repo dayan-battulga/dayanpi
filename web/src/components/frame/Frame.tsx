@@ -5,6 +5,7 @@ import { PeacePill } from "@/components/frame/PeacePill";
 import { Dock } from "@/components/header/Dock";
 import { Header } from "@/components/header/Header";
 import { RoomBar, RoomRail } from "@/components/room/WhoIsHere";
+import { findCameraMode } from "@/components/track/cameraTracker";
 import { Toaster } from "@/components/ui/toaster";
 import { type Camera, useCamera } from "@/hooks/useCamera";
 import { useCommands, useShortcuts } from "@/hooks/useCommands";
@@ -69,8 +70,8 @@ export function Frame() {
   useShortcuts(commands, togglePalette);
   useGestureToast(snapshot?.focus?.gesture);
   useNudgeToast(snapshot?.focus?.spoken);
-  useTabIcon(snapshot?.focus?.state);
-  const camera = useCamera(snapshot?.focus?.camera_source);
+  const lamp = useTabIcon(snapshot?.focus?.state);
+  const camera = useCamera(findCameraMode(snapshot?.focus));
   // A hidden tab's stream is closed, but the camera's readings still bring the peace sign's message, so its clip plays.
   const shownSpoken = snapshot?.focus?.spoken;
   const peaceVoice = usePeaceVoice((camera.spoken?.at ?? -1) > (shownSpoken?.at ?? -1) ? camera.spoken : shownSpoken);
@@ -109,6 +110,7 @@ export function Frame() {
       <div className="frame-column">
         <Header
           connection={connection}
+          lamp={lamp}
           user={user}
           phone={phone}
           here={pathname === "/" ? room.here : null}
