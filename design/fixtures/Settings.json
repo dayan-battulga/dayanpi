@@ -108,6 +108,7 @@
             "todos",
             "history"
           ],
+          "hidden": false,
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
@@ -209,6 +210,7 @@
           "apps",
           "history"
         ],
+        "hidden": false,
         "focus_seconds": 11538,
         "todos": {
           "current": "Problem set 3",

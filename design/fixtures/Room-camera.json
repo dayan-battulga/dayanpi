@@ -108,6 +108,7 @@
             "video",
             "history"
           ],
+          "hidden": false,
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
@@ -135,6 +136,7 @@
             "video",
             "history"
           ],
+          "hidden": false,
           "focus_seconds": 6480,
           "todos": {
             "current": "Read chapter 7",
@@ -162,6 +164,7 @@
             "todos",
             "history"
           ],
+          "hidden": false,
           "focus_seconds": 7500,
           "todos": {
             "current": "Flashcards, unit 4",

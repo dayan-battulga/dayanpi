@@ -42,6 +42,7 @@ Always use the **`main`** branch on both machines.
 | `/api/people/<username>` | That desk as JSON: their seat and only the pieces they share |
 | `/api/people/<username>/picture` | Their seat's small picture as a JPEG, only while they share video, are at the desk and it's under 3 s old (404 otherwise) |
 | `/api/nudge` | Nudge someone on their phone 5+ minutes: POST `{"username": ...}` (once per person every 10 minutes; 409 when they can't be nudged, 429 too soon) |
+| `/api/room/hide`, `/api/room/show` | Hide an offline seat from the room, or bring it back: POST `{"username": ...}`, anyone signed in (400 for yourself; hiding someone who's here is a 409) |
 | `/api/health` | Health check (open, no sign-in) |
 | `/video` | MJPEG camera (owner only; with the camera lock on, only from your own Tailscale devices; 404 otherwise) |
 | `/video/side` | MJPEG side camera, with `DAYANPI_CAMERA=both` (404 otherwise; same lock as `/video`) |
@@ -289,6 +290,8 @@ A link works once, for 7 days. With 4 accounts, no invite works and you can't ma
 **What a member can't do:** see or change anything of yours (every desk route only ever answers with their own desk), open the Pi page (the camera, temps, memory, power), or touch invites and accounts.
 
 **Removing someone:** Settings → Room and invites, **Remove** next to their name, then **Yes, remove**. Their account, sign-ins and Mac tokens are gone right away, and a tab they still have open stops getting live updates on the spot. Their desk isn't deleted: its folder moves to `data/users/removed/<username>-<date>/` (with `-2`, `-3` if that day already has one) and stays there until you delete it yourself, so someone who later picks the same username starts with an empty desk. The owner can't be removed.
+
+**Hiding a seat:** an offline seat (not here: no dayanpi tab open and no camera check in the last 2 minutes) gets a small × in its corner. It shows when you hover over the seat or tab to it, and on a phone or tablet it's always there, just dim. Anyone can press it, you or a member, and the seat leaves the Room for everyone, with **Undo** in the toast. It's only tidying: their account, desk, to-dos and history stay exactly as they are, their seat still counts as one of the 4 (so it never turns into an Invite seat), and their desk at `/people/<username>` still opens from a link. The seat comes back by itself the moment they're here again, so they never see themselves hidden. It's kept in their folder as `data/users/<username>/seat.json`, so a restart doesn't bring it back early, and the journal says who did it (`sam hid dayoon's seat`, `sam showed dayoon's seat`). To actually take someone out of the room, that's **Removing someone** above.
 
 **When this first started:** the first start with everyone's own desk moved your old `data/focus_log/`, `data/todos.json`, `data/days/` and `data/mac_tracking.json` into `data/users/<your username>/`, once, and said so in the journal (`moved focus_log, todos.json, days, mac_tracking.json from ...`). It only ever moves, never copies or deletes. If something was already in both places, it moved nothing and logged an error instead, so you can sort it out by hand: `journalctl -u dayanpi --no-pager | grep "didn't move"`.
 

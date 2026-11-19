@@ -12,7 +12,7 @@ export function Toaster() {
       offset={32}
       visibleToasts={1}
       duration={TOAST_S * 1000}
-      toastOptions={{ unstyled: true, className: "toast" }}
+      toastOptions={{ unstyled: true, className: "toast", classNames: { actionButton: "toast-action" } }}
     />
   );
 }

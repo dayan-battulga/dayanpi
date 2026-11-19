@@ -1,4 +1,4 @@
-import { Plus, Video, VideoOff } from "lucide-react";
+import { Plus, Video, VideoOff, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
@@ -21,6 +21,7 @@ interface SeatCardProps {
   now: number;
   nudger: Nudger;
   onPeek: () => void; // someone else's seat opens the quick peek
+  onHide: () => void; // someone else's offline seat's ×
   video?: { shown: boolean; flip: () => void }; // your own seat's Show/Hide my video (Settings → Sharing → Video)
   camera?: Camera; // your own seat, while your desk is on this browser's camera
 }
@@ -44,7 +45,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, video, camera }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, video, camera }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -66,6 +67,11 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, v
         </span>
       )}
       <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
+      {!mine && !seat.here && (
+        <button type="button" className="seat-hide" aria-label={`Hide ${seat.name}’s seat`} onClick={onHide}>
+          <X size={16} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      )}
       {(camera != null || video != null) && (
         <div className="seat-tools">
           {camera != null && <CameraControl camera={camera} place="seat" />}

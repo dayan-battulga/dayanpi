@@ -73,6 +73,7 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "state": "phone",
         "seconds_in_state": 365.0,
         "shares": ["focus", "todos", "apps", "sites", "video", "history"],
+        "hidden": False,
         "focus_seconds": 6480.0,
         "todos": {"current": "current thing", "current_seconds": 2, "done": 1, "total": 3},
         "app": "SecretApp",
@@ -80,7 +81,7 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "nudge": {"wait_s": 0.0, "age_s": None},
         "picture": None,  # shares video, but no picture right now
     }
-    status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": []}
+    status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": [], "hidden": False}
     assert build_seat("sam", "Sam", STATUS, share(), here=True) == status_only
 
 

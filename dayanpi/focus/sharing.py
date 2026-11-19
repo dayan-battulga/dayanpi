@@ -17,6 +17,7 @@ from pathlib import Path
 from dayanpi.utils.files import JsonSetting
 
 SHARING_FILE = "sharing.json"
+SEAT_FILE = "seat.json"  # {"hidden": bool}: someone tidied this offline seat out of the room
 # Nudges isn't something you show; it's whether others may nudge you. Video waits for step 7.
 DEFAULT_SHARING = {"focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True}
 SHOWN_SWITCHES = ("focus", "todos", "apps", "sites", "video", "history")  # what "Sam shares ..." lists, in its order
@@ -36,6 +37,7 @@ NEEDS = {
     "state": (),
     "seconds_in_state": (),
     "shares": (),
+    "hidden": (),  # tidied out of the room while offline; their seat leaves the Room page, never their account
     "focus_seconds": ("focus",),
     "todos": ("todos",),
     "app": ("apps",),
@@ -62,6 +64,16 @@ class SharingSetting(JsonSetting):
 
     def __init__(self, path: Path) -> None:
         super().__init__(path, DEFAULT_SHARING)
+
+    def accepts(self, key: str, value: object) -> bool:
+        return isinstance(value, bool)
+
+
+class SeatSetting(JsonSetting):
+    """{"hidden": bool}, in the desk's seat.json so a restart keeps it. app.seat_desk clears it once they're here."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, {"hidden": False})
 
     def accepts(self, key: str, value: object) -> bool:
         return isinstance(value, bool)
@@ -114,7 +126,8 @@ def summarize_todos(todos: dict) -> dict:
 
 
 def build_seat(
-    username: str, name: str, status: dict, sharing: dict[str, bool], here: bool, nudged: dict | None = None, now: float = 0.0, picture: dict | None = None
+    username: str, name: str, status: dict, sharing: dict[str, bool], here: bool, nudged: dict | None = None, now: float = 0.0, picture: dict | None = None,
+    hidden: bool = False,
 ) -> dict:
     """What the room sees of one desk every second. status is the desk's own full focus status (app.build_desk_status)."""
     fresh = find_fresh_picture(picture, status, here, now)
@@ -127,6 +140,7 @@ def build_seat(
             "state": lambda: status["state"] if here else "offline",
             "seconds_in_state": lambda: status["seconds_in_state"] if here else None,
             "shares": lambda: list_shares(sharing),
+            "hidden": lambda: hidden,
             "focus_seconds": lambda: status["today"]["working_seconds"],
             "todos": lambda: summarize_todos(status["todos"]),
             "app": lambda: status["app"],

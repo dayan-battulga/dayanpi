@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
@@ -195,4 +195,54 @@ it("hides and shows your video from your own seat, the same switch as Settings �
 
   expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/sharing", body: { video: false } });
   expect(screen.getByRole("button", { name: "Show my video" })).toHaveAttribute("aria-pressed", "false");
+});
+
+// ----- hiding an offline seat -----
+
+const AWAY_FOR_DAYS = makeSeat({ username: "alex", name: "Alex", here: false, state: "offline", seconds_in_state: null });
+const roomSeats = () => within(screen.getByRole("region", { name: "Seats" })).getAllByRole("article").map((seat) => seat.getAttribute("aria-label"));
+
+it("hides an offline seat for everyone with its ×, and Undo brings it back", async () => {
+  const routes = { "POST /api/room/hide": answer({ username: "alex", hidden: true }), "POST /api/room/show": answer({ username: "alex", hidden: false }) };
+  const { user, sent } = openApp("/", [ME, SAM, AWAY_FOR_DAYS], { routes });
+  await user.click(await screen.findByRole("button", { name: "Hide Alex’s seat" }));
+  expect(screen.queryByRole("button", { name: "Hide Sam’s seat" })).toBeNull(); // here
+  expect(screen.queryByRole("button", { name: "Hide Dayan’s seat" })).toBeNull(); // yours
+
+  expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/room/hide", body: { username: "alex" } });
+  expect(roomSeats()).toEqual(["Dayan, you", "Sam, on the phone", "Open seat"]); // Alex's place isn't an open seat
+  expect(await screen.findByText("Hid Alex’s seat")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Undo" })); // jsdom has no setPointerCapture for Sonner's pointerdown
+  await waitFor(() => expect(sent.at(-1)?.path).toBe("/api/room/show"));
+  expect(sent.at(-1)).toMatchObject({ method: "POST", path: "/api/room/show", body: { username: "alex" } });
+  expect(roomSeats()).toEqual(["Dayan, you", "Sam, on the phone", "Alex, offline", "Open seat"]);
+});
+
+it("says so and keeps the seat when the Pi turns the hide down", async () => {
+  const { user } = openApp("/", [ME, SAM, AWAY_FOR_DAYS], { routes: { "POST /api/room/hide": answer({ detail: "they're here right now" }, 409) } });
+  await user.click(await screen.findByRole("button", { name: "Hide Alex’s seat" }));
+  expect(await screen.findByText("Couldn’t hide Alex’s seat")).toBeInTheDocument();
+  expect(roomSeats()).toContain("Alex, offline");
+});
+
+it("leaves a hidden seat out of the room, the sidebar and the bottom bar until they're here, but never your own", async () => {
+  sizeWindow(WIDE_QUERY);
+  openApp("/me", [{ ...ME, hidden: true }, SAM, { ...AWAY_FOR_DAYS, hidden: true }]);
+  const rail = await screen.findByRole("complementary", { name: "In the room" });
+  expect(within(rail).getAllByRole("link", { name: /^Open .*’s desk$/ }).map((link) => link.getAttribute("href"))).toEqual(["/people/sam"]);
+
+  cleanup();
+  sizeWindow(null);
+  openApp("/settings", [ME, { ...AWAY_FOR_DAYS, hidden: true }]);
+  await screen.findByRole("heading", { level: 1 });
+  expect(screen.queryByRole("navigation", { name: "The room" })).toBeNull();
+
+  cleanup();
+  openApp("/", [{ ...ME, hidden: true }, { ...AWAY_FOR_DAYS, hidden: true }]);
+  await screen.findByRole("region", { name: "Seats" });
+  expect(roomSeats()).toEqual(["Dayan, you", "Open seat", "Open seat"]); // still two accounts, so not "Just you"
+
+  FakeEventSource.latest?.send({ ...makeSnapshot(), room: { seats: [ME, { ...AWAY_FOR_DAYS, here: true, state: "unknown", seconds_in_state: 3 }] } });
+  expect(await screen.findByRole("article", { name: "Alex, here" })).toBeInTheDocument();
 });

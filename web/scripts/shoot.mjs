@@ -14,6 +14,7 @@
 //   --options="moment=day page&myState=away"   mockup options for this run, on top of the fixture's
 //   --fill="#name=Riley"     type into a field before the clicks (selector=text, split at the last =, repeatable)
 //   --click="text=Start"     click something on the real page before the shot (Playwright selector, repeatable)
+//   --hover=".seat-hide"     hover something on the real page last, right before the shot (Playwright selector)
 //   --press=Control+k        press keys on the real page before the shot (repeatable, after the clicks)
 //   --wait=4000              wait this many ms more before the shot (the camera's models take a few seconds to load)
 //   --label=palette          added to the file names, so different states don't overwrite each other
@@ -276,6 +277,7 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
   await page.waitForTimeout(Number(actions.wait ?? 0));
   // A click scrolls its target into view even when it's already showing, and fixed things (dialogs) follow the scroll.
   await page.evaluate(() => window.scrollTo(0, 0));
+  if (actions.hover) await page.hover(actions.hover);
   await page.screenshot({ path: file, fullPage: true, animations: "disabled" });
   await context.close();
 }
@@ -349,11 +351,12 @@ async function main() {
       fills: readFlags(flags, "fill"),
       clicks: readFlags(flags, "click"),
       presses: readFlags(flags, "press"),
+      hover: readFlag(flags, "hover"),
       wait: readFlag(flags, "wait"),
       reducedMotion: flags.includes("--reduced-motion"),
     });
   } else {
-    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--wait=ms] [--label=name] [--reduced-motion]");
+    console.log("usage: shoot.mjs serve | mockups [Name ...] | compare <Mockup> <route> [--phone] [--width=px] [--mockup=Name] [--fixture=Name] [--options=a=b&c=d] [--fill=selector=text] [--click=selector] [--press=keys] [--hover=selector] [--wait=ms] [--label=name] [--reduced-motion]");
     process.exitCode = 1;
   }
 }

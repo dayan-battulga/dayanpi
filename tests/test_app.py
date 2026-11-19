@@ -667,7 +667,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     for secret in ("secret plan", "SecretApp", "secret.example"):
         assert secret not in seen
     [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
-    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "nudge"}
+    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "nudge"}
 
     desk.sharing.update({"focus": True, "todos": True, "apps": True})
     make_room(monkeypatch, now)
@@ -702,7 +702,7 @@ def test_the_sharing_route_saves_your_switches_and_your_seat_is_what_the_room_ge
     assert [seat["username"] for seat in room["seats"]] == [owner.username, member.username]
     without_timer = lambda seat: {key: value for key, value in seat.items() if key != "seconds_in_state"}  # noqa: E731
     assert without_timer(reply.json()["seat"]) == without_timer(room["seats"][1]), "Settings' preview is what the room gets"
-    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "app", "nudge"}
+    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "focus_seconds", "app", "nudge"}
     for bad in ({"status": False}, {"apps": "yes"}):
         assert client.post("/api/sharing", json=bad).status_code == 422
 
@@ -1380,6 +1380,8 @@ ACCESS = {
     ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
     ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
+    ("POST", "/api/room/hide"): ("/api/room/hide", {"username": ""}, 401, 422, 422),
+    ("POST", "/api/room/show"): ("/api/room/show", {"username": ""}, 401, 422, 422),
     ("GET", "/people/{username}"): ("/people/sam", None, 303, 200, 200),  # the voice is off in the tests, so nothing plays
     ("GET", "/api/voice/clip"): ("/api/voice/clip", None, 401, 404, 404),
     ("GET", "/api/stream"): ("/api/stream", None, 401, 200, 200),
@@ -2190,7 +2192,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
     desk.sharing.update(switches)
     reply = let_in(stranger(), find_owner()).get("/api/people/sam")
     their = reply.json()
-    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture"}
+    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture", "hidden"}
     assert reply.status_code == 200
     assert set(their) - seat_keys == pieces
     for piece, texts in SECRETS.items():
@@ -2276,6 +2278,49 @@ def test_nobody_can_nudge_someone_who_turned_nudges_off(monkeypatch):
     assert reply.status_code == 409
     assert desk.last_nudged is None and desk.last_spoken is None
     assert "nudge" not in app.seat_desk(desk, "Sam", app.build_desk_status(desk, time.time()), time.time())
+
+
+# ----- hiding an offline seat -----
+
+
+def test_anyone_hides_an_offline_seat_but_never_their_own_or_someone_here(monkeypatch, caplog):
+    owner, sam = find_owner(), add_member("sam")
+    me, member = let_in(stranger(), owner), let_in(stranger(), sam)
+    with caplog.at_level(logging.INFO):
+        assert member.post("/api/room/hide", json={"username": owner.username}).json() == {"username": owner.username, "hidden": True}
+        assert me.post("/api/room/show", json={"username": owner.username}).status_code == 400, "not yourself either"
+        assert me.post("/api/room/hide", json={"username": "sam"}).status_code == 200
+        assert me.post("/api/room/show", json={"username": "sam"}).json() == {"username": "sam", "hidden": False}
+    assert f"sam hid {owner.username}'s seat" in caplog.text
+    assert f"{owner.username} hid sam's seat" in caplog.text and f"{owner.username} showed sam's seat" in caplog.text
+    assert desk_of(owner).seat.read() == {"hidden": True} and desk_of(sam).seat.read() == {"hidden": False}
+
+    yours = member.post("/api/room/hide", json={"username": "sam"})
+    assert (yours.status_code, yours.json()["detail"]) == (400, "that's you")
+    assert member.post("/api/room/hide", json={"username": "nobody"}).status_code == 404
+    desk_of(sam).seen_at = time.time()
+    here = me.post("/api/room/hide", json={"username": "sam"})
+    assert (here.status_code, here.json()["detail"]) == (409, "they're here right now")
+    put_on_the_phone(monkeypatch, desk_of(owner))  # the camera just checked me: here without the site open
+    assert member.post("/api/room/hide", json={"username": owner.username}).status_code == 409
+
+
+def test_a_hidden_seat_stays_hidden_through_a_restart_and_comes_back_once_theyre_here(real_server, monkeypatch, tmp_path):
+    owner, sam = find_owner(), add_member("sam")
+    let_in(stranger(), owner).post("/api/room/hide", json={"username": "sam"})
+    monkeypatch.setattr(app, "desks", Desks(tmp_path))  # a restart: every desk opened again from its folder
+    desk_of(owner), desk_of(sam)
+    room = make_room(monkeypatch, time.time())
+    assert [(seat["username"], seat["hidden"]) for seat in room["seats"]] == [(owner.username, False), ("sam", True)], "still a seat of its own"
+    with httpx.stream("GET", real_server + "/api/stream", headers=session_header(owner), timeout=3) as response:
+        [event] = read_events(response, 1)
+    assert event["room"] == room
+
+    desk_of(sam).seen_at = time.time()  # their site opens
+    [_, seat] = make_room(monkeypatch, time.time())["seats"]
+    assert (seat["here"], seat["hidden"]) == (True, False)
+    assert json.loads((desk_of(sam).folder / "seat.json").read_text()) == {"hidden": False}
+    assert let_in(stranger(), owner).get("/api/people/sam").status_code == 200, "their desk opens all along"
 
 
 def test_the_day_page_has_the_others_who_share_focus_and_history():

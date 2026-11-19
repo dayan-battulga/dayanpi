@@ -113,6 +113,7 @@ export interface Seat {
   state: SeatState;
   seconds_in_state: number | null; // null while offline
   shares: SharedPart[]; // what they show, so a page can tell a piece turned on or off
+  hidden: boolean; // someone tidied this offline seat out of the Room (POST /api/room/hide); false again once they're here
   focus_seconds?: number;
   todos?: { current: string | null; current_seconds: number | null; done: number; total: number };
   app?: string | null;

@@ -107,6 +107,7 @@
             "apps",
             "history"
           ],
+          "hidden": false,
           "focus_seconds": 11538,
           "todos": {
             "current": "Problem set 3",
@@ -130,6 +131,7 @@
             "todos",
             "history"
           ],
+          "hidden": false,
           "todos": {
             "current": "Read chapter 7",
             "current_seconds": 1440,
@@ -151,6 +153,7 @@
             "todos",
             "history"
           ],
+          "hidden": false,
           "todos": {
             "current": "Flashcards, unit 4",
             "current_seconds": 900,
@@ -184,6 +187,7 @@
         "todos",
         "history"
       ],
+      "hidden": false,
       "todos": {
         "current": "Read chapter 7",
         "current_seconds": 1440,

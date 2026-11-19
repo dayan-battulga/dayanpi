@@ -82,7 +82,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge|POST /api/room/(hide|show)"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -246,8 +246,12 @@ def build_desk_status(desk: Desk, now: float) -> dict:
 
 
 def seat_desk(desk: Desk, name: str, status: dict, now: float) -> dict:
-    """One desk's seat, through sharing.build_seat: what anyone else may see of it."""
-    seat = build_seat(desk.username, name, status, desk.sharing.read(), is_here(desk.seen_at, status, now), desk.last_nudged, now, desk.picture)
+    """One desk's seat, through sharing.build_seat: what anyone else may see of it. Being here brings a hidden seat back
+    (build_room makes every seat each second, so that's within a second of them coming back)."""
+    here = is_here(desk.seen_at, status, now)
+    if here:
+        desk.seat.update({"hidden": False})  # only writes seat.json when it was hidden
+    seat = build_seat(desk.username, name, status, desk.sharing.read(), here, desk.last_nudged, now, desk.picture, desk.seat.read()["hidden"])
     return seat
 
 
@@ -1056,7 +1060,7 @@ def their_picture(username: str):
     return Response(fresh["jpeg"], media_type="image/jpeg", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
-class NudgeRequest(BaseModel):
+class PersonRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(min_length=1, max_length=64)
@@ -1067,7 +1071,7 @@ def nudge_line(sender: str) -> str:
 
 
 @app.post("/api/nudge")
-def nudge(request: Request, asked: NudgeRequest):
+def nudge(request: Request, asked: PersonRequest):
     """Nudges someone who's been on their phone NUDGE_AFTER_S: their speaker says so, where their peace sign speaks (the
     Pi's for me, their own computer for anyone else). At most one per person every NUDGE_EVERY_S, from anyone."""
     sender = auth_routes.read_viewer(request).user
@@ -1086,6 +1090,33 @@ def nudge(request: Request, asked: NudgeRequest):
     logger.info("%s nudged %s, through %s", sender.username, target.username, find_voice_output(desk))
     speak_to(desk, nudge_line(sender.display_name), now, kind="nudge")
     return {"status": "ok", "wait_s": NUDGE_EVERY_S}
+
+
+def set_seat_hidden(request: Request, asked: PersonRequest, hidden: bool) -> dict:
+    """Tidies an offline seat out of the room for everyone, or puts it back. Their account, desk and data stay as they
+    are, and seat_desk brings the seat back by itself once they're here."""
+    viewer = auth_routes.read_viewer(request).user
+    target = find_user(asked.username)
+    if target.id == viewer.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="that's you")
+    now = time.time()
+    desk = desks.open(target.username, now)
+    if hidden and is_here(desk.seen_at, desk.tracker.status(now), now):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="they're here right now")
+    desk.seat.update({"hidden": hidden})
+    logger.info("%s %s %s's seat", viewer.username, "hid" if hidden else "showed", target.username)
+    return {"username": target.username, "hidden": hidden}
+
+
+@app.post("/api/room/hide")
+def hide_seat(request: Request, asked: PersonRequest):
+    return set_seat_hidden(request, asked, True)
+
+
+@app.post("/api/room/show")
+def show_seat(request: Request, asked: PersonRequest):
+    """The toast's Undo."""
+    return set_seat_hidden(request, asked, False)
 
 
 class VoiceChange(BaseModel):
