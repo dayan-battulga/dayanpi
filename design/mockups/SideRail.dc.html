@@ -18,9 +18,11 @@ a { color: inherit; } a:hover { opacity: 0.8; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 </style>
 </helmet>
-<div style="min-height: 900px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}};">
+<div style="display: flex; min-height: 900px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}};">
 
-  <header style="max-width: 1320px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+  <!-- The top bar and the page center at the usual page width (1180 px plus 32 px sides) in the column left of the panel. -->
+  <div style="flex: 1; min-width: 0;">
+  <header style="box-sizing: border-box; max-width: 1244px; margin: 0 auto; padding: 22px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
     <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">dayanpi</span>
     <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
       <a href="Room.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;">Room</a>
@@ -36,9 +38,7 @@ a { color: inherit; } a:hover { opacity: 0.8; }
     </div>
   </header>
 
-  <div style="max-width: 1320px; margin: 0 auto; padding: 0 32px; display: flex; flex-wrap: wrap; align-items: stretch;">
-
-    <main style="flex: 999 1 640px; min-width: 0; padding: 40px 56px 64px 0;">
+    <main style="box-sizing: border-box; max-width: 1244px; margin: 0 auto; padding: 40px 32px 64px;">
       <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 32px;">
         <h1 style="margin: 0; font-size: clamp(56px, 7vw, 104px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.92;">Focused</h1>
         <p style="margin: 0; font-family: 'Geist Mono', monospace; font-size: clamp(40px, 5vw, 72px); font-weight: 500; letter-spacing: -0.045em; line-height: 1; color: var(--work);">42:18</p>
@@ -79,10 +79,14 @@ a { color: inherit; } a:hover { opacity: 0.8; }
         </li>
       </ul>
     </main>
+  </div>
+
+  <!-- The room: pinned to the window's right edge, its full height, and still while the page scrolls. Its title row
+       lines up with the top bar (22 px down, the bar's 46 px row). -->
 
     <sc-if value="{{rail.open}}" hint-placeholder-val="{{true}}">
-      <aside aria-labelledby="rail-title" style="flex: 1 1 320px; min-width: 0; max-width: 380px; box-sizing: border-box; padding: 36px 0 64px 36px; border-left: 1px solid var(--line); animation: slide 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <aside aria-labelledby="rail-title" style="position: sticky; top: 0; flex: none; width: 360px; height: 100vh; overflow-y: auto; box-sizing: border-box; padding: 22px 28px 40px 32px; border-left: 1px solid var(--line); animation: slide 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px;">
           <h2 id="rail-title" style="margin: 0; font-size: 15px; font-weight: 600;">In the room</h2>
           <button type="button" aria-label="Hide the room panel" onClick="{{rail.toggle}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path><path d="m8 9 3 3-3 3"></path></svg></button>
         </div>
@@ -122,14 +126,13 @@ a { color: inherit; } a:hover { opacity: 0.8; }
     </sc-if>
 
     <sc-if value="{{rail.closed}}" hint-placeholder-val="{{false}}">
-      <aside aria-label="The room" style="flex: 0 0 76px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 36px 0 0 20px; border-left: 1px solid var(--line);">
+      <aside aria-label="The room" style="position: sticky; top: 0; flex: none; width: 76px; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 23px 0 0; border-left: 1px solid var(--line);">
         <button type="button" aria-label="Show the room panel" onClick="{{rail.toggle}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path><path d="m10 15-3-3 3-3"></path></svg></button>
         <sc-for list="{{people}}" as="p" hint-placeholder-count="2">
           <a href="{{p.href}}" title="{{p.name}} · {{p.task}}" aria-label="Open {{p.name}}’s desk" style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; text-decoration: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px {{p.color}};">{{p.initial}}</a>
         </sc-for>
       </aside>
     </sc-if>
-  </div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"sidebar":{"editor":"enum","options":["open","collapsed"],"default":"open","section":"Preview"},"$preview":{"width":1440,"height":900}}'>

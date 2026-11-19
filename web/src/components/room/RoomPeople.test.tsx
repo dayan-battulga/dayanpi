@@ -121,6 +121,9 @@ it("shows who's here in the sidebar from 1280 px, and remembers it folded", asyn
   expect(within(rail).getByText("1h 05m today")).toBeInTheDocument(); // Sam's; Alex doesn't share focus time
   expect(within(rail).getByText("12m · paused · Chrome")).toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "The room" })).toBeNull();
+  // Its own column on the window's right edge, beside the one with the top bar and the page.
+  const column = document.querySelector(".frame-column");
+  expect([column?.contains(document.querySelector(".topbar")), column?.contains(document.querySelector(".shell")), column?.contains(rail)]).toEqual([true, true, false]);
 
   await user.click(within(rail).getByRole("button", { name: "Hide the room panel" }));
   expect(screen.getByRole("complementary", { name: "The room" })).toBeInTheDocument();

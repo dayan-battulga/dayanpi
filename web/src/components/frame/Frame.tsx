@@ -1,3 +1,4 @@
+import { m, useReducedMotionConfig } from "motion/react";
 import { Suspense, ViewTransition, lazy, useCallback, useLayoutEffect, useState } from "react";
 import { Outlet, useLocation, useOutletContext } from "react-router";
 import { PeacePill } from "@/components/frame/PeacePill";
@@ -15,12 +16,15 @@ import { PHONE_QUERY, WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNudgeToast } from "@/hooks/useNudge";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { SPRINGS } from "@/lib/motion";
 import { listOthersHere, orderSeats, summarizeRoom } from "@/lib/room";
 import { readStored, writeStored } from "@/lib/storage";
 import type { Connection, Snapshot, User } from "@/lib/types";
 
 // The pages that show who's here, in the sidebar or the bottom bar. The room and their desks show it themselves.
 const PAGES_WITH_ROOM = new Set(["/me", "/pi", "/settings"]);
+// The sidebar's width open and folded: dashboard.css's .rail and .rail-collapsed.
+const RAIL_PX = { open: 360, collapsed: 76 };
 
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
@@ -41,8 +45,8 @@ export function useFrame(): FrameData {
   return useOutletContext<FrameData>();
 }
 
-// Every signed-in page: the top bar, the page itself (which cross-fades when it changes), who's here (the sidebar from
-// 1280 px, the bottom bar down to a phone), the peace sign's pill, the dock on a phone, ⌘K and the toasts. The camera
+// Every signed-in page: the top bar and the page itself (which cross-fades when it changes) in one column, who's here
+// (from 1280 px the sidebar on the window's right edge, the bottom bar down to a phone), the peace sign's pill, the dock on a phone, ⌘K and the toasts. The camera
 // lives here too, so it keeps running from page to page and in the background.
 export function Frame() {
   const { snapshot, connection, receivedAt } = useSnapshot();
@@ -50,6 +54,7 @@ export function Frame() {
   const clock = useNow();
   const phone = useMediaQuery(PHONE_QUERY);
   const wide = useMediaQuery(WIDE_QUERY);
+  const reduced = useReducedMotionConfig();
   const [collapsed, setCollapsed] = useState(() => readStored("rail", "open") === "collapsed");
   const { pathname } = useLocation();
   // A snapshot can land between two ticks of the clock; never show time running backwards.
@@ -77,6 +82,7 @@ export function Frame() {
   const withRoom = PAGES_WITH_ROOM.has(pathname);
   const rail = withRoom && wide && seats.length > 1 ? (collapsed ? "collapsed" : "open") : undefined;
   const bar = withRoom && !wide && !phone && others.length > 0;
+  const railWidth = rail == null ? 0 : RAIL_PX[rail];
   const collapseRail = (folded: boolean) => {
     setCollapsed(folded);
     writeStored("rail", folded ? "collapsed" : "open");
@@ -87,16 +93,26 @@ export function Frame() {
   }, [pathname]);
 
   return (
-    <div className="frame" data-connection={connection} data-rail={rail} data-bar={bar ? "" : undefined}>
-      <Header
-        connection={connection}
-        user={user}
-        phone={phone}
-        here={pathname === "/" ? room.here : null}
-        hereLabel={room.hereLabel}
-        onOpenPalette={() => setPaletteOpen(true)}
-      />
-      <div className="frame-body">
+    // --rail-width is the room the sidebar takes on the right. It springs, so the column (and the peace pill and toasts
+    // over it) eases over as the sidebar comes, goes or folds, instead of jumping.
+    <m.div
+      className="frame"
+      data-connection={connection}
+      data-rail={rail}
+      data-bar={bar ? "" : undefined}
+      initial={false}
+      animate={{ "--rail-width": `${railWidth}px` }}
+      transition={reduced ? { duration: 0 } : SPRINGS.layout}
+    >
+      <div className="frame-column">
+        <Header
+          connection={connection}
+          user={user}
+          phone={phone}
+          here={pathname === "/" ? room.here : null}
+          hereLabel={room.hereLabel}
+          onOpenPalette={() => setPaletteOpen(true)}
+        />
         {/* Suspense outside the keyed page, so a lazy page keeps the old one up while it loads instead of a blank. */}
         <Suspense fallback={null}>
           <ViewTransition key={pathname} enter="page" exit="page" default="none">
@@ -105,8 +121,12 @@ export function Frame() {
             </main>
           </ViewTransition>
         </Suspense>
-        {rail != null && <RoomRail others={others} elapsed={elapsed} together={room.focusSeconds} collapsed={rail === "collapsed"} onCollapse={collapseRail} />}
       </div>
+      {wide && (
+        <div className="rail-slot">
+          {rail != null && <RoomRail others={others} elapsed={elapsed} together={room.focusSeconds} collapsed={rail === "collapsed"} onCollapse={collapseRail} />}
+        </div>
+      )}
       {bar && <RoomBar others={others} elapsed={elapsed} />}
       <PeacePill spoken={snapshot?.focus?.spoken} receivedAt={receivedAt} now={now} voice={peaceVoice} />
       {phone && <Dock />}
@@ -116,6 +136,6 @@ export function Frame() {
         </Suspense>
       )}
       <Toaster />
-    </div>
+    </m.div>
   );
 }
