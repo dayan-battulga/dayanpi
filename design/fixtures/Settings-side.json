@@ -1,0 +1,232 @@
+{
+  "about": "For comparing /settings to design/mockups/Settings.dc.html: the Desk's day, signed in as the owner, with the mockup's room (Dayan, Sam, Alex), one Mac token and one open invite.",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {
+    "section": "Profile"
+  },
+  "stream": {
+    "temperature_celsius": 51.3,
+    "uptime_seconds": 351000,
+    "memory": {
+      "total_mb": 8000,
+      "available_mb": 5100,
+      "percent_used": 36.3
+    },
+    "throttle": {
+      "is_undervoltage": false
+    },
+    "rates": {
+      "cpu_percent": 21.5
+    },
+    "focus": {
+      "state": "working",
+      "since": 1794875400,
+      "seconds_in_state": 2538,
+      "today": {
+        "working_seconds": 11538,
+        "phone_seconds": 1440,
+        "pickups": 2,
+        "longest_streak_seconds": 4800,
+        "first_seen": 1794844800
+      },
+      "app": "Code",
+      "site": null,
+      "mac_tracking": true,
+      "camera_source": "pi",
+      "picture_source": "pi",
+      "pi_camera": "side",
+      "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi",
+      "camera_ok": true,
+      "last_check": {
+        "person": 0.93,
+        "phone": 0.02,
+        "elapsed_ms": 190
+      },
+      "enabled": true,
+      "side_camera": true,
+      "side_camera_running": true,
+      "overlay": null,
+      "side_overlay": null,
+      "voice": {
+        "enabled": true,
+        "backend": "piper",
+        "problem": null
+      },
+      "todos": {
+        "current": "t1",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null
+          },
+          {
+            "id": "t3",
+            "text": "Read chapter 7",
+            "seconds": 0,
+            "done_at": null
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800
+          }
+        ]
+      },
+      "gesture": null,
+      "spoken": null,
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": false,
+        "sites": false,
+        "video": false,
+        "nudges": true
+      }
+    },
+    "room": {
+      "seats": [
+        {
+          "username": "dayan",
+          "name": "Dayan",
+          "here": true,
+          "state": "working",
+          "seconds_in_state": 2538,
+          "shares": [
+            "focus",
+            "todos",
+            "history"
+          ],
+          "hidden": false,
+          "focus_seconds": 11538,
+          "todos": {
+            "current": "Problem set 3",
+            "current_seconds": 2280,
+            "done": 1,
+            "total": 4
+          },
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          }
+        }
+      ]
+    }
+  },
+  "routes": {
+    "/api/me": {
+      "user": {
+        "id": 1,
+        "username": "dayan",
+        "display_name": "Dayan",
+        "role": "owner"
+      }
+    },
+    "/api/tokens": {
+      "tokens": [
+        {
+          "id": 1,
+          "name": "MacBook",
+          "created_at": 1794758400,
+          "last_used_at": 1794877898
+        }
+      ]
+    },
+    "/api/invites": {
+      "invites": [
+        {
+          "id": 2,
+          "created_at": 1794758400,
+          "expires_at": 1795363200
+        }
+      ]
+    },
+    "/api/accounts": {
+      "accounts": [
+        {
+          "id": 1,
+          "username": "dayan",
+          "display_name": "Dayan",
+          "role": "owner",
+          "created_at": 1793548800
+        },
+        {
+          "id": 2,
+          "username": "sam",
+          "display_name": "Sam",
+          "role": "member",
+          "created_at": 1794499200
+        },
+        {
+          "id": 3,
+          "username": "alex",
+          "display_name": "Alex",
+          "role": "member",
+          "created_at": 1794672000
+        }
+      ]
+    },
+    "POST /api/invites": {
+      "invite": {
+        "id": 3,
+        "created_at": 1794877938,
+        "expires_at": 1795479138
+      },
+      "code": "7Hq2fk"
+    },
+    "POST /api/mac/tracking": {
+      "enabled": false
+    },
+    "POST /api/sharing": {
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": true,
+        "sites": false,
+        "video": false,
+        "nudges": true
+      },
+      "seat": {
+        "username": "dayan",
+        "name": "Dayan",
+        "here": true,
+        "state": "working",
+        "seconds_in_state": 2538,
+        "shares": [
+          "focus",
+          "todos",
+          "apps",
+          "history"
+        ],
+        "hidden": false,
+        "focus_seconds": 11538,
+        "todos": {
+          "current": "Problem set 3",
+          "current_seconds": 2280,
+          "done": 1,
+          "total": 4
+        },
+        "app": "Code",
+        "nudge": {
+          "wait_s": 0.0,
+          "age_s": null
+        }
+      }
+    }
+  }
+}

@@ -184,6 +184,22 @@ it("shows a seat's picture, fading each new frame in over the last, and the init
   expect(within(sam).getByText("S")).toHaveClass("seat-initial");
 });
 
+it("mirrors your own picture on your seat and nobody else's, and the quick peek shows them the true way round", async () => {
+  stubObjectUrls();
+  const routes = { "GET /api/people/dayan/picture?at=1": answer("me"), "GET /api/people/sam/picture?at=1": answer("sam") };
+  const { user } = openApp("/", [{ ...ME, picture: { at: 1 } }, { ...SAM, picture: { at: 1 } }], { routes });
+  const mine = await screen.findByRole("article", { name: `${ME.name}, you` });
+  const sam = screen.getByRole("article", { name: "Sam, on the phone" });
+  await waitFor(() => expect(mine.querySelector(".seat-picture-frame")).toHaveClass("is-mirrored"));
+  await waitFor(() => expect(sam.querySelector(".seat-picture-frame")).not.toBeNull());
+  expect(sam.querySelector(".seat-picture-frame")).not.toHaveClass("is-mirrored");
+
+  await user.click(screen.getByRole("button", { name: "Peek at Sam" }));
+  const peek = await screen.findByRole("dialog", { name: "Sam" });
+  await waitFor(() => expect(peek.querySelector(".seat-picture-frame")).not.toBeNull());
+  expect(peek.querySelector(".seat-picture-frame")).not.toHaveClass("is-mirrored");
+});
+
 it("has no video button on your own seat: Settings → Sharing → Video is the one switch", async () => {
   const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: true, nudges: true };
   openApp("/", [ME, SAM], { focus: { sharing } });

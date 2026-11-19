@@ -9,8 +9,9 @@ interface Frame {
 
 // Someone's once-a-second picture, from /api/people/<username>/picture. Each new frame (a new `at` on the stream) fades
 // in over the last one, so it reads as a calm live photo. Mount it only while the seat says there's a picture: it
-// fetches nothing else, and unmounting lets go of every frame.
-export function SeatPicture({ username, at }: { username: string; at: number }) {
+// fetches nothing else, and unmounting lets go of every frame. mirrored: it's you, so you see yourself as in a mirror;
+// only on screen, since the Pi's picture itself (what everyone else gets) is the true way round.
+export function SeatPicture({ username, at, mirrored = false }: { username: string; at: number; mirrored?: boolean }) {
   const [frames, setFrames] = useState<Frame[]>([]);
   const held = useRef<Frame[]>([]);
 
@@ -41,7 +42,7 @@ export function SeatPicture({ username, at }: { username: string; at: number }) 
   return (
     <span className="seat-picture" aria-hidden="true">
       {frames.map((frame) => (
-        <img key={frame.at} className="seat-picture-frame" src={frame.url} alt="" />
+        <img key={frame.at} className={mirrored ? "seat-picture-frame is-mirrored" : "seat-picture-frame"} src={frame.url} alt="" />
       ))}
     </span>
   );

@@ -29,6 +29,7 @@ from dayanpi.auth.accounts import SESSION_TTL_S, AccountStore, LoginLockout  # n
 from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
+from dayanpi.focus.camera_source import CAMERA_SOURCE_FILE, CameraSourceSetting  # noqa: E402
 from dayanpi.focus.desks import Desks  # noqa: E402
 from dayanpi.focus.pictures import PICTURE_MAX_BASE64, PICTURE_MAX_BYTES  # noqa: E402
 from dayanpi.focus.sharing import DEFAULT_SHARING  # noqa: E402
@@ -512,6 +513,9 @@ class FakeCamera:
         result = (self.frames.pop(), 1) if self.frames else None
         return result
 
+    def frame_age_s(self) -> float | None:
+        return None
+
 
 def read_stats_focus(client):
     deadline = time.monotonic() + 3
@@ -560,6 +564,9 @@ class EndlessCamera:
         self.frame_id += 1
         result = (b"jpeg", self.frame_id)
         return result
+
+    def frame_age_s(self) -> float:
+        return 0.01
 
 
 def session_header(user) -> dict:
@@ -1832,7 +1839,7 @@ def test_a_members_desk_waits_for_a_browsers_camera_and_gets_none_of_mine():
     with open_client("member") as member:
         app.owner_desk.last_spoken = {"text": "my peace sign", "at": time.time()}
         status = member.get("/api/focus").json()
-    camera_parts = {key: status[key] for key in ("enabled", "side_camera", "overlay", "side_overlay", "gesture", "spoken", "voice", "camera_access")}
+    camera_parts = {key: status[key] for key in ("enabled", "side_camera", "side_camera_running", "overlay", "side_overlay", "gesture", "spoken", "voice", "camera_access")}
     voice = {"enabled": app.voice.enabled, "backend": app.voice.backend, "problem": None}
     assert camera_parts == {**app.NO_CAMERA, "enabled": True, "spoken": None, "voice": voice, "camera_access": "owner_only"}
     assert (status["camera_source"], status["camera_paused"]) == ("browser", False)
@@ -1904,8 +1911,8 @@ def test_readings_only_count_for_a_desk_on_the_browser_and_only_my_desk_can_pick
     assert (on_the_pi.status_code, on_the_pi.json()) == (409, {"detail": "this desk uses the Pi's cameras"})
     assert paused_on_the_pi.status_code == 409
     assert (member_pi.status_code, member_pi.json()) == (403, {"detail": "only the owner's desk has the Pi's cameras"})
-    assert (member_browser.status_code, member_browser.json()) == (200, {"source": "browser", "picture": "browser"})
-    assert (picked.json(), source_after, on_the_browser.status_code, back) == ({"source": "browser", "picture": "browser"}, "browser", 200, {"source": "pi", "picture": "pi"})
+    assert (member_browser.status_code, member_browser.json()) == (200, {"source": "browser", "picture": "browser", "pi_camera": "front"})
+    assert (picked.json(), source_after, on_the_browser.status_code, back) == ({"source": "browser", "picture": "browser", "pi_camera": "front"}, "browser", 200, {"source": "pi", "picture": "pi", "pi_camera": "front"})
     assert feeding_before is None, "no models in the tests, so no worker"
 
 
@@ -2588,8 +2595,8 @@ def test_only_my_desk_picks_where_its_picture_comes_from_and_it_starts_out_follo
         member_pick = member.post("/api/track/source", json={"picture": "browser"})
         member_status = member.get("/api/focus").json()
     assert first == "pi", "until I pick, the picture comes from wherever my checks do"
-    assert tracked_by_browser == {"source": "browser", "picture": "browser"}
-    assert (picked, back_to_the_pi) == ({"source": "browser", "picture": "pi"}, {"source": "pi", "picture": "pi"})
+    assert tracked_by_browser == {"source": "browser", "picture": "browser", "pi_camera": "front"}
+    assert (picked, back_to_the_pi) == ({"source": "browser", "picture": "pi", "pi_camera": "front"}, {"source": "pi", "picture": "pi", "pi_camera": "front"})
     assert (member_pick.status_code, member_pick.json()) == (403, {"detail": "your picture is always your browser's"})
     assert (member_status["camera_source"], member_status["picture_source"]) == ("browser", "browser")
 
@@ -2641,6 +2648,68 @@ def test_tracked_by_the_browser_with_the_browser_picture_the_reading_carries_it(
     assert mine.picture is None
     reading = client.post("/api/track/reading", json={"person": 0.9, "phone": 0, "elapsed_ms": 1})
     assert reading.json()["send_picture"] is True
+
+
+class FakeSideCamera:
+    """The side camera: its own frame, and how long ago it came in (None: never)."""
+
+    def __init__(self, age_s: float | None, jpeg: bytes = b"side") -> None:
+        self.age_s = age_s
+        self.jpeg = jpeg
+
+    def frame_age_s(self) -> float | None:
+        return self.age_s
+
+    def latest_frame(self) -> bytes:
+        return self.jpeg
+
+
+def test_my_tile_comes_from_the_pi_camera_i_pick_and_falls_back_to_the_front(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "pi", None)
+    monkeypatch.setattr(app, "shrink_frame", lambda jpeg: jpeg)  # the same shrink either way; this shows which camera
+    monkeypatch.setattr(app.stream, "latest_frame", lambda: b"front", raising=False)
+    side = FakeSideCamera(age_s=0.4)
+    monkeypatch.setattr(app, "side_stream", side)
+
+    def take_tile() -> bytes:
+        app.take_owner_picture(time.time())
+        return mine.picture["jpeg"]
+
+    assert take_tile() == b"front", "front is the default"
+    mine.camera_source.update({"pi_camera": "side"})
+    status = app.build_desk_status(mine, time.time())
+    assert (take_tile(), status["pi_camera"], status["side_camera_running"]) == (b"side", "side", True)
+    side.age_s = 10.0
+    assert (take_tile(), app.build_desk_status(mine, time.time())["side_camera_running"]) == (b"front", False), "dropped out"
+    side.age_s = None
+    assert take_tile() == b"front", "never sent a frame"
+    monkeypatch.setattr(app, "side_stream", None)
+    assert (take_tile(), app.build_desk_status(mine, time.time())["side_camera_running"]) == (b"front", False), "not both"
+
+
+def test_the_side_cameras_tile_is_shrunk_like_the_fronts(monkeypatch):
+    mine = pick_my_pictures(monkeypatch, "pi", None)
+    mine.camera_source.update({"pi_camera": "side"})
+    monkeypatch.setattr(app, "side_stream", FakeSideCamera(age_s=0.4, jpeg=make_jpeg(768, 432)))
+    app.take_owner_picture(time.time())
+    import cv2
+    import numpy as np
+
+    assert cv2.imdecode(np.frombuffer(mine.picture["jpeg"], dtype=np.uint8), cv2.IMREAD_COLOR).shape[:2] == (360, 640)
+
+
+def test_only_i_pick_front_or_side_and_it_survives_a_restart():
+    with open_client() as client, open_client("member") as member:
+        picked = client.post("/api/track/source", json={"pi_camera": "side"}).json()
+        status = client.get("/api/focus").json()
+        wrong = client.post("/api/track/source", json={"pi_camera": "top"})
+        member_pick = member.post("/api/track/source", json={"pi_camera": "side"})
+    assert picked == {"source": "pi", "picture": "pi", "pi_camera": "side"}
+    assert (status["pi_camera"], status["side_camera_running"]) == ("side", False), "no side camera in the tests"
+    assert wrong.status_code == 422
+    assert (member_pick.status_code, member_pick.json()) == (403, {"detail": "your picture is always your browser's"})
+    saved = CameraSourceSetting(desk_of(find_owner()).days_dir.parent / CAMERA_SOURCE_FILE)
+    assert saved.pi_camera == "side", "read back from the disk, as a restart would"
 
 
 def test_a_member_cant_send_a_picture_on_its_own():

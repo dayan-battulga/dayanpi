@@ -55,7 +55,7 @@ Always use the **`main`** branch on both machines.
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
 | `/api/track/reading` | The browser camera's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a 640×360 base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
 | `/api/track/pause` | The camera's Turn off (POST `{}`): your desk says paused until the next reading |
-| `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}`, and/or `{"picture": "pi"}` / `{"picture": "browser"}` for where your room picture comes from (owner only). Answers `{"source", "picture"}` |
+| `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}`, and/or `{"picture": "pi"}` / `{"picture": "browser"}` for where your room picture comes from, and `{"pi_camera": "front"}` / `{"pi_camera": "side"}` for which Pi camera (both owner only). Answers `{"source", "picture", "pi_camera"}` |
 | `/api/track/picture` | Owner only: your seat's picture on its own, from a browser camera that only sends the picture (POST `{"picture": <640×360 base64 JPEG or null>}`, about one a second; 409 unless Room picture from is this browser). Answers `{"state", "send_picture"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
 | `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
@@ -313,7 +313,9 @@ If it says **Camera is blocked**: click the camera icon at the right end of Chro
 
 ### Your room picture
 
-Only you get this one. Settings → Camera has a second pick under "Track focus with": **Room picture from**, either **The Pi's front camera** or **This browser's camera**. It starts out on whatever you track with, so nothing changes until you pick something, and it keeps following "Track focus with" until you do.
+Only you get this one. Settings → Camera has a second pick under "Track focus with": **Room picture from**, either **The Pi's camera** or **This browser's camera**. It starts out on whatever you track with, so nothing changes until you pick something, and it keeps following "Track focus with" until you do.
+
+**Front or side.** While The Pi's camera is picked, a small dropdown next to it says which one: **Front** (where it starts) or **Side**. Your tile comes from that camera, cut and shrunk the same way. The pick lives in your desk's `camera_source.json`, so a restart keeps it. Side only works with `DAYANPI_CAMERA=both`. Without it, or when the side camera stops sending frames for 3 seconds (unplugged, crashed), Side is greyed out with a short note, and your tile quietly comes from the front camera until the side one is back. It only changes your room picture: tracking, the Pi page's feeds and the camera lock stay exactly as they were.
 
 - **Tracked by the Pi, picture from this browser:** your seat gets **Turn on camera**. Clicking it starts this browser's camera for the picture only: no models load, nothing gets checked, and once a second it sends just the picture, and only while the Pi says you're working or on your phone. Keep a dayanpi tab open, like a friend's camera. Turn off stops it and leaves your tracking alone.
 - **Tracked by the browser, picture from the Pi:** the browser checks you like before but stops sending its picture, and your tile comes from the front Pi camera instead. The Pi's cameras keep capturing while the browser tracks you, so they're there for that one picture a second.

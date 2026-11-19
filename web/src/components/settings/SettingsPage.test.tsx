@@ -147,7 +147,7 @@ it("gives the owner a room picture choice that starts where the desk is tracked,
   FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi", picture_source: "pi" })));
   const camera = await openSection(user, "Camera");
   const picture = choicesFor(camera, "Room picture from");
-  expect(picture.getByRole("radio", { name: "The Pi’s front camera" })).toBeChecked();
+  expect(picture.getByRole("radio", { name: "The Pi’s camera" })).toBeChecked();
   expect(camera.queryByRole("button", { name: "Turn on camera" })).toBeNull();
 
   await user.click(picture.getByRole("radio", { name: "This browser’s camera" }));
@@ -157,6 +157,33 @@ it("gives the owner a room picture choice that starts where the desk is tracked,
   expect(camera.getByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
   expect(camera.queryByText(/Loading the models/)).toBeNull();
   await waitFor(() => expect(sent.filter((request) => request.path === "/api/track/source").map((request) => request.body)).toEqual([{ picture: "browser" }]));
+});
+
+it("lets the owner pick the Pi's front or side camera for the room picture, only while the picture is the Pi's", async () => {
+  const sent = serveSettings(OWNER, undefined, { "POST /api/track/source": answer({ source: "pi", picture: "pi", pi_camera: "side" }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi", picture_source: "pi", pi_camera: "front", side_camera_running: true })));
+  const camera = await openSection(user, "Camera");
+  const which = camera.getByRole("combobox", { name: "Which Pi camera" });
+  expect(which).toHaveValue("front");
+  expect(camera.getByRole("option", { name: "Side" })).toBeEnabled();
+
+  await user.selectOptions(which, "side");
+
+  expect(which).toHaveValue("side");
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/track/source").map((request) => request.body)).toEqual([{ pi_camera: "side" }]));
+  expect(camera.queryByText(/side camera isn’t running/)).toBeNull();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi", picture_source: "browser" })));
+  await waitFor(() => expect(camera.queryByRole("combobox", { name: "Which Pi camera" })).toBeNull());
+});
+
+it("greys out Side with a note while the side camera isn't running, since the tile falls back to the front", async () => {
+  serveSettings(OWNER);
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ camera_source: "pi", picture_source: "pi", pi_camera: "side", side_camera_running: false })));
+  const camera = await openSection(user, "Camera");
+  expect(camera.getByRole("option", { name: "Side" })).toBeDisabled();
+  expect(camera.getByText("The side camera isn’t running, so your tile comes from the front one.")).toBeInTheDocument();
 });
 
 it("puts the pick back and says so when the Pi refuses it", async () => {

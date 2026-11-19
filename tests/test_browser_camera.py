@@ -105,5 +105,11 @@ def test_the_camera_source_is_saved_and_a_bad_file_means_no_pick(tmp_path):
     assert CameraSourceSetting(path).source == "browser"
     path.write_text('{"source": "webcam"}')
     assert CameraSourceSetting(path).source is None
+    assert CameraSourceSetting(path).pi_camera == "front", "front until picked"
+    setting = CameraSourceSetting(path)
+    setting.update({"picture": "pi", "pi_camera": "side"})
+    assert (CameraSourceSetting(path).picture, CameraSourceSetting(path).pi_camera) == ("pi", "side")
+    path.write_text('{"pi_camera": "top"}')
+    assert CameraSourceSetting(path).pi_camera == "front"
     path.write_text("not json")
     assert CameraSourceSetting(path).source is None

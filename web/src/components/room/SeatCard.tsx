@@ -26,7 +26,7 @@ interface SeatCardProps {
 }
 
 // Your own camera, live on your seat while it's on: straight from the camera, so nothing extra goes to the Pi. It sits
-// where the picture would, so it gets the picture's shade and white text.
+// where the picture would, so it gets the picture's shade and white text, and it's a mirror, like the picture there.
 function LiveVideo({ stream }: { stream: MediaStream }) {
   const video = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -36,7 +36,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
   }, [stream]);
   return (
     <span className="seat-picture" aria-hidden="true">
-      <video ref={video} className="seat-picture-frame seat-live" autoPlay muted playsInline />
+      <video ref={video} className="seat-picture-frame seat-live is-mirrored" autoPlay muted playsInline />
     </span>
   );
 }
@@ -58,7 +58,7 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
       </span>
-      {live != null ? <LiveVideo stream={live} /> : seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
+      {live != null ? <LiveVideo stream={live} /> : seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} mirrored={mine} />}
       {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
         <span className="seat-ripples" aria-hidden="true">
           <span />

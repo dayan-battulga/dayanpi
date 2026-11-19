@@ -59,6 +59,7 @@ class CameraStream:
         self._capture: cv2.VideoCapture | None = None
         self._frame: bytes | None = None
         self._frame_id = 0
+        self._frame_at: float | None = None  # time.monotonic() when the newest frame came in
         # Condition (not Lock): readers wait for notify instead of busy-polling.
         self._condition = threading.Condition()
         self._thread: threading.Thread | None = None
@@ -124,6 +125,7 @@ class CameraStream:
             with self._condition:
                 self._frame = jpeg
                 self._frame_id += 1
+                self._frame_at = time.monotonic()
                 self._condition.notify_all()
 
             time.sleep(LOOP_SLEEP_S)
@@ -156,6 +158,13 @@ class CameraStream:
         if self._capture is not None:
             self._capture.release()
             self._capture = None
+
+    def frame_age_s(self) -> float | None:
+        """Seconds since the newest frame came in, None before the first. A camera that dropped out keeps its last frame,
+        so this is how to tell."""
+        with self._condition:
+            age = None if self._frame_at is None else time.monotonic() - self._frame_at
+        return age
 
     def latest_frame(self) -> bytes | None:
         with self._condition:

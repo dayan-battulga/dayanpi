@@ -1565,6 +1565,34 @@ number-flow-react {
   cursor: default;
 }
 
+/* Settings → Camera's rows are a label plus, at the end, a control of their own (the Front/Side pick). */
+.setting-choice-label {
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  align-items: center;
+  gap: 12px;
+  cursor: inherit;
+}
+
+/* A small dropdown in a row: the time field's border, radius and surface, sized to sit inside the 52 px row. */
+.setting-select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.setting-select:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
 .setting-choice input {
   width: 18px;
   height: 18px;
@@ -2454,6 +2482,12 @@ button.todo-pill:active,
   font-size: 16px;
 }
 
+/* The camera hint after the caption, a step quieter: one size smaller in the same --muted (at 70% it would fall under
+   AA contrast). */
+.room-hint {
+  font-size: 15px;
+}
+
 .seats {
   display: flex;
   flex-wrap: wrap;
@@ -2767,6 +2801,13 @@ button.todo-pill:active,
   .room-caption {
     margin-top: 8px;
     font-size: 15px;
+  }
+
+  /* On its own line, "·" and all (a block drops the leading space). */
+  .room-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
   }
 
   .seats {
@@ -3970,6 +4011,12 @@ button.todo-pill:active,
   height: 100%;
   object-fit: cover;
   animation: fade-in 0.8s var(--ease) both;
+}
+
+/* You see yourself as in a mirror (your live camera, your picture, Settings' preview); everyone else sees you the true
+   way round. Only on screen: the frames the models check and the pictures the Pi gets are never flipped. */
+.is-mirrored {
+  transform: scaleX(-1);
 }
 
 /* The name and the details read on a picture through SeatsInfo's shade along the bottom. */

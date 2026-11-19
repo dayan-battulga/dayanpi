@@ -39,6 +39,7 @@
       },
       "enabled": true,
       "side_camera": true,
+      "side_camera_running": true,
       "overlay": null,
       "side_overlay": null,
       "voice": {
@@ -82,6 +83,7 @@
       "camera_access": "tailscale_only",
       "camera_source": "pi",
       "picture_source": "pi",
+      "pi_camera": "front",
       "camera_paused": false,
       "bedtime": "00:00",
       "voice_output": "pi",

@@ -35,6 +35,7 @@
       "mac_tracking": true,
       "camera_source": "pi",
       "picture_source": "pi",
+      "pi_camera": "front",
       "camera_paused": false,
       "bedtime": "00:00",
       "voice_output": "pi",
@@ -46,6 +47,7 @@
       },
       "enabled": true,
       "side_camera": true,
+      "side_camera_running": true,
       "overlay": null,
       "side_overlay": null,
       "voice": {
@@ -150,6 +152,7 @@
       "mac_tracking": true,
       "camera_source": "pi",
       "picture_source": "pi",
+      "pi_camera": "front",
       "camera_paused": false,
       "camera_ok": true,
       "last_check": {
@@ -159,6 +162,7 @@
       },
       "enabled": true,
       "side_camera": true,
+      "side_camera_running": true,
       "overlay": null,
       "side_overlay": null,
       "voice": {

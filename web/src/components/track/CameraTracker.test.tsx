@@ -187,6 +187,7 @@ it("shows the seat's states: Turn on camera, Starting…, then your own camera l
   expect(mySeat().getByRole("status")).toHaveTextContent("Camera on");
   expect(mySeat().getByRole("button", { name: "Turn off" })).toBeInTheDocument();
   expect(document.querySelector(".seat-live")).not.toBeNull(); // straight from the camera, not a picture from the Pi
+  expect(document.querySelector(".seat-live")).toHaveClass("is-mirrored"); // you see yourself as in a mirror
   expect(mySeat().queryByRole("button", { name: /my video/ })).toBeNull(); // that's Settings → Sharing's switch now
 });
 

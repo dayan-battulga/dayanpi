@@ -53,6 +53,30 @@ def test_capture_loop_recovers_when_camera_appears(monkeypatch):
         stream.stop()
 
 
+def test_a_camera_that_dropped_out_keeps_its_last_frame_but_it_ages(monkeypatch):
+    monkeypatch.setattr(camera, "RECONNECT_SLEEP_S", 0.05)
+    reads = []
+
+    class DyingCapture:
+        def read(self):
+            reads.append(1)
+            return (True, FakeFrame()) if len(reads) <= 2 else (False, None)
+
+        def release(self) -> None:
+            pass
+
+    monkeypatch.setattr(CameraStream, "_open_capture", lambda self: DyingCapture())
+    stream = CameraStream(frame_skip=1)
+    assert stream.frame_age_s() is None, "no frame yet"
+    stream.start()
+    try:
+        assert stream.frame_after(-1, timeout=2.0) is not None
+        time.sleep(0.3)
+        assert stream.latest_frame() == b"jpeg-bytes" and stream.frame_age_s() >= 0.2
+    finally:
+        stream.stop()
+
+
 class FailingCapture:
     def read(self):
         return False, None

@@ -59,7 +59,7 @@ export function SharingSection({ focus, room, username, now, receivedAt }: Shari
                 <span className="share-initial" aria-hidden="true">
                   {readInitial(seat.name)}
                 </span>
-                {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} />}
+                {seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} mirrored />}
                 <div className="share-tile-foot">
                   <span className="share-name">{seat.name}</span>
                   <span className="share-timer">{seat.seconds_in_state == null ? "offline" : formatClock(seat.seconds_in_state + Math.max(0, now - seatAt))}</span>

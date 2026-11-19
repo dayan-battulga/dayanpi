@@ -28,7 +28,7 @@ from dayanpi.focus import days
 from dayanpi.focus import worker as focus_worker
 from dayanpi.hardware.camera import CameraStream, create_side_stream, create_stream
 from dayanpi.focus.browser_camera import BrowserCheck
-from dayanpi.focus.camera_source import SOURCES
+from dayanpi.focus.camera_source import PI_CAMERAS, SOURCES
 from dayanpi.focus.voice_setting import OUTPUTS
 from dayanpi.focus.desks import Desk, Desks, move_owner_data
 from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shrink_frame
@@ -168,7 +168,23 @@ def stamp_age(event: dict | None, now: float) -> dict | None:
 
 
 # A desk the Pi's cameras and voice don't reach: everyone's but the owner's.
-NO_CAMERA = {"enabled": False, "side_camera": False, "overlay": None, "side_overlay": None, "gesture": None}
+NO_CAMERA = {
+    "enabled": False,
+    "side_camera": False,
+    "side_camera_running": False,
+    "overlay": None,
+    "side_overlay": None,
+    "gesture": None,
+}
+# A side camera with no new frame for this long has dropped out, so my tile goes back to the front one.
+SIDE_FRESH_S = 3.0
+
+
+def is_side_camera_running() -> bool:
+    """There's a side camera (DAYANPI_CAMERA=both) and it's still sending frames."""
+    age = None if side_stream is None else side_stream.frame_age_s()
+    running = age is not None and age <= SIDE_FRESH_S
+    return running
 
 
 def build_camera_status(now: float) -> dict:
@@ -177,6 +193,7 @@ def build_camera_status(now: float) -> dict:
     camera = {
         "enabled": running is not None and running.running,
         "side_camera": side_stream is not None,
+        "side_camera_running": is_side_camera_running(),  # for Settings → Camera's Front/Side pick
         "overlay": stamp_age(None if running is None else running.last_overlay, now),
         "side_overlay": stamp_age(None if running is None else running.last_side_overlay, now),
         "gesture": stamp_age(None if running is None else running.last_gesture, now),
@@ -196,6 +213,13 @@ def find_picture_source(desk: Desk) -> str:
     picked = desk.camera_source.picture if desk is owner_desk else "browser"
     source = find_camera_source(desk) if picked is None else picked
     return source
+
+
+def find_picture_camera(desk: Desk) -> CameraStream:
+    """The Pi camera my tile comes from: the side one while I picked it and it's running, otherwise the front, so a side
+    camera that's missing or dropped out never leaves my seat blank."""
+    camera = side_stream if desk.camera_source.pi_camera == "side" and is_side_camera_running() else stream
+    return camera
 
 
 def find_bedtime(desk: Desk) -> int:
@@ -239,6 +263,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         "mac_tracking": desk.mac_tracking.enabled,
         "camera_source": source,
         "picture_source": find_picture_source(desk),
+        "pi_camera": desk.camera_source.pi_camera,  # which Pi camera, when the picture is the Pi's
         "camera_paused": source == "browser" and desk.browser.paused,
         "spoken": describe_spoken(desk, now),
         "bedtime": format_bedtime(find_bedtime(desk)),
@@ -272,14 +297,14 @@ def keep_picture(desk: Desk, jpeg: bytes | None, state: str, now: float) -> None
 
 
 def take_owner_picture(now: float) -> None:
-    """My tile: the front Pi camera's latest frame, shrunk, once a second, only while my picture comes from the Pi, I
-    share video and I'm at the desk. The camera keeps capturing while the browser tracks me, so this works then too.
-    The full feeds stay behind the camera lock; this is a separate small copy."""
+    """My tile: the picked Pi camera's latest frame (find_picture_camera, front by default), shrunk, once a second, only
+    while my picture comes from the Pi, I share video and I'm at the desk. The cameras keep capturing while the browser
+    tracks me, so this works then too. The full feeds stay behind the camera lock; this is a separate small copy."""
     desk = owner_desk
     if desk is not None and find_picture_source(desk) == "pi":
         state = desk.tracker.status(now)["state"]
         wants = desk.sharing.read()["video"] and state in AT_DESK_STATES
-        frame = stream.latest_frame() if wants else None
+        frame = find_picture_camera(desk).latest_frame() if wants else None
         keep_picture(desk, None if frame is None else shrink_frame(frame), state, now)
 
 
@@ -961,12 +986,14 @@ class TrackReading(BaseModel):
 
 
 class TrackSource(BaseModel):
-    """Settings → Camera: where the checks come from, and (the owner's only) where the seat's picture comes from."""
+    """Settings → Camera: where the checks come from, and (the owner's only) where the seat's picture comes from and from
+    which Pi camera."""
 
     model_config = ConfigDict(extra="forbid")
 
     source: Literal[SOURCES] | None = None
     picture: Literal[SOURCES] | None = None
+    pi_camera: Literal[PI_CAMERAS] | None = None
 
 
 class TrackPicture(BaseModel):
@@ -1053,11 +1080,17 @@ def set_camera_source(request: Request, change: TrackSource):
     owner = auth_routes.read_viewer(request).user.role == "owner"
     if change.source == "pi" and not owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the owner's desk has the Pi's cameras")
-    if change.picture is not None and not owner:
+    if (change.picture is not None or change.pi_camera is not None) and not owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="your picture is always your browser's")
     if desk.camera_source.update(change.model_dump(exclude_none=True)):
-        logger.info("%s's desk: checks from the %s, picture from the %s", desk.username, find_camera_source(desk), find_picture_source(desk))
-    return {"source": find_camera_source(desk), "picture": find_picture_source(desk)}
+        logger.info(
+            "%s's desk: checks from the %s, picture from the %s (%s camera)",
+            desk.username,
+            find_camera_source(desk),
+            find_picture_source(desk),
+            desk.camera_source.pi_camera,
+        )
+    return {"source": find_camera_source(desk), "picture": find_picture_source(desk), "pi_camera": desk.camera_source.pi_camera}
 
 
 class SharingChange(BaseModel):

@@ -1,5 +1,5 @@
 {
-  "about": "Room.json with me on the phone: the mockup's myState phone.",
+  "about": "Room.json with me on the phone: the mockup's myState phone. Your desk is on this browser's camera (already feeding it), so the caption has the camera hint.",
   "now": "2026-11-16T19:12:18-06:00",
   "timezone": "America/Chicago",
   "mockupOptions": {
@@ -35,8 +35,9 @@
       "app": "Code",
       "site": null,
       "mac_tracking": true,
-      "camera_source": "pi",
-      "picture_source": "pi",
+      "camera_source": "browser",
+      "picture_source": "browser",
+      "pi_camera": "front",
       "camera_paused": false,
       "bedtime": "00:00",
       "voice_output": "pi",
@@ -48,6 +49,7 @@
       },
       "enabled": true,
       "side_camera": true,
+      "side_camera_running": true,
       "overlay": null,
       "side_overlay": null,
       "voice": {

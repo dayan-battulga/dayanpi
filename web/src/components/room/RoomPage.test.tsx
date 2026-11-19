@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "@/App";
-import type { Seat, User } from "@/lib/types";
+import type { FocusStatus, Seat, User } from "@/lib/types";
 import { answer, serveApi } from "@/test/fakeApi";
 import { FakeEventSource } from "@/test/fakeStream";
-import { MEMBER, OWNER, makeSeat, makeSnapshot } from "@/test/fixtures";
+import { MEMBER, OWNER, makeFocus, makeSeat, makeSnapshot } from "@/test/fixtures";
 
 vi.mock("@/lib/navigation", () => ({ loadPage: vi.fn() }));
 
@@ -19,7 +19,7 @@ function ShowPath() {
   return <output aria-label="Path">{useLocation().pathname}</output>;
 }
 
-function openRoom(me: User, seats: Seat[], path = "/") {
+function openRoom(me: User, seats: Seat[], path = "/", focus: Partial<FocusStatus> = {}) {
   serveApi({ "GET /api/me": answer({ user: me }), "GET /api/tokens": answer({ tokens: [] }), "GET /api/invites": answer({ invites: [] }), "GET /api/accounts": answer({ accounts: [] }) });
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -27,7 +27,7 @@ function openRoom(me: User, seats: Seat[], path = "/") {
       <ShowPath />
     </MemoryRouter>,
   );
-  FakeEventSource.latest?.send({ ...makeSnapshot(), room: { seats } });
+  FakeEventSource.latest?.send({ ...makeSnapshot(makeFocus(focus)), room: { seats } });
   const user = userEvent.setup();
   return user;
 }
@@ -67,6 +67,24 @@ it("adds up the focus of everyone here who shares it, and says who's here", asyn
     ["S", "phone"],
     ["A", "away"],
   ]);
+});
+
+it("hints to keep your camera on after the caption while your desk tracks with this browser's camera", async () => {
+  openRoom(MEMBER, [makeSeat({ username: "sam", name: "Sam" })], "/", { camera_source: "browser" });
+  const caption = await screen.findByText(/^focused today/);
+  expect(caption).toHaveTextContent(/^focused today · keep your camera on to count your focus$/);
+  expect(within(caption).getByText("· keep your camera on to count your focus")).toHaveClass("room-hint"); // its own, quieter span
+});
+
+it("puts the hint after the together caption", async () => {
+  openRoom(OWNER, [SAM, ALEX, ME], "/", { camera_source: "browser" });
+  expect(await screen.findByText(/^3 here/)).toHaveTextContent(/^3 here · focused together today · keep your camera on to count your focus$/);
+});
+
+it("leaves the hint out while the Pi's cameras track your desk", async () => {
+  openRoom(OWNER, [ME], "/", { camera_source: "pi", picture_source: "browser" });
+  expect(await screen.findByText("focused today")).toBeInTheDocument();
+  expect(document.querySelector(".room-hint")).toBeNull();
 });
 
 it("draws each seat with only what that person shares, yours first and called You", async () => {

@@ -42,7 +42,11 @@ export function RoomPage() {
           <h1 id="room-total" className="room-total">
             {formatDuration(summary.focusSeconds)}
           </h1>
-          <p className="room-caption">{summary.caption}</p>
+          <p className="room-caption">
+            {summary.caption}
+            {/* Only a desk on this browser's camera has a camera to keep on; on a phone it takes its own line. */}
+            {focus?.camera_source === "browser" && <span className="room-hint"> · keep your camera on to count your focus</span>}
+          </p>
         </section>
         <section className="seats live" aria-label="Seats">
           {seats.map((seat) => (
