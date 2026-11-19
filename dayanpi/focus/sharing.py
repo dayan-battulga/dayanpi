@@ -50,6 +50,7 @@ NEEDS = {
     "app_youtube": ("apps", "sites"),
     "sites": ("apps", "sites"),
     "history": ("history",),
+    "history_today": ("focus", "history"),  # today's live minutes inside history: focus time, so it needs focus too
     "video": ("video",),
     # The group line in the day page dialog.
     "day_focus": ("focus", "history"),

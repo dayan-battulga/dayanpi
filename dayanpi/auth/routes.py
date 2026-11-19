@@ -236,7 +236,7 @@ def change_me(change: MeChange, request: Request):
 
 @router.post("/api/me/password")
 async def change_password(change: PasswordChange, request: Request):
-    """A wrong current password counts toward its own wait and the sign-in's. Ends the other sessions.
+    """A wrong current password counts toward its own wait and the sign-in's. Ends the other sessions and every Mac token.
 
     This caller is signed in, so its own wait can say so instead of "wrong password"."""
     viewer = read_viewer(request)
@@ -262,9 +262,11 @@ def list_tokens(request: Request):
 def create_token(new: TokenNew, request: Request):
     """The only time the secret is shown; the Pi keeps its hash."""
     try:
-        created = accounts.create_token(read_viewer(request).user.id, new.name, time.time())
+        created = accounts.create_token(read_viewer(request).session.token_hash, new.name, time.time())
     except TooManyTokens:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=f"{TOKENS_MAX} tokens is the most. Delete one first.") from None
+    if created is None:  # signed out, password changed or removed since the middleware let it in
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="sign in first")
     return {"token": asdict(created.token), "secret": created.secret}
 
 

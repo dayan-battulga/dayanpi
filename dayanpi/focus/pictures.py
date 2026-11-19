@@ -22,21 +22,34 @@ PICTURE_MAX_BASE64 = (PICTURE_MAX_BYTES * 4) // 3 + 4
 JPEG_START = b"\xff\xd8"
 # The start-of-frame markers, which carry the picture's size (C4, C8 and CC are other segments).
 SIZE_MARKERS = set(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+# Every other marker libjpeg reads a length after before the first scan: DHT, DAC, DQT, DNL, DRI, APP0-15 and COM.
+# TEM, RST0-7 and FF 00 have no length there, and libjpeg skips stray bytes between markers, so a walker that took
+# them any other way would land on a different SOF than the one cv2 allocates for.
+LENGTH_MARKERS = SIZE_MARKERS | {0xC4, 0xCC, 0xDB, 0xDC, 0xDD, 0xFE} | set(range(0xE0, 0xF0))
+SCAN_START = 0xDA
 
 
 def read_jpeg_size(jpeg: bytes) -> dict | None:
-    """{"width", "height"} from a JPEG's header without decoding it, or None when the header never says."""
+    """{"width", "height"} from a JPEG's header without decoding it, or None when the header never says. It walks the
+    markers to the first scan the way libjpeg does and gives up on anything libjpeg could read another way (stray
+    bytes, a marker with no length, a length under 2, more than one SOF), so the size is the one cv2 would allocate."""
     at = len(JPEG_START)
-    size = None
-    while size is None and at + 9 <= len(jpeg) and jpeg[at] == 0xFF:
+    sizes = []
+    scanning = False
+    while not scanning and at + 4 <= len(jpeg) and jpeg[at] == 0xFF:
         marker = jpeg[at + 1]
+        length = int.from_bytes(jpeg[at + 2 : at + 4], "big")
         if marker == 0xFF:
             at += 1  # a fill byte before the next marker
-        elif marker in SIZE_MARKERS:
-            size = {"height": int.from_bytes(jpeg[at + 5 : at + 7], "big"), "width": int.from_bytes(jpeg[at + 7 : at + 9], "big")}
+        elif marker == SCAN_START:
+            scanning = True
+        elif marker in LENGTH_MARKERS and length >= 2:
+            if marker in SIZE_MARKERS:
+                sizes.append({"height": int.from_bytes(jpeg[at + 5 : at + 7], "big"), "width": int.from_bytes(jpeg[at + 7 : at + 9], "big")})
+            at += 2 + length
         else:
-            at += 2 + int.from_bytes(jpeg[at + 2 : at + 4], "big")
-    return size
+            at = len(jpeg)
+    return sizes[0] if scanning and len(sizes) == 1 else None
 
 
 def shrink_frame(jpeg: bytes) -> bytes | None:

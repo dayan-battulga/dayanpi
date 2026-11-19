@@ -39,6 +39,14 @@ it.each(["%2F%09%2Fevil.example%2Fphish", "%2F%0A%2Fevil.example", "%2F%0D%2Fevi
   },
 );
 
+// These stay on this origin, but the parser drops the "." or "x/.." and the path it leaves starts with //.
+it.each(["/.//evil.example/login", "/a/..//evil.example", "/./\\evil.example", "/%2e//evil.example", "/x/%2E%2E//evil.example?a=1#b"])(
+  "never follows next=%s to a path that starts with //",
+  (next) => {
+    expect(readSafeNext(next)).toBe("/");
+  },
+);
+
 it("sends a 401 to /login, with where you were as next", async () => {
   stubReply(401, { detail: "sign in first" });
   const reply = await request("GET", "/api/focus");

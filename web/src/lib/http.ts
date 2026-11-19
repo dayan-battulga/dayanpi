@@ -15,12 +15,13 @@ const SIGN_IN_PATHS = new Set(["/api/login", "/api/join"]);
 
 // "next" can only send you somewhere on this site. Checking the raw string isn't enough: the URL parser drops
 // tabs and newlines and reads \ as /, so "/\t/evil.example" becomes //evil.example. Resolve it the way the
-// browser will and keep it only when it stays on this origin.
+// browser will and keep it only when it stays on this origin. The path it hands back is checked too: "/.//evil.example"
+// stays here, but its pathname comes out as //evil.example, which location.assign reads as another host.
 export function readSafeNext(next: string | null): string {
   let safe = "/";
   try {
     const url = new URL(next ?? "", window.location.origin);
-    if (next?.startsWith("/") && url.origin === window.location.origin) {
+    if (next?.startsWith("/") && url.origin === window.location.origin && !/^\/[/\\]/.test(url.pathname)) {
       safe = url.pathname + url.search + url.hash;
     }
   } catch {

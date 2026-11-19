@@ -39,6 +39,11 @@ def add_member(store, username, now=NOW):
     return store.join(invite.code, username.title(), username, PASSWORD, now)
 
 
+def sign_in(store, user):
+    """A session's hash, which is what a token is made through."""
+    return store.find_session(store.create_session(user.id, NOW), NOW).token_hash
+
+
 def test_a_password_checks_against_its_own_hash_only():
     stored = hash_password("correct horse battery")
     assert stored.startswith("scrypt$16384$8$1$")
@@ -226,9 +231,9 @@ def test_ids_of_removed_accounts_tokens_and_invites_are_never_reused(store):
     store.delete_member(gone.id)
     kept = add_member(store, "cy")
     assert kept.id > gone.id
-    revoked = store.create_token(kept.id, "mac", NOW)
+    revoked = store.create_token(sign_in(store, kept), "mac", NOW)
     store.delete_token(kept.id, revoked.token.id)
-    assert store.create_token(kept.id, "mac", NOW).token.id > revoked.token.id
+    assert store.create_token(sign_in(store, kept), "mac", NOW).token.id > revoked.token.id
     deleted = store.create_invite(NOW)
     store.delete_invite(deleted.invite.id)
     assert store.create_invite(NOW).invite.id > deleted.invite.id
@@ -252,7 +257,7 @@ def test_a_session_ends_on_sign_out_and_with_its_account(store):
     store.delete_session(first)
     assert store.find_session(first, NOW) is None
     assert store.find_session(second, NOW) is not None
-    token = store.create_token(member.id, "mac", NOW)
+    token = store.create_token(sign_in(store, member), "mac", NOW)
     store.delete_member(member.id)
     assert store.find_session(second, NOW) is None
     assert store.find_token_user(token.secret, NOW) is None
@@ -264,7 +269,7 @@ def test_the_database_keeps_only_hashes(store, tmp_path):
     member = add_member(store, "bo")
     session = store.create_session(member.id, NOW)
     invite = store.create_invite(NOW)
-    token = store.create_token(member.id, "mac", NOW)
+    token = store.create_token(sign_in(store, member), "mac", NOW)
     raw = (tmp_path / "accounts.db").read_bytes()
     for secret in ("the owner password", PASSWORD, session, invite.code, token.secret):
         assert secret.encode() not in raw
@@ -272,13 +277,18 @@ def test_the_database_keeps_only_hashes(store, tmp_path):
     assert invite.code not in repr(invite) and token.secret not in repr(token)
 
 
-def test_changing_the_password_ends_the_other_sessions(store):
+def test_changing_the_password_ends_the_other_sessions_and_every_token(store):
     member = add_member(store, "bo")
     kept = store.create_session(member.id, NOW)
     other = store.create_session(member.id, NOW)
+    other_hash = store.find_session(other, NOW).token_hash
+    token = store.create_token(other_hash, "made with a stolen session", NOW)
     store.change_password(member.id, "a brand new password", store.find_session(kept, NOW).token_hash)
     assert store.find_session(kept, NOW) is not None
     assert store.find_session(other, NOW) is None
+    assert store.find_token_user(token.secret, NOW) is None and store.list_tokens(member.id) == []
+    assert store.create_token(other_hash, "sent before, done after", NOW) is None, "an ended session makes no token"
+    assert store.list_tokens(member.id) == []
     assert store.check_login("bo", "a brand new password") is not None
     assert store.check_login("bo", PASSWORD) is None
 
@@ -287,8 +297,8 @@ def test_tokens_are_per_user_and_revocable(store):
     store.seed_owner("dayan", "pw", NOW)
     [owner] = store.list_users()
     member = add_member(store, "bo")
-    mine = store.create_token(member.id, "mac", NOW)
-    theirs = store.create_token(owner.id, "laptop", NOW)
+    mine = store.create_token(sign_in(store, member), "mac", NOW)
+    theirs = store.create_token(sign_in(store, owner), "laptop", NOW)
     assert store.find_token_user(mine.secret, NOW + 5) == member
     assert [token.name for token in store.list_tokens(member.id)] == ["mac"]
     assert store.delete_token(member.id, theirs.token.id) is False, "not someone else's"
@@ -302,18 +312,19 @@ def test_ten_tokens_is_the_most_per_account(store):
     store.seed_owner("dayoon", PASSWORD, NOW)
     owner = store.list_users()[0]
     bo = add_member(store, "bo")
-    made = [store.create_token(owner.id, f"mac {index}", NOW) for index in range(TOKENS_MAX)]
+    signed_in = sign_in(store, owner)
+    made = [store.create_token(signed_in, f"mac {index}", NOW) for index in range(TOKENS_MAX)]
     with pytest.raises(TooManyTokens):
-        store.create_token(owner.id, "one too many", NOW)
+        store.create_token(signed_in, "one too many", NOW)
     assert len(store.list_tokens(owner.id)) == TOKENS_MAX == 10
-    assert store.create_token(bo.id, "bo's mac", NOW).token.name == "bo's mac", "everyone has their own ten"
+    assert store.create_token(sign_in(store, bo), "bo's mac", NOW).token.name == "bo's mac", "everyone has their own ten"
     store.delete_token(owner.id, made[0].token.id)
-    assert store.create_token(owner.id, "room again", NOW).token.name == "room again"
+    assert store.create_token(signed_in, "room again", NOW).token.name == "room again"
 
 
 def test_a_token_notes_its_last_use_at_most_once_a_minute(store):
     member = add_member(store, "bo")
-    token = store.create_token(member.id, "mac", NOW)
+    token = store.create_token(sign_in(store, member), "mac", NOW)
     store.find_token_user(token.secret, NOW + 10)
     store.find_token_user(token.secret, NOW + 30)
     assert store.list_tokens(member.id)[0].last_used_at == NOW + 10
@@ -380,14 +391,45 @@ def test_a_flood_of_other_names_never_resets_a_wait():
     for index in range(20_000):
         lockout.reserve_attempt(f"spray{index}", NOW + 10)
     assert not lockout.reserve_attempt("dayan", NOW + 29), "the 30 s wait is still on"
-    # A flood takes minutes on the Pi, so the wait is usually over by the time it's done. Names sharing
-    # dayan's bucket are left out here: they would count toward the same wait, which is fine but not this test.
-    others = [f"late{index}" for index in range(20_000) if lockout._find_bucket(f"late{index}") != lockout._find_bucket("dayan")]
-    for name in others:
-        lockout.reserve_attempt(name, NOW + 35)
+    # A flood takes minutes on the Pi, so the wait is usually over by the time it's done.
+    for index in range(20_000):
+        lockout.reserve_attempt(f"late{index}", NOW + 35)
     assert lockout.reserve_attempt("dayan", NOW + 40)
     assert not lockout.reserve_attempt("dayan", NOW + 99), "that miss doubled the wait to 60 s, as if no flood came"
-    assert len(lockout._counts) <= 2 ** (8 * accounts.LOCKOUT_BUCKET_BYTES)
+
+
+def test_no_other_name_can_clear_a_wait():
+    """With 65536 shared buckets, some of these names would have landed in dayan's and wiped the wait on a sign-in."""
+    lockout = LoginLockout()
+    for _ in range(5):
+        lockout.reserve_attempt("dayan", NOW)
+    for index in range(200_000):
+        lockout.clear(f"member{index}")
+    assert lockout.wait_left("dayan", NOW + 1) == 29
+
+
+def test_a_flood_of_any_size_never_resets_the_doubling():
+    lockout = LoginLockout()
+    now = NOW
+    for _ in range(11):
+        while not lockout.reserve_attempt("dayan", now):
+            now += 1
+    assert lockout.wait_left("dayan", now) == accounts.LOCKOUT_MAX_WAIT_S
+    now += accounts.LOCKOUT_MAX_WAIT_S
+    for index in range(70_000):
+        lockout.reserve_attempt(f"spray{index}", now)
+    assert lockout.reserve_attempt("dayan", now + 1), "the wait ran out"
+    assert lockout.wait_left("dayan", now + 1) == accounts.LOCKOUT_MAX_WAIT_S, "still 15 min, not back to 30 s"
+
+
+def test_a_name_nobody_tried_for_six_hours_is_forgotten():
+    lockout = LoginLockout()
+    for _ in range(3):
+        lockout.reserve_attempt("dayan", NOW)
+    lockout.reserve_attempt("sam", NOW + 60)
+    lockout.reserve_attempt("someone", NOW + accounts.LOCKOUT_FORGET_S + 1)
+    assert len(lockout._counts) == 2, "dayan is gone, sam isn't quiet long enough yet"
+    assert [lockout.reserve_attempt("dayan", NOW + accounts.LOCKOUT_FORGET_S + 2) for _ in range(5)] == [True] * 5, "four free misses again"
 
 
 def test_a_burst_of_sign_ins_checks_only_five_passwords(store, monkeypatch):

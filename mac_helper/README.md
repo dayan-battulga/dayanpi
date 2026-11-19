@@ -189,7 +189,7 @@ The last line deletes the saved token too; skip it if you want to keep it. Revok
 | --- | --- |
 | `DAYANPI_USER isn't set` | By hand: put `DAYANPI_USER=yourname` in front of the command. Background: redo the `sed` line with your name |
 | `No Mac helper token in the Keychain` | Step 2. The `-a` name has to match `DAYANPI_USER` exactly |
-| `the Pi said 401` | The token is wrong or was revoked, or the Keychain still has your old password. Make a new one in Settings → Mac helper and store it with the `-U` command from step 2; the helper rereads it by itself |
+| `the Pi said 401` | The token is wrong or was revoked (changing your password deletes every token), or the Keychain still has your old password. Make a new one in Settings → Mac helper and store it with the `-U` command from step 2; the helper rereads it by itself |
 | `the Pi said 403` | That's a member's token. Only the owner's helper can report for now |
 | `can't reach the Pi` | Is Tailscale connected? Does https://dayoon.tail279594.ts.net/ open in the browser? Is the `dayanpi` service running? |
 | `the Pi answered HTTP 404` | The Pi's code doesn't have `/api/mac/app` yet. Pull and restart the service there |

@@ -15,6 +15,7 @@ import secrets
 import sqlite3
 import threading
 import unicodedata
+from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -46,7 +47,8 @@ SCRYPT_SALT_BYTES = 16
 LOCKOUT_FREE_MISSES = 4
 LOCKOUT_FIRST_WAIT_S = 30.0
 LOCKOUT_MAX_WAIT_S = 15 * 60.0
-LOCKOUT_BUCKET_BYTES = 2  # 65536 buckets
+LOCKOUT_NAME_BYTES = 8  # a 64-bit keyed hash per name: nobody can find a name that shares yours
+LOCKOUT_FORGET_S = 6 * 3600.0  # a name nobody has tried for this long is forgotten, so the map can't grow forever
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -292,11 +294,13 @@ class AccountStore:
         return user
 
     def change_password(self, user_id: int, new_password: str, keep_token_hash: str) -> None:
-        """Also ends every other session of this user, so a stolen one stops working."""
+        """Also ends every other session of this user and deletes their Mac tokens, so a stolen session stops working
+        and so does any token it made."""
         password_hash = hash_password(new_password)
         with self._transaction() as db:
             db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
             db.execute("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", (user_id, keep_token_hash))
+            db.execute("DELETE FROM tokens WHERE user_id = ?", (user_id,))
 
     def delete_member(self, user_id: int) -> bool:
         """Never the owner. Its sessions and tokens go with it (ON DELETE CASCADE)."""
@@ -397,17 +401,25 @@ class AccountStore:
         user = User(cursor.lastrowid, username, display_name, "member", now)
         return user
 
-    def create_token(self, user_id: int, name: str, now: float) -> NewToken:
-        """Raises TooManyTokens at TOKENS_MAX, counted in the insert's own transaction so two at once can't make an 11th."""
+    def create_token(self, session_hash: str, name: str, now: float) -> NewToken | None:
+        """For a session that's still there, checked in the insert's own transaction: a request is let in at its headers,
+        so one whose body comes after a password change or a sign-out gets None. Raises TooManyTokens at TOKENS_MAX,
+        counted in the same transaction so two at once can't make an 11th."""
         secret = "dpi_" + secrets.token_urlsafe(32)
+        created = None
         with self._transaction() as db:
-            if db.execute("SELECT COUNT(*) FROM tokens WHERE user_id = ?", (user_id,)).fetchone()[0] >= TOKENS_MAX:
-                raise TooManyTokens
-            cursor = db.execute(
-                "INSERT INTO tokens (user_id, name, secret_hash, created_at) VALUES (?, ?, ?, ?)",
-                (user_id, name, hash_secret(secret), now),
-            )
-        created = NewToken(ApiToken(cursor.lastrowid, name, now, None), secret)
+            session = db.execute(
+                "SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?", (session_hash, now)
+            ).fetchone()
+            if session is not None:
+                user_id = session["user_id"]
+                if db.execute("SELECT COUNT(*) FROM tokens WHERE user_id = ?", (user_id,)).fetchone()[0] >= TOKENS_MAX:
+                    raise TooManyTokens
+                cursor = db.execute(
+                    "INSERT INTO tokens (user_id, name, secret_hash, created_at) VALUES (?, ?, ?, ?)",
+                    (user_id, name, hash_secret(secret), now),
+                )
+                created = NewToken(ApiToken(cursor.lastrowid, name, now, None), secret)
         return created
 
     def list_tokens(self, user_id: int) -> list[ApiToken]:
@@ -444,27 +456,37 @@ class MissCount:
     misses: int = 0
     wait_s: float = 0.0
     until: float = 0.0
+    last_at: float = 0.0  # the last attempt that counted
 
 
 class LoginLockout:
     """Wrong-password waits per lowercased username, known or not, so a wait can't tell which names exist.
 
     Misses 1-4 are free; the 5th starts a 30 s wait, and each miss after a wait doubles it, up to 15 min.
-    Names go into 65536 buckets by a hash with a key made at startup: strangers can't grow it, can't push
-    a name's wait out with a flood of other names, and can't pick a name that shares a bucket with yours.
-    ponytail: in memory, so a restart clears every wait, and two names in one bucket share a wait.
-    Move it into accounts.db if that ever matters.
+    Each name is kept under a 64-bit hash with a key made at startup, so only that name's own sign-in clears
+    it: nobody can find another name that shares it, not even by watching which names get a quick 429.
+    A name is forgotten only after LOCKOUT_FORGET_S without a counted attempt, never because other names
+    came in, so a flood of names can't reset anyone's wait or its doubling. Strangers' sign-ins are capped
+    at 2 a second (routes.stranger_sign_ins), so at most about 43,000 names are ever kept.
+    ponytail: in memory, so a restart clears every wait. Move it into accounts.db if that ever matters.
     """
 
     def __init__(self) -> None:
-        self._counts: dict[int, MissCount] = {}
+        self._counts: OrderedDict[bytes, MissCount] = OrderedDict()  # least recently tried first
         self._key = secrets.token_bytes(16)
         self._lock = threading.Lock()
 
-    def _find_bucket(self, username: str) -> int:
-        digest = hashlib.blake2b(username.encode("utf-8", "surrogatepass"), digest_size=LOCKOUT_BUCKET_BYTES, key=self._key)
-        bucket = int.from_bytes(digest.digest(), "big")
+    def _find_bucket(self, username: str) -> bytes:
+        bucket = hashlib.blake2b(username.encode("utf-8", "surrogatepass"), digest_size=LOCKOUT_NAME_BYTES, key=self._key).digest()
         return bucket
+
+    def _forget_quiet_names(self, now: float) -> None:
+        """Drops names nobody has tried for LOCKOUT_FORGET_S. A wait is at most 15 min, so none of them is waiting."""
+        while self._counts:
+            oldest = next(iter(self._counts.values()))
+            if now - oldest.last_at < LOCKOUT_FORGET_S:
+                break
+            self._counts.popitem(last=False)
 
     def reserve_attempt(self, username: str, now: float) -> bool:
         """Whether this attempt may check its password. It counts as a miss right here, before the check, so a
@@ -472,9 +494,12 @@ class LoginLockout:
         During a wait it's False and doesn't count."""
         bucket = self._find_bucket(username)
         with self._lock:
+            self._forget_quiet_names(now)
             count = self._counts.setdefault(bucket, MissCount())
             allowed = now >= count.until
             if allowed:
+                self._counts.move_to_end(bucket)
+                count.last_at = now
                 count.misses += 1
                 if count.misses > LOCKOUT_FREE_MISSES:
                     count.wait_s = min(count.wait_s * 2, LOCKOUT_MAX_WAIT_S) if count.wait_s else LOCKOUT_FIRST_WAIT_S

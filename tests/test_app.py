@@ -111,6 +111,12 @@ def let_in(client, user):
     return client
 
 
+def make_session_hash(user):
+    """A token is made through a session of its user's, still there when it's made."""
+    session_hash = auth_routes.accounts.find_session(auth_routes.accounts.create_session(user.id, time.time()), time.time()).token_hash
+    return session_hash
+
+
 def stranger(**options):
     """A client without the app's startup, for a second viewer next to an open_client()."""
     client = TestClient(app.app, base_url=BASE_URL, **options)
@@ -1049,7 +1055,7 @@ def test_a_removed_member_is_signed_out_everywhere():
     with open_client() as owner:
         member = add_member()
         member_client = let_in(stranger(), member)
-        mac = auth_routes.accounts.create_token(member.id, "mac", time.time())
+        mac = auth_routes.accounts.create_token(make_session_hash(member), "mac", time.time())
         assert member_client.get("/api/me").status_code == 200
         listed = owner.get("/api/accounts").json()["accounts"]
         removed = delete(owner, f"/api/accounts/{member.id}")
@@ -1521,10 +1527,26 @@ def test_a_mac_token_only_opens_the_mac_routes(fresh_mac_tracking):
     assert none_left == {"tokens": []}
 
 
+def test_a_token_asked_for_before_a_password_change_is_never_made_after_it(monkeypatch):
+    # The middleware lets a session in at the headers; a held-back body lands in the handler after the change.
+    found = auth_routes.find_viewer
+
+    def find_then_change_password(request, now):
+        viewer = found(request, now)
+        auth_routes.accounts.change_password(viewer.user.id, AUTH[1], "")
+        return viewer
+
+    with open_client() as owner:
+        monkeypatch.setattr(auth_routes, "find_viewer", find_then_change_password)
+        made = owner.post("/api/tokens", json={"name": "mac"})
+    assert (made.status_code, made.json()) == (401, {"detail": "sign in first"})
+    assert auth_routes.accounts.list_tokens(find_owner().id) == []
+
+
 def test_a_members_token_reports_to_their_own_desk_and_manages_only_their_tokens(fresh_mac_tracking):
     from dayanpi.focus.tracker import format_day
 
-    owner_token = auth_routes.accounts.create_token(find_owner().id, "laptop", time.time())
+    owner_token = auth_routes.accounts.create_token(make_session_hash(find_owner()), "laptop", time.time())
     bo = add_member()
     member = let_in(stranger(), bo)
     made = member.post("/api/tokens", json={"name": "mac"}).json()
@@ -2173,6 +2195,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
             assert (text in reply.text) == (piece in pieces), f"{text} with {piece} {'on' if piece in pieces else 'off'}"
     if "history" in pieces:
         assert their["history"]["days"][f"{format_day(time.time())[:7]}-01"] == 77
+        assert (format_day(time.time()) in their["history"]["days"]) == ("today" in pieces), "today's live minutes need focus"
     if "app_youtube" in pieces:
         assert their["sites"] == [{"site": "secret.example", "seconds": 90.0}]
 
@@ -2389,6 +2412,30 @@ def test_a_picture_claiming_a_huge_size_is_dropped_before_anything_decodes_it(mo
     decoded = []
     monkeypatch.setattr(pictures.cv2, "imdecode", lambda *args: decoded.append(args) or None)
     for sent in (huge, b"\xff\xd8" + b"\x00" * 64, b"\xff\xd8\xff\xe0\x00\x00"):
+        assert pictures.read_browser_picture(as_base64(sent)) is None
+    assert decoded == [], "cv2 never saw them"
+
+
+def test_a_huge_size_hidden_where_libjpeg_reads_the_header_another_way_is_dropped(monkeypatch):
+    from dayanpi.focus import pictures
+
+    real = make_jpeg(320, 180)
+    sof = real.index(b"\xff\xc0")
+    small, rest = real[sof : sof + 19], real[sof + 19 :]
+    huge = small[:5] + (30000).to_bytes(2, "big") * 2 + small[9:]
+    comment = b"\xff\xfe\x00\x15"  # a COM segment around the small SOF, so libjpeg skips it
+    crafted = [
+        real[:sof] + b"\xff\xd0\x00\x19" + huge + comment + small + rest,  # RST0 has no length: libjpeg reads the huge one
+        real[:sof] + b"\xff\x01\x00\x19" + huge + comment + small + rest,  # TEM, the same way
+        real[:sof] + b"\xff\xfe\x00\x02\x00\x00" + huge + rest,  # stray bytes before a marker, which libjpeg skips
+        real[:sof] + b"\xff\xfe\x00\x00" + huge + rest,  # a length under 2
+        real[:sof] + small + huge + rest,  # two sizes
+        real[:sof] + small,  # never gets to the scan
+    ]
+    decoded = []
+    monkeypatch.setattr(pictures.cv2, "imdecode", lambda *args: decoded.append(args) or None)
+    for sent in crafted:
+        assert pictures.read_jpeg_size(sent) is None
         assert pictures.read_browser_picture(as_base64(sent)) is None
     assert decoded == [], "cv2 never saw them"
 

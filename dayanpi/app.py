@@ -277,10 +277,12 @@ def find_user(username: str) -> User:
     return user
 
 
-def build_history(desk: Desk, joined_at: float, focus: dict, now: float) -> dict:
-    """This month's focused minutes per day (today's live) and the total since they joined."""
+def build_history(desk: Desk, sharing: dict[str, bool], joined_at: float, focus: dict, now: float) -> dict:
+    """This month's focused minutes per day (today's live, only while they share focus time too) and the total since
+    they joined."""
     today = format_day(now)
-    written = days.read_focus_minutes(desk.days_dir) | {today: days.count_minutes(focus["today"]["working_seconds"])}
+    live = share_parts(sharing, {"history_today": lambda: {today: days.count_minutes(focus["today"]["working_seconds"])}})
+    written = days.read_focus_minutes(desk.days_dir) | live.get("history_today", {})
     joined = format_day(joined_at)
     history = {
         "month": today[:7],
@@ -298,8 +300,9 @@ def build_their_desk(user: User, now: float) -> dict:
     desk = desks.open(user.username, now)
     focus = build_desk_status(desk, now)
     chart = functools.cache(lambda: days.build_apps_chart(desk.log, now, "today"))
+    sharing = desk.sharing.read()
     pieces = share_parts(
-        desk.sharing.read(),
+        sharing,
         {
             "here_since": lambda: focus["today"]["first_seen"] if is_here(desk.seen_at, focus, now) else None,
             "today": lambda: {key: focus["today"][key] for key in ("working_seconds", "phone_seconds", "pickups")} | {"segments": desk.tracker.segments()},
@@ -307,7 +310,7 @@ def build_their_desk(user: User, now: float) -> dict:
             "apps": lambda: [{"app": row["app"], "total_seconds": row["total_seconds"]} for row in chart()],
             "app_youtube": lambda: {row["app"]: row["youtube_seconds"] for row in chart() if row.get("youtube_seconds")},
             "sites": lambda: days.build_sites_chart(desk.log, now),
-            "history": lambda: build_history(desk, user.created_at, focus, now),
+            "history": lambda: build_history(desk, sharing, user.created_at, focus, now),
             "video": lambda: True,
         },
     )
