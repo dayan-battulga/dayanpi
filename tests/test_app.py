@@ -26,7 +26,7 @@ os.environ.setdefault("DAYANPI_DATA_DIR", tempfile.mkdtemp(prefix="dayanpi-test-
 
 from dayanpi import app  # noqa: E402  (auth env must be set before import)
 from dayanpi.auth import routes as auth_routes  # noqa: E402
-from dayanpi.auth.accounts import SESSION_TTL_S, AccountStore, LoginLockout  # noqa: E402
+from dayanpi.auth.accounts import SESSION_TTL_S, AccountStore, LoginLockout, hash_secret  # noqa: E402
 from dayanpi.hardware import camera  # noqa: E402
 from dayanpi.hardware import collector  # noqa: E402
 from dayanpi.focus import worker as focus_worker  # noqa: E402
@@ -684,7 +684,7 @@ def test_a_hidden_part_is_in_no_stream_and_no_route(real_server, monkeypatch):
     for secret in ("secret plan", "SecretApp", "secret.example"):
         assert secret not in seen
     [mine] = [seat for seat in room["seats"] if seat["username"] == owner.username]
-    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "nudge"}
+    assert set(mine) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "nudge", "talk"}
 
     desk.sharing.update({"focus": True, "todos": True, "apps": True})
     make_room(monkeypatch, now)
@@ -733,7 +733,7 @@ def test_the_sharing_route_saves_your_switches_and_your_seat_is_what_the_room_ge
     assert [seat["username"] for seat in room["seats"]] == [owner.username, member.username]
     without_timer = lambda seat: {key: value for key, value in seat.items() if key != "seconds_in_state"}  # noqa: E731
     assert without_timer(reply.json()["seat"]) == without_timer(room["seats"][1]), "Settings' preview is what the room gets"
-    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "focus_seconds", "app", "nudge"}
+    assert set(reply.json()["seat"]) == {"username", "name", "here", "state", "seconds_in_state", "shares", "hidden", "lamp", "focus_seconds", "app", "nudge", "talk"}
     for bad in ({"status": False}, {"apps": "yes"}):
         assert client.post("/api/sharing", json=bad).status_code == 422
 
@@ -1411,6 +1411,7 @@ ACCESS = {
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
     ("POST", "/api/goal"): ("/api/goal", {"minutes": 45}, 401, 422, 422),
     ("POST", "/api/notepad"): ("/api/notepad", {"high": "yes"}, 401, 422, 422),
+    ("GET", "/api/talk"): ("/api/talk", None, 401, 404, 404),  # a WebSocket: plain HTTP finds nothing there
     ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
     ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
@@ -2227,7 +2228,7 @@ def test_their_desk_has_only_the_pieces_they_share(switches, pieces):
     desk.sharing.update(switches)
     reply = let_in(stranger(), find_owner()).get("/api/people/sam")
     their = reply.json()
-    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "here_since", "picture", "hidden", "lamp"}
+    seat_keys = {"username", "name", "here", "state", "seconds_in_state", "shares", "focus_seconds", "todos", "app", "site", "nudge", "talk", "here_since", "picture", "hidden", "lamp"}
     assert reply.status_code == 200
     assert set(their) - seat_keys == pieces
     for piece, texts in SECRETS.items():
@@ -2837,3 +2838,153 @@ def test_the_notepad_setting_is_your_own_and_starts_with_everything():
     assert me.get("/api/focus").json()["notepad"]["low"] is True
     for wrong in ({"low": "no"}, {"low": 0}, {"urgent": True}):
         assert member.post("/api/notepad", json=wrong).status_code == 422, wrong
+
+
+# ----- talking in the room (/api/talk, focus/talk.py) -----
+
+
+def open_talk(server: str, user=None, headers: dict | None = None, origin: str | None = "same"):
+    """A talk socket to the real server: signed in as user (a fresh session), from this site unless origin says
+    otherwise."""
+    from websockets.sync.client import connect
+
+    extra = dict(headers or {})
+    if user is not None:
+        extra |= session_header(user)
+    if origin is not None:
+        extra["Origin"] = server if origin == "same" else origin
+    socket = connect(server.replace("http://", "ws://") + "/api/talk", additional_headers=extra, open_timeout=3, close_timeout=1)
+    return socket
+
+
+def to(target: str, opus: bytes = b"\x0f\x0e") -> bytes:
+    return bytes([len(target)]) + target.encode() + opus
+
+
+def refused_status(server: str, **options) -> int | None:
+    from websockets.exceptions import InvalidStatus
+
+    try:
+        with open_talk(server, **options):
+            status_code = None
+    except InvalidStatus as refused:
+        status_code = refused.response.status_code
+    return status_code
+
+
+def test_the_talk_socket_only_opens_for_a_signed_in_room_member_on_this_site(real_server):
+    owner, sam = find_owner(), add_member("sam")
+    expired = {"Cookie": f"{COOKIE}={auth_routes.accounts.create_session(sam.id, time.time() - SESSION_TTL_S - 60)}"}
+    owners_session = auth_routes.accounts.create_session(owner.id, time.time())
+    token = auth_routes.accounts.create_token(hash_secret(owners_session), "mac", time.time()).secret
+    assert refused_status(real_server) == 403, "no session"
+    assert refused_status(real_server, headers=expired) == 403, "an expired session"
+    assert refused_status(real_server, headers={"Authorization": f"Bearer {token}"}) == 403, "a Mac token never counts"
+    assert refused_status(real_server, user=sam, origin="https://evil.example") == 403, "another site's page"
+    assert refused_status(real_server, user=sam, origin=None) == 403, "no Origin at all"
+    assert refused_status(real_server, user=sam) is None and refused_status(real_server, user=owner) is None
+
+    removed_session = session_header(sam)
+    auth_routes.accounts.delete_member(sam.id)
+    assert refused_status(real_server, headers=removed_session) == 403, "a removed account's old session"
+
+
+def test_an_open_talk_socket_closes_once_its_sign_in_is_gone(real_server, monkeypatch):
+    from websockets.exceptions import ConnectionClosed
+
+    monkeypatch.setattr(app, "TALK_SESSION_CHECK_S", 0.1)
+    sam = add_member("sam")
+    header = session_header(sam)
+    with open_talk(real_server, headers=header) as socket:
+        auth_routes.accounts.delete_session(header["Cookie"].split("=", 1)[1])
+        with pytest.raises(ConnectionClosed) as closed:
+            socket.recv(timeout=3)
+    assert closed.value.rcvd.code == 1008
+
+
+def test_frames_reach_only_the_people_they_are_for(real_server):
+    owner, sam, al = find_owner(), add_member("sam"), add_member("al")
+    mine = bytes([len(owner.username)]) + owner.username.encode()
+    with open_talk(real_server, owner) as me, open_talk(real_server, sam) as sams, open_talk(real_server, al) as als:
+        time.sleep(0.2)  # all three in the room
+        me.send(to(""))
+        assert (sams.recv(timeout=2), als.recv(timeout=2)) == (b"\x00" + mine + b"\x0f\x0e",) * 2, "to everyone, tagged with who"
+        me.send(to("sam", b"\x01"))
+        assert sams.recv(timeout=2) == b"\x01" + mine + b"\x01", "to sam alone, tagged to you"
+        sams.send(to(""))
+        assert me.recv(timeout=2) == b"\x00\x03sam\x0f\x0e" and als.recv(timeout=2) == b"\x00\x03sam\x0f\x0e"
+        with pytest.raises(TimeoutError):
+            als.recv(timeout=0.3)  # never got the frame for sam alone
+        with pytest.raises(TimeoutError):
+            sams.recv(timeout=0.3)  # nor its own
+
+
+def test_hear_the_room_off_gets_nothing_and_direct_talk_off_refuses_frames_for_them(real_server):
+    owner, sam, al = find_owner(), add_member("sam"), add_member("al")
+    desk_of(sam).sharing.update({"hear_room": False})
+    desk_of(al).sharing.update({"direct_talk": False})
+    with open_talk(real_server, owner) as me, open_talk(real_server, sam) as sams, open_talk(real_server, al) as als:
+        time.sleep(0.2)
+        me.send(to("al"))
+        me.send(to("sam"))
+        me.send(to(""))
+        assert als.recv(timeout=2)[:1] == b"\x00", "al still hears everyone, just not frames for al alone"
+        for socket in (sams, als):
+            with pytest.raises(TimeoutError):
+                socket.recv(timeout=0.3)
+
+
+def test_the_room_sees_who_takes_direct_talk_through_the_sharing_gate(monkeypatch):
+    sam = add_member("sam")
+    desk_of(sam)
+    seat = next(seat for seat in make_room(monkeypatch, time.time())["seats"] if seat["username"] == "sam")
+    assert seat["talk"] is True
+    desk_of(sam).sharing.update({"direct_talk": False})
+    seat = next(seat for seat in make_room(monkeypatch, time.time())["seats"] if seat["username"] == "sam")
+    assert "talk" not in seat
+    reply = let_in(stranger(), sam).post("/api/sharing", json={"hear_room": False, "direct_talk": True}).json()
+    assert (reply["sharing"]["hear_room"], reply["sharing"]["direct_talk"]) == (False, True)
+    assert "talk" not in reply["seat"], "nobody gets the mic for someone who can't hear it"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["hello", b"", b"\x05sam", to("", b"x" * 401), b"\x02\xff\xfe\x01"],
+    ids=["text", "empty", "cut short", "frame too big", "target not text"],
+)
+def test_a_malformed_message_closes_the_talk_socket(real_server, bad):
+    from websockets.exceptions import ConnectionClosed
+
+    with open_talk(real_server, add_member("sam")) as socket:
+        socket.send(bad)
+        with pytest.raises(ConnectionClosed) as closed:
+            socket.recv(timeout=2)
+    assert closed.value.rcvd.code == 1007
+
+
+def test_one_talk_socket_each_the_newest_wins(real_server):
+    from websockets.exceptions import ConnectionClosed
+
+    sam = add_member("sam")
+    with open_talk(real_server, sam) as first, open_talk(real_server, sam):
+        with pytest.raises(ConnectionClosed) as closed:
+            first.recv(timeout=3)
+    assert closed.value.rcvd.code == app.TALK_REPLACED
+
+
+def test_talking_writes_nothing_to_disk(real_server, tmp_path):
+    owner, sam = find_owner(), add_member("sam")
+    desk_of(owner), desk_of(sam)
+
+    def list_files() -> dict:
+        return {str(path): (path.stat().st_size, path.stat().st_mtime_ns) for path in tmp_path.rglob("*") if path.is_file()}
+
+    me_header, sam_header = session_header(owner), session_header(sam)
+    before = list_files()
+    with open_talk(real_server, headers=me_header) as me, open_talk(real_server, headers=sam_header) as sams:
+        time.sleep(0.2)
+        for _ in range(40):
+            me.send(to("", b"\x55" * 120))
+        assert len([sams.recv(timeout=2) for _ in range(40)]) == 40
+    time.sleep(0.2)
+    assert list_files() == before, "no audio, no log line, nothing on disk"

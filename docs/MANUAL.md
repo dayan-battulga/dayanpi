@@ -37,7 +37,8 @@ Always use the **`main`** branch on both machines.
 | `/api/invites`, `/api/accounts` | Owner only: invites and accounts |
 | `/api/stats` | One JSON snapshot (owner only) |
 | `/api/stream` | Live SSE feed: your own desk's `focus` and everyone's seat as `room` (members don't get the Pi's numbers) |
-| `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video", "nudges"}` as true/false; answers with all your switches and your seat as the room now sees it |
+| `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video", "nudges", "hear_room", "direct_talk"}` as true/false; answers with all your switches and your seat as the room now sees it |
+| `/api/talk` | The room's voices: one WebSocket per person while the site is open, signed in with the session cookie from a page on this site. It only passes Opus frames on, never keeps them. See [Talking in the room](#talking-in-the-room) |
 | `/people/<username>` | Someone's desk, read-only, built from what they share (yours goes to `/me`) |
 | `/api/people/<username>` | That desk as JSON: their seat and only the pieces they share |
 | `/api/people/<username>/picture` | Their seat's small picture as a JPEG, only while they share video, are at the desk and it's under 3 s old (404 otherwise) |
@@ -344,10 +345,28 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 - **Apps**, **Sites** and **Video** start off. Sites only counts while Apps is on. **Video** puts a small picture of you on your seat about once a second, only while you're working or on your phone: a friend's from the tracker on their laptop, yours from the front Pi camera, shrunk on the Pi ([pi-camera.md](pi-camera.md#your-seats-picture)), or from your browser if you picked that ([Your room picture](#your-room-picture)). This switch is the only place to show or hide it.
 - **Lamp color** picks the color your lamp shows while you're focused, out of six (Teal, the default, Green, Sky, Yellow, Pink and White), for everyone: your seat, the sidebar and bottom bar, the peek, your desk, the desk sign, plus your own wordmark and tab icon. On the phone stays orange and away stays violet for everyone, and the color goes out even with everything else switched off.
 - **Nudges** starts on: others can nudge you once you've been on your phone 5 minutes (at most once every 10). Off, nobody gets the button. A nudge speaks where your peace sign does (the Pi's speaker for you, their own computer for everyone else), so it needs the Pi's voice on like the peace sign ([voice.md](voice.md)); with it off they still get the toast.
+- **Hear the room** starts on: off, the Pi sends you none of the room's voices ([Talking in the room](#talking-in-the-room)).
+- **Let people talk to me directly** starts on: off, nobody gets the "Talk to you" mic on your seat or in your quick peek, and the Pi drops anything meant for you alone. You still hear people talking to everyone.
 
 Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as **Studied with** in their calendar's day pages.
 
 The preview next to the switches is your seat exactly as the others get it. The switches live in each person's folder as `data/users/<name>/sharing.json`, so a restart keeps them. More in [focus-tracker.md](focus-tracker.md#the-room-and-sharing-study-room-step-6-part-1).
+
+### Talking in the room
+
+People in the room can talk to each other, through the Pi only: no outside server ever hears it.
+
+- **Talk to everyone** is the button by the room's total. Click it once and your mic turns on (the first time, Chrome asks if the site can use it): the button glows teal and says "Mic on · everyone", and your seat says "To everyone". Click it again, or press Esc, to stop.
+- **Talk to one person** from their seat: point at it (or Tab to it) and a small "Talk to Sam" mic shows in its corner, or use **Talk to Sam** in the quick peek, next to Nudge. While it's on, the main button says "Mic on · Sam only" and stops it too, your seat says "To Sam only", and Sam's seat gets a soft teal ring, so you always know who hears you.
+- When someone's talking, their seat shows moving sound bars: "To everyone", or "To you" when it's just for you.
+- Your mic only stays on while you're on the Room page: it turns off when you go to another page or close the tab. You hear the room on any page while the site is open, unless **Hear the room** is off.
+- Browsers only play sound after you've clicked something on the page, so if you open the site and don't touch it, the first click (turning on your camera counts) lets the voices through.
+- It needs Chrome (it uses Chrome's built-in Opus encoder, like the camera uses Chrome-only parts). In other browsers the buttons are hidden and the Room says "Talking needs Chrome".
+- It works over Funnel too, from a phone on mobile data, since it's the same site.
+
+Two switches in Settings → **Sharing** decide what reaches you: **Hear the room** and **Let people talk to me directly** (both on to start).
+
+How it works, briefly: your browser encodes the mic as small Opus frames (about 24 kbps, one every 20 ms) and sends them over one WebSocket to the Pi (`/api/talk`), and the Pi hands each frame to whoever it's for. It never decodes, saves or logs any of it. The other browser decodes and plays it with a tiny buffer, so it's a fraction of a second behind. More in [focus-tracker.md](focus-tracker.md#talking-in-the-room).
 
 ### Your notepad and priorities
 
@@ -593,6 +612,9 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/
 
 curl -s -H 'Content-Type: application/json' -d '{"username":"nobody","password":"not-the-password"}' localhost:8000/api/login
 # expect {"detail":"wrong username or password"}
+
+curl -si -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8000/api/talk | head -1
+# expect HTTP/1.1 403 Forbidden (the talk socket needs a signed-in page on this site)
 
 curl -s -o /dev/null -w '%{http_code}\n' -d 'username=nobody&password=x' localhost:8000/api/login
 # expect 415 (a plain form post is refused: writes have to be JSON)

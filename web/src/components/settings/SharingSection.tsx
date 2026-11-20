@@ -16,6 +16,8 @@ const SWITCHES: { key: SharingSwitch; label: string }[] = [
   { key: "sites", label: "Sites" },
   { key: "video", label: "Video" },
   { key: "nudges", label: "Nudges" }, // whether others may nudge you; the button doesn't show for anyone while it's off
+  { key: "hear_room", label: "Hear the room" }, // off: the Pi sends you none of the room's voices
+  { key: "direct_talk", label: "Let people talk to me directly" }, // off: nobody gets "Talk to you", and the Pi drops it
 ];
 
 // Your lamp's color while focused; on the phone and away look the same for everyone. Each swatch gets its shade from

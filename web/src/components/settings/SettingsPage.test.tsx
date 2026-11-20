@@ -362,7 +362,7 @@ it("signs out", async () => {
 });
 
 it("picks your lamp color from six swatches, and your seat's preview takes it at once", async () => {
-  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "teal" as const };
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, hear_room: true, direct_talk: true, lamp: "teal" as const };
   const seat = makeSeat({ focus_seconds: 11538 });
   const sent = serveSettings(MEMBER, [], { "POST /api/sharing": answer({ sharing: { ...sharing, lamp: "pink" }, seat: { ...seat, lamp: "pink" } }) });
   const user = renderSettings();
@@ -381,7 +381,7 @@ it("picks your lamp color from six swatches, and your seat's preview takes it at
 });
 
 it("shares with the room what the switches say, and previews your seat as the room gets it", async () => {
-  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "teal" as const };
+  const sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, hear_room: true, direct_talk: true, lamp: "teal" as const };
   const seat = makeSeat({ focus_seconds: 11538 });
   const sent = serveSettings(OWNER, undefined, {
     "POST /api/sharing": answer({ sharing: { ...sharing, apps: true }, seat: { ...seat, app: "Code" } }),
@@ -401,6 +401,8 @@ it("shares with the room what the switches say, and previews your seat as the ro
     ["Sites", "false"],
     ["Video", "false"],
     ["Nudges", "true"],
+    ["Hear the room", "true"],
+    ["Let people talk to me directly", "true"],
   ]);
   const pieces = () => section.getByRole("list", { name: "What else the room sees" }).textContent;
   expect(section.getByLabelText("Your seat: Dayan")).toHaveTextContent("Dayan02:05");

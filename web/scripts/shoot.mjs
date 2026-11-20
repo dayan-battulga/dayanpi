@@ -257,6 +257,13 @@ async function shootApp(browser, appUrl, route, fixture, size, theme, actions, f
     }, fixture.storage);
   }
   const page = await context.newPage();
+  // The room's voices (/api/talk): the page's socket opens and stays quiet, or, with a fixture's "talk", hears those
+  // people, a frame every 20 ms as the Pi would pass them on ([kind][name length][name][Opus's 20 ms of silence]).
+  await page.routeWebSocket(/\/api\/talk$/, (socket) => {
+    const frames = (fixture.talk ?? []).map(({ from, kind }) => Buffer.from([kind === "you" ? 1 : 0, from.length, ...Buffer.from(from), 0xf8, 0xff, 0xfe]));
+    const timer = setInterval(() => frames.forEach((frame) => socket.send(frame)), 20);
+    socket.onClose(() => clearInterval(timer));
+  });
   if (fixture.now) await page.clock.setFixedTime(new Date(fixture.now));
   await page.goto(`${appUrl.replace(/\/$/, "")}${route}`);
   await page.waitForLoadState("load");

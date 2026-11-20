@@ -2,7 +2,7 @@ import { useHeldReply } from "@/hooks/useHeldReply";
 import { request } from "@/lib/http";
 import type { FocusStatus, LampColor, Room, Seat, Sharing } from "@/lib/types";
 
-export const DEFAULT_SHARING: Sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "teal" };
+export const DEFAULT_SHARING: Sharing = { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, hear_room: true, direct_talk: true, lamp: "teal" };
 
 interface SharingReply {
   sharing: Sharing;

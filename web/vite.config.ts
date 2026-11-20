@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
   // page itself: Chrome keeps the Pi's Secure session cookie on http://localhost too.
   const env = loadEnv(mode, webDir, "DAYANPI_");
   const toPi = { target: env.DAYANPI_URL, changeOrigin: true };
+  // The room's talk socket: the Pi only takes one from a page on its own site, so the upgrade carries the Pi's address.
+  const talkToPi = { ...toPi, ws: true, headers: { origin: env.DAYANPI_URL } };
   return {
     plugins: [react()],
     resolve: { alias: { "@": path.resolve(webDir, "src") } },
@@ -23,7 +25,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // /video also covers /video/side.
-      proxy: env.DAYANPI_URL ? { "/api": toPi, "/video": toPi } : undefined,
+      proxy: env.DAYANPI_URL ? { "/api/talk": talkToPi, "/api": toPi, "/video": toPi } : undefined,
       // The Pi's own isolation headers (app.py), so the camera gets its threads here too.
       headers: { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" },
     },

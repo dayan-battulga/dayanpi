@@ -10,13 +10,13 @@ import time
 from collections import defaultdict
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, suppress
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
-from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request, Response, status
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request, Response, WebSocket, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.websockets import WebSocketClose
+from starlette.websockets import WebSocketClose, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
 from typing import Annotated, Literal
@@ -35,6 +35,7 @@ from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shr
 from dayanpi.focus.sharing import AT_DESK_STATES, LAMP_COLORS, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime
+from dayanpi.focus.talk import TALK_PATH, Listener, TalkError, TalkRoom, read_frame
 from dayanpi.focus.todos import PRIORITIES, TEXT_MAX, TODOS_MAX, TodoListFull, hide_priorities
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
@@ -124,6 +125,9 @@ def make_write_allowance() -> TokenBucket:
 # By user id, which never comes back for another account. In memory, like the sign-in waits.
 write_allowances: defaultdict[int, TokenBucket] = defaultdict(make_write_allowance)
 write_refusals = RefusalNote()
+talk_room = TalkRoom()  # everyone with the Room open, for its voices (focus/talk.py); memory only, never any audio kept
+TALK_SESSION_CHECK_S = 2.0  # how soon an open talk socket notices its sign-in is gone
+TALK_REPLACED = 4001  # the close code when a newer socket of theirs took over, so the page doesn't try again
 
 
 class InviteCodeFilter(logging.Filter):
@@ -633,14 +637,15 @@ app = FastAPI(
 
 
 class WebSocketGate:
-    """Closes every WebSocket handshake. The session middleware only sees HTTP, so one would reach the routes
-    unchecked, and StaticFiles asserts on it: a 500 and a traceback in the journal per stranger's try."""
+    """Closes every WebSocket handshake but the Room's talk socket, which checks the sign-in itself (talk). The session
+    middleware only sees HTTP, so any other one would reach the routes unchecked, and StaticFiles asserts on it: a 500
+    and a traceback in the journal per stranger's try."""
 
     def __init__(self, inner) -> None:
         self.inner = inner
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "websocket":
+        if scope["type"] == "websocket" and scope["path"] != TALK_PATH:
             await WebSocketClose(code=1008)(scope, receive, send)
         else:
             await self.inner(scope, receive, send)
@@ -752,6 +757,74 @@ async def session_middleware(request: Request, call_next):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     return response
+
+
+def is_same_origin(websocket: WebSocket) -> bool:
+    """The page that opened the socket is on this site. A browser always says where a WebSocket comes from, and the
+    SameSite cookie aside, nothing else would stop another site's page from opening one with a visitor's sign-in."""
+    host = websocket.headers.get("host", "")
+    same = host != "" and urlsplit(websocket.headers.get("origin", "")).netloc == host
+    return same
+
+
+async def close_quietly(websocket: WebSocket, code: int) -> None:
+    try:
+        await websocket.close(code=code)
+    except RuntimeError:
+        pass  # the other side closed it first
+
+
+async def pass_frames_on(websocket: WebSocket, listener: Listener, token: str) -> None:
+    """Sends the listener the frames for them until a newer socket of theirs takes over or their sign-in is gone
+    (signed out, a password change, the account removed), checked every TALK_SESSION_CHECK_S, then closes it."""
+    signed_in = True
+    checked_at = time.monotonic()
+    try:
+        while signed_in and not listener.replaced:
+            try:
+                await websocket.send_bytes(await asyncio.wait_for(listener.queue.get(), TALK_SESSION_CHECK_S))
+            except TimeoutError:
+                pass
+            if time.monotonic() - checked_at >= TALK_SESSION_CHECK_S:
+                signed_in = auth_routes.accounts.find_session(token, time.time()) is not None
+                checked_at = time.monotonic()
+        await close_quietly(websocket, TALK_REPLACED if signed_in else status.WS_1008_POLICY_VIOLATION)
+    except (WebSocketDisconnect, RuntimeError):
+        pass  # it closed under us; take_talk is ending too
+
+
+async def take_talk(websocket: WebSocket, username: str, token: str) -> None:
+    """Routes the talker's frames (talk_room.route) while pass_frames_on sends them theirs, until either side closes.
+    Anything that isn't a talk frame, text included, closes the socket."""
+    listener = talk_room.join(username)
+    sending = asyncio.create_task(pass_frames_on(websocket, listener, token))
+    try:
+        while not sending.done():
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            frame = read_frame(message.get("bytes") or b"")
+            talk_room.route(listener, frame, lambda name: desks.open(name, time.time()).sharing.read(), time.time())
+    except TalkError:
+        await close_quietly(websocket, status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        talk_room.leave(listener)
+        sending.cancel()
+
+
+@app.websocket(TALK_PATH)
+async def talk(websocket: WebSocket):
+    """The Room's voices (focus/talk.py). The session middleware never sees a WebSocket, so this does its check before
+    accepting: a page on this site with a live session cookie (a Mac token never counts). Anyone else's handshake is
+    refused."""
+    viewer = auth_routes.find_viewer(websocket, time.time()) if is_same_origin(websocket) else None
+    if viewer is None or viewer.session is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    else:
+        await websocket.accept()
+        await take_talk(websocket, viewer.user.username, websocket.cookies[auth_routes.SESSION_COOKIE])
 
 
 def frame_generator(camera: CameraStream, token: str) -> Iterator[bytes]:
@@ -1102,6 +1175,8 @@ class SharingChange(BaseModel):
     sites: StrictBool | None = None
     video: StrictBool | None = None
     nudges: StrictBool | None = None
+    hear_room: StrictBool | None = None
+    direct_talk: StrictBool | None = None
     lamp: Literal[LAMP_COLORS] | None = None  # only the presets
 
 

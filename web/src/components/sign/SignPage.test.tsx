@@ -117,7 +117,7 @@ it("does without a wake lock quietly: a refusal, or none at all", async () => {
 it("lights each lamp in that person's own color, mine across the whole sign", async () => {
   openSign();
   FakeEventSource.latest?.send({
-    ...makeSnapshot(makeFocus({ sharing: { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, lamp: "yellow" } })),
+    ...makeSnapshot(makeFocus({ sharing: { focus: true, todos: true, history: true, apps: false, sites: false, video: false, nudges: true, hear_room: true, direct_talk: true, lamp: "yellow" } })),
     room: { seats: [{ ...ROOM.seats[0], lamp: "yellow" }, { ...ROOM.seats[1], lamp: "pink" }, ROOM.seats[2]] },
   });
   const room = within(await screen.findByRole("list", { name: "The room" }));

@@ -110,6 +110,8 @@ export interface Sharing {
   sites: boolean;
   video: boolean;
   nudges: boolean; // whether others may nudge you
+  hear_room: boolean; // whether the Pi sends you the room's voices at all
+  direct_talk: boolean; // whether anyone may talk to you alone
   lamp: LampColor; // your lamp's color while focused, which everyone sees
 }
 
@@ -132,6 +134,7 @@ export interface Seat {
   app?: string | null;
   site?: string | null;
   nudge?: { wait_s: number; age_s: number | null }; // only while they take nudges
+  talk?: boolean; // only while they hear the room and take direct talk: others get "Talk to <name>"
   picture?: { at: number } | null; // while they share video: a fresh picture to fetch (/api/people/<username>/picture), or none
 }
 

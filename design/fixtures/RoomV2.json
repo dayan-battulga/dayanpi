@@ -1,5 +1,5 @@
 {
-  "about": "For comparing / to design/mockups/RoomV2.dc.html: the Room with your notepad pinned on the right (from 1280 px) and the four seats in a 2 by 2 grid. Your to-dos are in the list's own order with priorities, so the notepad sorts them high, medium, low, none, and Problem set 3 is the one you're working on. A 4h goal puts the ring on your seat. The talk button comes later, so its spot stays empty.",
+  "about": "For comparing / to design/mockups/RoomV2.dc.html: the Room with your notepad pinned on the right (from 1280 px) and the four seats in a 2 by 2 grid. Your to-dos are in the list's own order with priorities, so the notepad sorts them high, medium, low, none, and Problem set 3 is the one you're working on. A 4h goal puts the ring on your seat. The talk button comes later, so its spot stays empty. The microphone is granted (Chrome's fake one), so the talk buttons really turn it on.",
   "now": "2026-11-16T19:12:18-06:00",
   "timezone": "America/Chicago",
   "mockupOptions": {
@@ -129,7 +129,9 @@
         "sites": false,
         "video": true,
         "nudges": true,
-        "lamp": "pink"
+        "lamp": "pink",
+        "hear_room": true,
+        "direct_talk": true
       },
       "goal_minutes": 240,
       "notepad": {
@@ -170,7 +172,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "sam",
@@ -201,7 +204,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "alex",
@@ -230,7 +234,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "jordan",
@@ -255,7 +260,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         }
       ]
     }
@@ -278,5 +284,8 @@
     "/api/people/alex/picture": {
       "$file": "design/fixtures/pictures/sam.jpg"
     }
-  }
+  },
+  "permissions": [
+    "microphone"
+  ]
 }

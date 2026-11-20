@@ -18,6 +18,7 @@ import { PHONE_QUERY, WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNudgeToast } from "@/hooks/useNudge";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { type Talk, useTalk } from "@/hooks/useTalk";
 import { useTabIcon } from "@/hooks/useTabIcon";
 import { SPRINGS } from "@/lib/motion";
 import { listOthersHere, orderSeats, summarizeRoom } from "@/lib/room";
@@ -32,7 +33,7 @@ const RAIL_PX = { open: 360, collapsed: 76, notepad: 340 };
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
 // What every page inside the frame gets: the one stream, who you are, a clock that never runs backwards, the Mac
-// tracking pick (shared with ⌘K) and this browser's camera.
+// tracking pick (shared with ⌘K), this browser's camera and the room's voices.
 export interface FrameData {
   snapshot: Snapshot | null;
   connection: Connection;
@@ -42,6 +43,7 @@ export interface FrameData {
   setUser: (user: User) => void;
   macTracking: MacTracking;
   camera: Camera;
+  talk: Talk;
 }
 
 export function useFrame(): FrameData {
@@ -78,7 +80,9 @@ export function Frame() {
   // A hidden tab's stream is closed, but the camera's readings still bring the peace sign's message, so its clip plays.
   const shownSpoken = snapshot?.focus?.spoken;
   const peaceVoice = usePeaceVoice((camera.spoken?.at ?? -1) > (shownSpoken?.at ?? -1) ? camera.spoken : shownSpoken);
-  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking, camera };
+  // You hear the room on every page; only the Room's buttons turn your mic on, and leaving it turns it off.
+  const talk = useTalk();
+  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking, camera, talk };
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
   const room = summarizeRoom(seats);
   const others = listOthersHere(seats, user?.username);

@@ -100,7 +100,9 @@
         "sites": false,
         "video": true,
         "nudges": true,
-        "lamp": "teal"
+        "lamp": "teal",
+        "hear_room": true,
+        "direct_talk": true
       }
     },
     "room": {
@@ -134,7 +136,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "sam",
@@ -165,7 +168,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "alex",
@@ -190,7 +194,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         }
       ]
     }

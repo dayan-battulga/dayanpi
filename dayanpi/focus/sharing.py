@@ -19,8 +19,11 @@ from dayanpi.utils.files import JsonSetting
 
 SHARING_FILE = "sharing.json"
 SEAT_FILE = "seat.json"  # {"hidden": bool}: someone tidied this offline seat out of the room
-# Nudges isn't something you show; it's whether others may nudge you.
-DEFAULT_SHARING = {"focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True}
+# Nudges isn't something you show; it's whether others may nudge you. hear_room is whether the Pi sends you the room's
+# voices at all, and direct_talk whether anyone may talk to you alone (focus/talk.py).
+DEFAULT_SHARING = {
+    "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True, "hear_room": True, "direct_talk": True,
+}
 # The colors anyone can pick for their lamp while focused; dashboard.css has their shades (--lamp-<name>).
 LAMP_COLORS = ("teal", "green", "sky", "yellow", "pink", "white")
 SHOWN_SWITCHES = ("focus", "todos", "apps", "sites", "video", "history")  # what "Sam shares ..." lists, in its order
@@ -47,6 +50,7 @@ NEEDS = {
     "app": ("apps",),
     "site": ("apps", "sites"),
     "nudge": ("nudges",),
+    "talk": ("hear_room", "direct_talk"),  # whether others get "Talk to <name>": only if they'd hear it
     "picture": ("video",),  # the seat's say-so ({at}); the JPEG itself goes through the same part (app.their_picture)
     # Their desk (/api/people/<username>) and the quick peek, on top of the seat. When they got here is status too.
     "here_since": (),
@@ -151,6 +155,7 @@ def build_seat(
             "app": lambda: status["app"],
             "site": lambda: status["site"],
             "nudge": lambda: describe_nudge(nudged, now),
+            "talk": lambda: True,
             "picture": lambda: None if fresh is None else {"at": fresh["at"]},
         },
     )

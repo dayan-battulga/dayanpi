@@ -100,7 +100,9 @@
         "sites": false,
         "video": false,
         "nudges": true,
-        "lamp": "teal"
+        "lamp": "teal",
+        "hear_room": true,
+        "direct_talk": true
       },
       "notepad": {
         "high": true,
@@ -134,7 +136,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         }
       ]
     }
@@ -212,7 +215,9 @@
         "sites": false,
         "video": false,
         "nudges": true,
-        "lamp": "teal"
+        "lamp": "teal",
+        "hear_room": true,
+        "direct_talk": true
       },
       "seat": {
         "username": "dayan",
@@ -239,7 +244,8 @@
         "nudge": {
           "wait_s": 0.0,
           "age_s": null
-        }
+        },
+        "talk": true
       }
     }
   }

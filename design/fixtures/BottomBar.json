@@ -98,7 +98,9 @@
         "sites": false,
         "video": false,
         "nudges": true,
-        "lamp": "teal"
+        "lamp": "teal",
+        "hear_room": true,
+        "direct_talk": true
       }
     },
     "room": {
@@ -126,7 +128,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         },
         {
           "username": "sam",
@@ -156,7 +159,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         },
         {
           "username": "alex",
@@ -179,7 +183,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         }
       ]
     }
@@ -666,7 +671,8 @@
         "total_minutes": 613
       },
       "video": true,
-      "here_since": 1794867120
+      "here_since": 1794867120,
+      "talk": true
     },
     "/api/people/alex": {
       "username": "alex",
@@ -738,7 +744,8 @@
         },
         "total_minutes": 350
       },
-      "here_since": 1794841200
+      "here_since": 1794841200,
+      "talk": true
     }
   }
 }

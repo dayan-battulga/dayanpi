@@ -1,8 +1,9 @@
-import { Plus, X } from "lucide-react";
+import { Mic, Plus, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
 import { SeatPicture } from "@/components/room/SeatPicture";
+import { SoundBars } from "@/components/room/TalkControl";
 import { GoalRing, formatGoalProgress } from "@/components/shared/GoalRing";
 import { CameraControl } from "@/components/track/CameraControl";
 import type { Camera } from "@/hooks/useCamera";
@@ -25,6 +26,24 @@ interface SeatCardProps {
   onHide: () => void; // someone else's offline seat's ×
   camera?: Camera; // your own seat, while your desk is on this browser's camera
   goal?: { seconds: number; minutes: number }; // your own seat, with your daily goal: only you ever see it
+  talk?: SeatTalk;
+}
+
+// Who hears whom, on a seat (RoomV2.dc.html): the chip with sound bars while they talk, or while you do on your own seat
+// ("To everyone", "To Sam only", "To you"), a ring, and on someone else's seat the mic to talk to just them.
+export interface SeatTalk {
+  chip?: string;
+  ring?: "on" | "soft"; // on: talking, or talking to you; soft: the one person you're talking to
+  mic?: { on: boolean; onToggle: () => void }; // only while they take direct talk and talking works here
+}
+
+function TalkChip({ text }: { text: string }) {
+  return (
+    <span className="talk-chip">
+      <SoundBars />
+      <span className="talk-chip-text">{text}</span>
+    </span>
+  );
 }
 
 // Your own camera, live on your seat while it's on: straight from the camera, so nothing extra goes to the Pi. It sits
@@ -46,7 +65,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera, goal }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera, goal, talk }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -55,7 +74,7 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
   const nudgedAgo = seat.nudge?.age_s == null ? null : seat.nudge.age_s + elapsed;
   const live = camera?.step === "on" ? camera.preview : null;
   return (
-    <article className="seat" data-state={seat.state} data-lamp={seat.lamp} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
+    <article className="seat" data-state={seat.state} data-lamp={seat.lamp} data-talk={talk?.ring} aria-label={`${seat.name}, ${mine ? "you" : SEAT_WORDS[seat.state]}`}>
       {!mine && <button type="button" className="seat-peek" aria-label={`Peek at ${seat.name}`} aria-haspopup="dialog" onClick={onPeek} />}
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
@@ -67,16 +86,30 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
           <span />
         </span>
       )}
-      <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
+      {mine ? (
+        (camera != null || talk?.chip != null) && (
+          <div className="seat-tools">
+            {talk?.chip != null && <TalkChip text={talk.chip} />}
+            {camera != null && <CameraControl camera={camera} place="seat" />}
+          </div>
+        )
+      ) : (
+        <div className="seat-corner">
+          {/* First, so while it's hidden it never pushes the chip in from the corner. */}
+          {talk?.mic != null && (
+            <button type="button" className="seat-mic" data-on={talk.mic.on || undefined} aria-pressed={talk.mic.on} onClick={talk.mic.onToggle}>
+              <Mic size={14} strokeWidth={2} aria-hidden="true" />
+              {talk.mic.on ? `Talking to ${seat.name}` : `Talk to ${seat.name}`}
+            </button>
+          )}
+          {talk?.chip != null && <TalkChip text={talk.chip} />}
+          <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="bell" />
+        </div>
+      )}
       {!mine && !seat.here && (
         <button type="button" className="seat-hide" aria-label={`Hide ${seat.name}’s seat`} onClick={onHide}>
           <X size={16} strokeWidth={1.8} aria-hidden="true" />
         </button>
-      )}
-      {camera != null && (
-        <div className="seat-tools">
-          <CameraControl camera={camera} place="seat" />
-        </div>
       )}
       {goal != null ? (
         <span className="seat-chip seat-chip-goal">

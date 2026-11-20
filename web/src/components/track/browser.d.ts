@@ -1,7 +1,8 @@
 // The Chrome-only pieces the camera test and the tracker use that TypeScript's DOM types don't have yet. Each may be missing at
 // run time, so each is optional.
 
-declare var MediaStreamTrackProcessor: (new (init: { track: MediaStreamTrack }) => { readonly readable: ReadableStream<VideoFrame> }) | undefined;
+// A camera's track reads as VideoFrames, a microphone's (the room's talk) as AudioData.
+declare var MediaStreamTrackProcessor: (new <Frame = VideoFrame>(init: { track: MediaStreamTrack }) => { readonly readable: ReadableStream<Frame> }) | undefined;
 
 interface Window {
   documentPictureInPicture?: { requestWindow(options?: { width?: number; height?: number }): Promise<Window> };

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Mic, X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { Link } from "react-router";
 import { AppBars, DayBar, TheirTodoList, describeDone } from "@/components/people/TheirPieces";
@@ -20,6 +20,7 @@ interface PeekDialogProps {
   now: number;
   elapsed: number;
   onClose: () => void;
+  talk?: { on: boolean; onToggle: () => void }; // while they take direct talk and talking works here
 }
 
 // What the footer says when there's no Nudge: "Away for 12 minutes".
@@ -30,7 +31,7 @@ function describeFor(seat: Seat, elapsed: number): string {
 
 // The quick peek when you tap someone's seat (PersonPanel.dc.html): what they're on, their day, to-dos and apps, each only
 // if they share it, Nudge, and the way to their whole desk.
-function PeekCard({ seat, username, nudger, now, elapsed }: Omit<PeekDialogProps, "onClose"> & { seat: Seat }) {
+function PeekCard({ seat, username, nudger, now, elapsed, talk }: Omit<PeekDialogProps, "onClose"> & { seat: Seat }) {
   const { desk } = useTheirDesk(seat.username, seat.shares.join(), now);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
   const meta = describeTaskMeta(seat);
@@ -92,7 +93,15 @@ function PeekCard({ seat, username, nudger, now, elapsed }: Omit<PeekDialogProps
         <Link className="peek-open" to={`/people/${encodeURIComponent(seat.username)}`}>
           Open {seat.name}’s desk →
         </Link>
-        {isNudgeable(seat, username) ? <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="text" /> : <p className="peek-meta">{describeFor(seat, elapsed)}</p>}
+        <div className="peek-actions">
+          {talk != null && (
+            <button type="button" className="peek-talk" data-on={talk.on || undefined} aria-pressed={talk.on} onClick={talk.onToggle}>
+              <Mic size={16} strokeWidth={2} aria-hidden="true" />
+              {talk.on ? `Mic on · ${seat.name} only (stop)` : `Talk to ${seat.name}`}
+            </button>
+          )}
+          {isNudgeable(seat, username) ? <NudgeButton seat={seat} username={username} nudger={nudger} elapsed={elapsed} now={now} kind="text" /> : <p className="peek-meta">{describeFor(seat, elapsed)}</p>}
+        </div>
       </div>
     </>
   );

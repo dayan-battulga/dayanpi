@@ -32,7 +32,8 @@ def share(**on) -> dict:
 
 def test_the_switches_start_with_focus_todos_and_history_on(tmp_path):
     assert SharingSetting(tmp_path / "sharing.json").read() == {
-        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True, "lamp": "teal",
+        "focus": True, "todos": True, "history": True, "apps": False, "sites": False, "video": False, "nudges": True,
+        "hear_room": True, "direct_talk": True, "lamp": "teal",
     }
 
 
@@ -80,6 +81,7 @@ def test_status_always_shows_and_nothing_else_of_the_desk_ever_does():
         "app": "SecretApp",
         "site": "secret.example",
         "nudge": {"wait_s": 0.0, "age_s": None},
+        "talk": True,
         "picture": None,  # shares video, but no picture right now
     }
     status_only = {"username": "sam", "name": "Sam", "here": True, "state": "phone", "seconds_in_state": 365.0, "shares": [], "hidden": False, "lamp": "pink"}

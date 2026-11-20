@@ -98,7 +98,9 @@
         "sites": false,
         "video": false,
         "nudges": true,
-        "lamp": "teal"
+        "lamp": "teal",
+        "hear_room": true,
+        "direct_talk": true
       }
     },
     "room": {
@@ -128,7 +130,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         },
         {
           "username": "sam",
@@ -161,7 +164,8 @@
           },
           "picture": {
             "at": 1794877937.6
-          }
+          },
+          "talk": true
         },
         {
           "username": "alex",
@@ -184,7 +188,8 @@
           "nudge": {
             "wait_s": 0.0,
             "age_s": null
-          }
+          },
+          "talk": true
         }
       ]
     }
@@ -342,7 +347,8 @@
       "here_since": 1794867120,
       "picture": {
         "at": 1794877937.6
-      }
+      },
+      "talk": true
     },
     "POST /api/nudge": {
       "status": "ok",

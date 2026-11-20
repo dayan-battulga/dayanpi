@@ -1,0 +1,297 @@
+{
+  "about": "RoomV2.json with Sam talking to you: the fake /api/talk socket (shoot.mjs) hears a frame from Sam, for you alone, every 20 ms, so Sam's seat shows To you with its ring (RoomV2's moment Sam to you).",
+  "now": "2026-11-16T19:12:18-06:00",
+  "timezone": "America/Chicago",
+  "mockupOptions": {
+    "moment": "Sam to you",
+    "notepad": "open"
+  },
+  "stream": {
+    "temperature_celsius": 51.3,
+    "uptime_seconds": 351000,
+    "memory": {
+      "total_mb": 8000,
+      "available_mb": 5100,
+      "percent_used": 36.3
+    },
+    "throttle": {
+      "is_undervoltage": false
+    },
+    "rates": {
+      "cpu_percent": 21.5
+    },
+    "focus": {
+      "state": "working",
+      "since": 1794875400,
+      "seconds_in_state": 2538,
+      "today": {
+        "working_seconds": 9600,
+        "phone_seconds": 1440,
+        "pickups": 2,
+        "longest_streak_seconds": 4800,
+        "first_seen": 1794844800
+      },
+      "app": "Code",
+      "site": null,
+      "mac_tracking": true,
+      "camera_source": "pi",
+      "picture_source": "pi",
+      "pi_camera": "front",
+      "camera_paused": false,
+      "bedtime": "00:00",
+      "voice_output": "pi",
+      "camera_ok": true,
+      "last_check": {
+        "person": 0.93,
+        "phone": 0.02,
+        "elapsed_ms": 190
+      },
+      "enabled": true,
+      "side_camera": true,
+      "side_camera_running": true,
+      "overlay": null,
+      "side_overlay": null,
+      "voice": {
+        "enabled": true,
+        "backend": "piper",
+        "problem": null
+      },
+      "todos": {
+        "current": "t1",
+        "open": [
+          {
+            "id": "t1",
+            "text": "Problem set 3",
+            "seconds": 2280,
+            "done_at": null,
+            "priority": "none"
+          },
+          {
+            "id": "t2",
+            "text": "Lab report outline",
+            "seconds": 720,
+            "done_at": null,
+            "priority": "medium"
+          },
+          {
+            "id": "t5",
+            "text": "Read chapter 8",
+            "seconds": 0,
+            "done_at": null,
+            "priority": "none"
+          },
+          {
+            "id": "t6",
+            "text": "CS 571 project demo",
+            "seconds": 0,
+            "done_at": null,
+            "priority": "high"
+          },
+          {
+            "id": "t7",
+            "text": "Buy Mom’s bday gift",
+            "seconds": 0,
+            "done_at": null,
+            "priority": "low"
+          },
+          {
+            "id": "t8",
+            "text": "Quiz review",
+            "seconds": 300,
+            "done_at": null,
+            "priority": "medium"
+          },
+          {
+            "id": "t9",
+            "text": "Email TA about lab grade",
+            "seconds": 0,
+            "done_at": null,
+            "priority": "high"
+          }
+        ],
+        "done": [
+          {
+            "id": "t4",
+            "text": "Review lecture 18 notes",
+            "seconds": 1500,
+            "done_at": 1794868800,
+            "priority": "none"
+          }
+        ]
+      },
+      "gesture": null,
+      "spoken": null,
+      "sharing": {
+        "focus": true,
+        "todos": true,
+        "history": true,
+        "apps": true,
+        "sites": false,
+        "video": true,
+        "nudges": true,
+        "lamp": "pink",
+        "hear_room": true,
+        "direct_talk": true
+      },
+      "goal_minutes": 240,
+      "notepad": {
+        "high": true,
+        "medium": true,
+        "low": true,
+        "none": true
+      }
+    },
+    "room": {
+      "seats": [
+        {
+          "username": "dayan",
+          "name": "Dayan",
+          "here": true,
+          "state": "working",
+          "seconds_in_state": 2538,
+          "shares": [
+            "focus",
+            "todos",
+            "apps",
+            "video",
+            "history"
+          ],
+          "hidden": false,
+          "lamp": "teal",
+          "focus_seconds": 9600,
+          "todos": {
+            "current": "Problem set 3",
+            "current_seconds": 2280,
+            "done": 1,
+            "total": 8
+          },
+          "app": "Code",
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
+          },
+          "talk": true
+        },
+        {
+          "username": "sam",
+          "name": "Sam",
+          "here": true,
+          "state": "working",
+          "seconds_in_state": 1450,
+          "shares": [
+            "focus",
+            "todos",
+            "apps",
+            "video",
+            "history"
+          ],
+          "hidden": false,
+          "lamp": "teal",
+          "focus_seconds": 10080,
+          "todos": {
+            "current": "Read chapter 7",
+            "current_seconds": 1440,
+            "done": 1,
+            "total": 4
+          },
+          "app": "Chrome",
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
+          },
+          "talk": true
+        },
+        {
+          "username": "alex",
+          "name": "Alex",
+          "here": true,
+          "state": "phone",
+          "seconds_in_state": 365,
+          "shares": [
+            "focus",
+            "todos",
+            "video",
+            "history"
+          ],
+          "hidden": false,
+          "lamp": "teal",
+          "focus_seconds": 5820,
+          "todos": {
+            "current": "Flashcards, unit 4",
+            "current_seconds": 900,
+            "done": 3,
+            "total": 5
+          },
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          },
+          "picture": {
+            "at": 1794877937.6
+          },
+          "talk": true
+        },
+        {
+          "username": "jordan",
+          "name": "Jordan",
+          "here": true,
+          "state": "away",
+          "seconds_in_state": 760,
+          "shares": [
+            "focus",
+            "todos",
+            "history"
+          ],
+          "hidden": false,
+          "lamp": "teal",
+          "focus_seconds": 2700,
+          "todos": {
+            "current": null,
+            "current_seconds": null,
+            "done": 0,
+            "total": 2
+          },
+          "nudge": {
+            "wait_s": 0.0,
+            "age_s": null
+          },
+          "talk": true
+        }
+      ]
+    }
+  },
+  "routes": {
+    "/api/me": {
+      "user": {
+        "id": 1,
+        "username": "dayan",
+        "display_name": "Dayan",
+        "role": "owner"
+      }
+    },
+    "/api/people/dayan/picture": {
+      "$file": "design/fixtures/pictures/dayan.jpg"
+    },
+    "/api/people/sam/picture": {
+      "$file": "design/fixtures/pictures/sam.jpg"
+    },
+    "/api/people/alex/picture": {
+      "$file": "design/fixtures/pictures/sam.jpg"
+    }
+  },
+  "permissions": [
+    "microphone"
+  ],
+  "talk": [
+    {
+      "from": "sam",
+      "kind": "you"
+    }
+  ]
+}
