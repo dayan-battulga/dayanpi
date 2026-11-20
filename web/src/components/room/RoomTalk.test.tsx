@@ -28,7 +28,8 @@ vi.mock("@/hooks/useTalk", async () => {
         voices.asked.push("stop");
         setTarget(null);
       }, []);
-      return { supported: voices.supported, target, talking: voices.talking, talkTo, stop };
+      const listenSignals = useCallback(() => () => {}, []);
+      return { supported: voices.supported, connected: false, sendSignal: () => {}, listenSignals, target, talking: voices.talking, talkTo, stop };
     },
   };
 });

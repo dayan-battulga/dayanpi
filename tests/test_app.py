@@ -1412,6 +1412,7 @@ ACCESS = {
     ("POST", "/api/goal"): ("/api/goal", {"minutes": 45}, 401, 422, 422),
     ("POST", "/api/notepad"): ("/api/notepad", {"high": "yes"}, 401, 422, 422),
     ("GET", "/api/talk"): ("/api/talk", None, 401, 404, 404),  # a WebSocket: plain HTTP finds nothing there
+    ("GET", "/api/rtc"): ("/api/rtc", None, 401, 200, 200),
     ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
     ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
@@ -2988,3 +2989,70 @@ def test_talking_writes_nothing_to_disk(real_server, tmp_path):
         assert len([sams.recv(timeout=2) for _ in range(40)]) == 40
     time.sleep(0.2)
     assert list_files() == before, "no audio, no log line, nothing on disk"
+
+
+# ----- smooth video (focus/smooth_video.py): /api/rtc and the signaling on /api/talk -----
+
+
+class FakeTurn:
+    """Stands in for the Cloudflare client: what it would hand out, and how often it was asked."""
+
+    def __init__(self):
+        self.asked = 0
+
+    def find_servers(self, now):
+        self.asked += 1
+        return [{"urls": ["turn:turn.example:3478"], "username": "u", "credential": "short-lived"}]
+
+
+def test_smooth_video_is_off_with_nothing_outside_unless_the_pi_turns_it_on(monkeypatch):
+    from dayanpi.focus.smooth_video import STUN_SERVER, SmoothVideo
+
+    member = let_in(stranger(), add_member("sam"))
+    assert stranger().get("/api/rtc").status_code == 401
+    assert member.get("/api/rtc").json() == {"smooth_video": False, "ice_servers": []}
+    turn = FakeTurn()
+    monkeypatch.setattr(app, "smooth_video", SmoothVideo(True, turn))
+    described = member.get("/api/rtc").json()
+    assert described["ice_servers"] == [STUN_SERVER, *FakeTurn().find_servers(0)]
+    monkeypatch.setattr(app, "smooth_video", SmoothVideo(True, None))
+    assert member.get("/api/rtc").json() == {"smooth_video": True, "ice_servers": [STUN_SERVER]}, "no TURN keys, no TURN"
+
+
+def test_the_built_page_has_no_outside_server_in_it():
+    built = "".join(path.read_text(errors="ignore") for path in (app.STATIC_DIR / "assets").glob("*.js"))
+    assert "stun:" not in built and "cloudflare" not in built.lower(), "the ICE servers only ever come from /api/rtc"
+
+
+def test_signaling_only_passes_between_signed_in_members_while_smooth_video_is_on(real_server, monkeypatch):
+    from websockets.exceptions import ConnectionClosed
+
+    from dayanpi.focus.smooth_video import SmoothVideo
+
+    owner, sam, al = find_owner(), add_member("sam"), add_member("al")
+    offer = {"to": "sam", "signal": {"description": {"type": "offer", "sdp": "v=0"}}}
+    with open_talk(real_server, owner) as me, open_talk(real_server, sam) as sams:
+        me.send(json.dumps(offer))
+        with pytest.raises(ConnectionClosed) as closed:
+            me.recv(timeout=2)
+        assert closed.value.rcvd.code == 1007, "no signaling while smooth video is off"
+        with pytest.raises(TimeoutError):
+            sams.recv(timeout=0.3)
+
+    monkeypatch.setattr(app, "smooth_video", SmoothVideo(True, None))
+    with open_talk(real_server, owner) as me, open_talk(real_server, sam) as sams, open_talk(real_server, al) as als:
+        time.sleep(0.2)
+        me.send(json.dumps(offer))
+        assert json.loads(sams.recv(timeout=2)) == {"from": owner.username, "signal": offer["signal"]}
+        me.send(json.dumps({"to": owner.username, "signal": {"candidate": "x"}}))  # to yourself: dropped
+        me.send(json.dumps({"to": "nobody", "signal": {"candidate": "x"}}))  # not connected: dropped
+        with pytest.raises(TimeoutError):
+            als.recv(timeout=0.3)
+        with pytest.raises(TimeoutError):
+            me.recv(timeout=0.3)
+        for bad in ("{not json", json.dumps({"to": "sam"}), json.dumps({"to": "sam", "signal": "x"}), json.dumps({"to": "s" * 40, "signal": {}}), "x" * 20_000):
+            with open_talk(real_server, al) as socket:
+                socket.send(bad)
+                with pytest.raises(ConnectionClosed) as closed:
+                    socket.recv(timeout=2)
+            assert closed.value.rcvd.code == 1007, bad[:30]

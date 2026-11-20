@@ -8,15 +8,16 @@ class FakeSocket {
   static OPEN = 1;
   static opened: FakeSocket[] = [];
   readyState = 1;
+  onopen: (() => void) | null = null;
   binaryType = "blob";
-  sent: number[][] = [];
+  sent: (number[] | string)[] = [];
   onmessage: ((event: { data: ArrayBuffer }) => void) | null = null;
   onclose: ((event: { code: number }) => void) | null = null;
   constructor(public url: string) {
     FakeSocket.opened.push(this);
   }
-  send(data: Uint8Array) {
-    this.sent.push([...data]);
+  send(data: Uint8Array | string) {
+    this.sent.push(typeof data === "string" ? data : [...data]);
   }
   close() {
     this.readyState = 3;
@@ -138,4 +139,26 @@ it("tries again after a dropped socket, but not when the Pi said not to", async 
   act(() => FakeSocket.opened[1].onclose?.({ code: 4001 })); // a newer tab took over
   await act(async () => vi.advanceTimersByTime(5000));
   expect(FakeSocket.opened).toHaveLength(2);
+});
+
+it("opens one socket, not a second when Opus support comes back after signaling turned it on", async () => {
+  renderHook(() => useTalk(true));
+  await waitFor(() => expect(FakeSocket.opened).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 50)); // Opus has come back supported by now
+  expect(FakeSocket.opened).toHaveLength(1);
+});
+
+it("keeps the new socket when the one it replaced closes late", async () => {
+  vi.stubGlobal("AudioEncoder", undefined); // no talk here, so only signaling wants the socket
+  const { result, rerender } = renderHook(({ signaling }) => useTalk(signaling), { initialProps: { signaling: true } });
+  await waitFor(() => expect(FakeSocket.opened).toHaveLength(1));
+  rerender({ signaling: false });
+  rerender({ signaling: true });
+  await waitFor(() => expect(FakeSocket.opened).toHaveLength(2));
+  const [old, current] = FakeSocket.opened;
+  act(() => current.onopen?.());
+  act(() => old.onclose?.({ code: 4001 }));
+  expect(result.current.connected).toBe(true);
+  act(() => result.current.sendSignal("sam", { hello: true }));
+  expect(current.sent).toEqual([JSON.stringify({ to: "sam", signal: { hello: true } })]); // on the socket that's open
 });

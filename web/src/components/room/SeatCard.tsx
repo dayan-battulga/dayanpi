@@ -2,7 +2,7 @@ import { Mic, Plus, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
-import { SeatPicture } from "@/components/room/SeatPicture";
+import { SeatPicture, SeatVideo } from "@/components/room/SeatPicture";
 import { SoundBars } from "@/components/room/TalkControl";
 import { GoalRing, formatGoalProgress } from "@/components/shared/GoalRing";
 import { CameraControl } from "@/components/track/CameraControl";
@@ -27,6 +27,7 @@ interface SeatCardProps {
   camera?: Camera; // your own seat, while your desk is on this browser's camera
   goal?: { seconds: number; minutes: number }; // your own seat, with your daily goal: only you ever see it
   talk?: SeatTalk;
+  video?: MediaStream; // someone else's smooth video, while it's connected
 }
 
 // Who hears whom, on a seat (RoomV2.dc.html): the chip with sound bars while they talk, or while you do on your own seat
@@ -65,7 +66,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera, goal, talk }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera, goal, talk, video }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -79,7 +80,19 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
       <span className="seat-initial" aria-hidden="true">
         {readInitial(seat.name)}
       </span>
-      {live != null ? <LiveVideo stream={live} /> : seat.picture != null && <SeatPicture username={seat.username} at={seat.picture.at} mirrored={mine} />}
+      {/* The Pi's say-so (seat.picture: video shared, here, at the desk) gates the smooth video too: hidden is hidden. */}
+      {live != null ? (
+        <LiveVideo stream={live} />
+      ) : (
+        seat.picture != null &&
+        (video != null && !mine ? (
+          <SeatVideo stream={video}>
+            <SeatPicture username={seat.username} at={seat.picture.at} />
+          </SeatVideo>
+        ) : (
+          <SeatPicture username={seat.username} at={seat.picture.at} mirrored={mine} />
+        ))
+      )}
       {nudgedAgo != null && nudgedAgo < RIPPLE_S && (
         <span className="seat-ripples" aria-hidden="true">
           <span />

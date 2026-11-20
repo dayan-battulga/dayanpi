@@ -4447,6 +4447,16 @@ button.todo-pill:active,
   border-radius: 26px;
 }
 
+/* Smooth video (hooks/useSmoothVideo): someone's camera fades in over their picture once it plays. */
+.seat-video {
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+}
+
+.seat-video[data-playing] {
+  opacity: 1;
+}
+
 /* ---------- talking in the room (RoomV2.dc.html, hooks/useTalk.ts) ---------- */
 
 /* The Room's head, right side: the Notepad button below 1280 px, then the talk toggle with its hint under it. */

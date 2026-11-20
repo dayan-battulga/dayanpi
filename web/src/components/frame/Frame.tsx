@@ -18,10 +18,12 @@ import { PHONE_QUERY, WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNudgeToast } from "@/hooks/useNudge";
 import { useNow } from "@/hooks/useNow";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { useRtc, useSmoothVideo } from "@/hooks/useSmoothVideo";
 import { type Talk, useTalk } from "@/hooks/useTalk";
 import { useTabIcon } from "@/hooks/useTabIcon";
 import { SPRINGS } from "@/lib/motion";
 import { listOthersHere, orderSeats, summarizeRoom } from "@/lib/room";
+import { findSendingTrack } from "@/lib/smoothVideo";
 import { readStored, writeStored } from "@/lib/storage";
 import type { Connection, Snapshot, User } from "@/lib/types";
 
@@ -44,6 +46,7 @@ export interface FrameData {
   macTracking: MacTracking;
   camera: Camera;
   talk: Talk;
+  videos: Record<string, MediaStream>; // smooth video: each person's incoming camera while it's connected
 }
 
 export function useFrame(): FrameData {
@@ -81,9 +84,14 @@ export function Frame() {
   const shownSpoken = snapshot?.focus?.spoken;
   const peaceVoice = usePeaceVoice((camera.spoken?.at ?? -1) > (shownSpoken?.at ?? -1) ? camera.spoken : shownSpoken);
   // You hear the room on every page; only the Room's buttons turn your mic on, and leaving it turns it off.
-  const talk = useTalk();
-  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking, camera, talk };
+  const rtc = useRtc();
+  const talk = useTalk(rtc?.smooth_video === true);
   const seats = orderSeats(snapshot?.room?.seats ?? [], user?.username);
+  // Smooth video, with everyone here, from every page (only the Room plays it): your camera's own track, or nothing.
+  const peers = seats.filter((seat) => seat.here && seat.username !== user?.username).map((seat) => seat.username);
+  const track = findSendingTrack(snapshot?.focus, camera.step === "on" ? camera.preview : null, rtc?.smooth_video === true);
+  const videos = useSmoothVideo(rtc, { talk, me: user?.username, peers, track });
+  const frame: FrameData = { snapshot, connection, receivedAt, now, user, setUser, macTracking, camera, talk, videos };
   const room = summarizeRoom(seats);
   const others = listOthersHere(seats, user?.username);
   const elapsed = Math.max(0, now - receivedAt);

@@ -21,8 +21,13 @@ const RETRY_MS = 3000;
 const REFRESH_MS = 200; // how often the seats' talk chips catch up with who went quiet
 const FRAME_US = 20_000;
 
+export type SignalListener = (from: string, signal: unknown) => void;
+
 export interface Talk {
   supported: boolean | null; // WebCodecs Opus and a mic reader, Chrome only; null while it's checking
+  connected: boolean; // the socket is open (it also carries smooth video's signaling)
+  sendSignal: (to: string, signal: object) => void;
+  listenSignals: (listener: SignalListener) => () => void; // returns how to stop listening
   target: TalkTarget | null; // who your mic is for while it's on: EVERYONE or a username
   talking: Record<string, TalkKind>; // who you hear right now, and whether it's for everyone or just you
   talkTo: (target: TalkTarget) => void; // the first time, this click is what asks for the mic
@@ -125,11 +130,14 @@ async function openMic(send: (opus: Uint8Array) => void): Promise<Mic> {
 
 // The room's voices, for the whole frame: one WebSocket (/api/talk) while you're signed in, so you hear the room on any
 // page, and your mic, which only a click turns on (the Room page turns it off when you leave). The Pi only passes
-// frames on; this end encodes, decodes and plays them.
-export function useTalk(): Talk {
+// frames on; this end encodes, decodes and plays them. The socket also carries smooth video's signaling as text, so it
+// opens when talking works here or when the Pi has smooth video on (signaling).
+export function useTalk(signaling = false): Talk {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [target, setTarget] = useState<TalkTarget | null>(null);
   const [talking, setTalking] = useState<Record<string, TalkKind>>({});
+  const [connected, setConnected] = useState(false);
+  const signalListeners = useRef(new Set<SignalListener>());
   const targetRef = useRef<TalkTarget | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const player = useRef<Player | null>(null);
@@ -141,9 +149,14 @@ export function useTalk(): Talk {
     void checkTalk().then(setSupported);
   }, []);
 
+  // One boolean, so the socket only reopens when wanting one changes, not when the second reason arrives too: a socket
+  // closed for nothing drops whatever was on its way.
+  const wantsSocket = supported === true || signaling;
+  const playsTalk = useRef(false);
+  playsTalk.current = supported === true;
   useEffect(() => {
     let cleanup: (() => void) | undefined;
-    if (supported === true) {
+    if (wantsSocket) {
       let closed = false;
       let retry: number | undefined;
       const hear = (heard: HeardFrame) => {
@@ -156,14 +169,24 @@ export function useTalk(): Talk {
       const open = () => {
         const opened = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${TALK_PATH}`);
         opened.binaryType = "arraybuffer";
-        opened.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-          const heard = readTalk(event.data);
-          if (heard != null) {
-            hear(heard);
+        // A socket this effect replaced can close after its successor opened: only the current one counts.
+        opened.onopen = () => socket.current === opened && setConnected(true);
+        opened.onmessage = (event: MessageEvent<ArrayBuffer | string>) => {
+          if (typeof event.data === "string") {
+            const { from, signal } = JSON.parse(event.data) as { from: string; signal: unknown };
+            signalListeners.current.forEach((listener) => listener(from, signal));
+          } else {
+            const heard = playsTalk.current ? readTalk(event.data) : null;
+            if (heard != null) {
+              hear(heard);
+            }
           }
         };
         opened.onclose = (event) => {
-          socket.current = null;
+          if (socket.current === opened) {
+            socket.current = null;
+            setConnected(false);
+          }
           if (!closed && !TALK_FINAL_CODES.has(event.code)) {
             retry = window.setTimeout(open, RETRY_MS);
           }
@@ -185,7 +208,7 @@ export function useTalk(): Talk {
       };
     }
     return cleanup;
-  }, [supported]);
+  }, [wantsSocket]);
 
   const stop = useCallback(() => {
     targetRef.current = null;
@@ -225,5 +248,15 @@ export function useTalk(): Talk {
 
   useEffect(() => stop, [stop]);
 
-  return { supported, target, talking, talkTo, stop };
+  const sendSignal = useCallback((to: string, signal: object) => {
+    if (socket.current?.readyState === WebSocket.OPEN) {
+      socket.current.send(JSON.stringify({ to, signal }));
+    }
+  }, []);
+  const listenSignals = useCallback((listener: SignalListener) => {
+    signalListeners.current.add(listener);
+    return () => void signalListeners.current.delete(listener);
+  }, []);
+
+  return { supported, connected, sendSignal, listenSignals, target, talking, talkTo, stop };
 }

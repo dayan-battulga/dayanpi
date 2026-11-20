@@ -38,6 +38,7 @@ Always use the **`main`** branch on both machines.
 | `/api/stats` | One JSON snapshot (owner only) |
 | `/api/stream` | Live SSE feed: your own desk's `focus` and everyone's seat as `room` (members don't get the Pi's numbers) |
 | `/api/sharing` | Settings → Sharing: POST any of `{"focus", "todos", "history", "apps", "sites", "video", "nudges", "hear_room", "direct_talk"}` as true/false; answers with all your switches and your seat as the room now sees it |
+| `/api/rtc` | Smooth video's settings for your browser: `{"smooth_video", "ice_servers"}`, with no servers at all while it's off. See [Smooth video](#smooth-video) |
 | `/api/talk` | The room's voices: one WebSocket per person while the site is open, signed in with the session cookie from a page on this site. It only passes Opus frames on, never keeps them. See [Talking in the room](#talking-in-the-room) |
 | `/people/<username>` | Someone's desk, read-only, built from what they share (yours goes to `/me`) |
 | `/api/people/<username>` | That desk as JSON: their seat and only the pieces they share |
@@ -367,6 +368,37 @@ People in the room can talk to each other, through the Pi only: no outside serve
 Two switches in Settings → **Sharing** decide what reaches you: **Hear the room** and **Let people talk to me directly** (both on to start).
 
 How it works, briefly: your browser encodes the mic as small Opus frames (about 24 kbps, one every 20 ms) and sends them over one WebSocket to the Pi (`/api/talk`), and the Pi hands each frame to whoever it's for. It never decodes, saves or logs any of it. The other browser decodes and plays it with a tiny buffer, so it's a fraction of a second behind. More in [focus-tracker.md](focus-tracker.md#talking-in-the-room).
+
+### Smooth video
+
+Out of the box the seats show a picture a second, all through the Pi. **Smooth video** turns them into real moving video, up to 30 frames a second, sent straight from each browser to the others with WebRTC. The Pi only introduces the browsers (over the same socket as talking) and never sees or keeps the video. It's off until you turn it on, because it uses a server outside your Pi.
+
+**Turning it on.** Add this to `/etc/dayanpi.env` on the Pi, then restart:
+
+```bash
+sudo nano /etc/dayanpi.env          # add: DAYANPI_SMOOTH_VIDEO=on
+sudo systemctl restart dayanpi
+journalctl -u dayanpi -n 20 --no-pager | grep "smooth video"
+# expect: smooth video on: browsers use Cloudflare's STUN, TURN relay off
+```
+
+Now each browser asks Cloudflare's free STUN server (`stun.cloudflare.com`, no account) what its own address on the internet is, so two browsers on different networks can find each other. The browsers talk to it; the Pi doesn't.
+
+**When two people can't connect directly** (some school, work or phone networks block it), their seats just keep the picture a second for each other. To get video through those networks too, add a Cloudflare TURN relay:
+
+1. In the Cloudflare dashboard, go to Realtime → TURN Server and create a TURN key (the free tier is plenty for four people).
+2. Copy its **Key ID** and **API token** into `/etc/dayanpi.env`:
+   ```bash
+   DAYANPI_TURN_KEY_ID=...
+   DAYANPI_TURN_API_TOKEN=...
+   ```
+3. `sudo systemctl restart dayanpi`, and the journal line says `TURN relay on`.
+
+With both set, the Pi asks Cloudflare for relay credentials that last 4 hours and reuses them until shortly before they run out. That's the only time the Pi itself talks to anything outside. The token never leaves the Pi and never shows up in a log; browsers only get the short-lived credentials, and only signed-in people in the room.
+
+**What Cloudflare sees.** The STUN server sees each browser's public IP address when it asks. A TURN relay, when a pair needs one, sees their IP addresses and passes their video along, but it can't watch it: WebRTC encrypts it end to end between the two browsers. Nothing is recorded anywhere, not on the Pi, not by the browsers.
+
+**What it sends.** Your camera goes out only while Sharing → Video is on and you're working or on the phone: hide it, step away, or turn your camera off and the others' seats drop back to your picture or your initial within a second. It's the same camera the tracker already uses (no second camera opens), at most 640×360, 30 frames a second and about 600 kbps per person, stepping down on a weak connection. In a full room that's three copies going up from each laptop: about 1.8 Mbps up, measured with four people. Seeing the others takes about as much down. On a phone's data plan that's around 800 MB an hour each way, so keep an eye on it. If your room picture is the Pi's camera (Settings → Camera), your seat stays on its picture a second; pick "This browser's camera" and it gets smooth video like everyone else's.
 
 ### Your notepad and priorities
 

@@ -35,7 +35,8 @@ from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shr
 from dayanpi.focus.sharing import AT_DESK_STATES, LAMP_COLORS, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime
-from dayanpi.focus.talk import TALK_PATH, Listener, TalkError, TalkRoom, read_frame
+from dayanpi.focus.smooth_video import read_smooth_video
+from dayanpi.focus.talk import TALK_PATH, Listener, TalkError, TalkRoom, read_frame, read_signal
 from dayanpi.focus.todos import PRIORITIES, TEXT_MAX, TODOS_MAX, TodoListFull, hide_priorities
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
@@ -126,6 +127,7 @@ def make_write_allowance() -> TokenBucket:
 write_allowances: defaultdict[int, TokenBucket] = defaultdict(make_write_allowance)
 write_refusals = RefusalNote()
 talk_room = TalkRoom()  # everyone with the Room open, for its voices (focus/talk.py); memory only, never any audio kept
+smooth_video = read_smooth_video()  # off unless DAYANPI_SMOOTH_VIDEO=on (focus/smooth_video.py)
 TALK_SESSION_CHECK_S = 2.0  # how soon an open talk socket notices its sign-in is gone
 TALK_REPLACED = 4001  # the close code when a newer socket of theirs took over, so the page doesn't try again
 
@@ -593,6 +595,8 @@ async def lifespan(app: FastAPI):
         logger.info("camera locked to Tailscale login %s", auth_routes.TAILSCALE_LOGIN)
     else:
         logger.warning("camera not locked to Tailscale, don't turn on Funnel")
+    if smooth_video.enabled:
+        logger.info("smooth video on: browsers use Cloudflare's STUN, TURN relay %s", "on" if smooth_video.turn is not None else "off")
     sampler.sample()
     owner_desk = open_desks(time.time())
     llm = None if LLM_MODEL is None else OllamaClient(LLM_MODEL)
@@ -782,7 +786,8 @@ async def pass_frames_on(websocket: WebSocket, listener: Listener, token: str) -
     try:
         while signed_in and not listener.replaced:
             try:
-                await websocket.send_bytes(await asyncio.wait_for(listener.queue.get(), TALK_SESSION_CHECK_S))
+                message = await asyncio.wait_for(listener.queue.get(), TALK_SESSION_CHECK_S)
+                await (websocket.send_text(message) if isinstance(message, str) else websocket.send_bytes(message))
             except TimeoutError:
                 pass
             if time.monotonic() - checked_at >= TALK_SESSION_CHECK_S:
@@ -794,8 +799,9 @@ async def pass_frames_on(websocket: WebSocket, listener: Listener, token: str) -
 
 
 async def take_talk(websocket: WebSocket, username: str, token: str) -> None:
-    """Routes the talker's frames (talk_room.route) while pass_frames_on sends them theirs, until either side closes.
-    Anything that isn't a talk frame, text included, closes the socket."""
+    """Routes the talker's frames (talk_room.route) and, with smooth video on, their signaling (talk_room.relay) while
+    pass_frames_on sends them theirs, until either side closes. Anything malformed closes the socket, and so does text
+    while smooth video is off."""
     listener = talk_room.join(username)
     sending = asyncio.create_task(pass_frames_on(websocket, listener, token))
     try:
@@ -803,8 +809,12 @@ async def take_talk(websocket: WebSocket, username: str, token: str) -> None:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":
                 break
-            frame = read_frame(message.get("bytes") or b"")
-            talk_room.route(listener, frame, lambda name: desks.open(name, time.time()).sharing.read(), time.time())
+            text = message.get("text")
+            if text is not None and smooth_video.enabled:
+                talk_room.relay(listener, read_signal(text), time.time())
+            else:
+                frame = read_frame(message.get("bytes") or b"")
+                talk_room.route(listener, frame, lambda name: desks.open(name, time.time()).sharing.read(), time.time())
     except TalkError:
         await close_quietly(websocket, status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
     except (WebSocketDisconnect, RuntimeError):
@@ -812,6 +822,13 @@ async def take_talk(websocket: WebSocket, username: str, token: str) -> None:
     finally:
         talk_room.leave(listener)
         sending.cancel()
+
+
+@app.get("/api/rtc")
+def describe_rtc():
+    """Smooth video's settings for this member's browser: whether it's on, and the ICE servers (Cloudflare's STUN, plus
+    TURN credentials when the Pi has the keys; nothing at all while it's off). Behind the sign-in like every route."""
+    return smooth_video.describe(time.time())
 
 
 @app.websocket(TALK_PATH)

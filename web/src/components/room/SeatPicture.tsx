@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const FRAMES_KEPT = 2; // the one fading in, over the one it replaces
 
@@ -45,5 +45,43 @@ export function SeatPicture({ username, at, mirrored = false }: { username: stri
         <img key={frame.at} className={mirrored ? "seat-picture-frame is-mirrored" : "seat-picture-frame"} src={frame.url} alt="" />
       ))}
     </span>
+  );
+}
+
+// Someone's smooth video (hooks/useSmoothVideo): their camera, straight from their browser, fading in over their
+// picture once it plays and back to the picture whenever it stops (their camera dropped, the connection's gone).
+export function SeatVideo({ stream, children }: { stream: MediaStream; children: ReactNode }) {
+  const video = useRef<HTMLVideoElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const element = video.current;
+    const [track] = stream.getVideoTracks();
+    const check = () => setPlaying(track != null && !track.muted && track.readyState === "live" && (element?.readyState ?? 0) >= 2);
+    if (element != null) {
+      element.srcObject = stream;
+      element.addEventListener("playing", check);
+      element.addEventListener("emptied", check);
+    }
+    track?.addEventListener("mute", check);
+    track?.addEventListener("unmute", check);
+    track?.addEventListener("ended", check);
+    check();
+    return () => {
+      element?.removeEventListener("playing", check);
+      element?.removeEventListener("emptied", check);
+      track?.removeEventListener("mute", check);
+      track?.removeEventListener("unmute", check);
+      track?.removeEventListener("ended", check);
+    };
+  }, [stream]);
+
+  return (
+    <>
+      {!playing && children}
+      <span className="seat-picture" aria-hidden="true">
+        <video ref={video} className="seat-picture-frame seat-video" data-playing={playing || undefined} autoPlay muted playsInline />
+      </span>
+    </>
   );
 }
