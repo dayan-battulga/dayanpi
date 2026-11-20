@@ -551,7 +551,7 @@ ol {
 }
 
 .wordmark {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.04em;
 }
@@ -5400,7 +5400,7 @@ button.todo-pill:active,
   }
 
   .wordmark {
-    font-size: 18px;
+    font-size: 21px;
   }
 
   .topbar-end {
