@@ -74,7 +74,22 @@ it("splits a day page into totals, to-dos, apps and notes", () => {
       { name: "No time", time: "" },
     ],
     apps: [],
+    goal: null,
     notes: ["Paused for 5m."],
   });
-  expect(readDayPage("---\n---\n# Friday\n\nNothing was logged on this day.\n")).toEqual({ totals: [], todos: [], apps: [], notes: ["Nothing was logged on this day."] });
+  expect(readDayPage("---\n---\n# Friday\n\nNothing was logged on this day.\n")).toEqual({ totals: [], todos: [], apps: [], goal: null, notes: ["Nothing was logged on this day."] });
+});
+
+it("reads each app's seconds and a browser's YouTube part, old pages too", () => {
+  const page = "---\nfocus_minutes: 163\ngoal_minutes: 240\n---\n\n## Apps\n- Google Chrome: 1h41 (YouTube 22m)\n- Code: 2h05\n- Mail: Inbox: 12m\n- Finder: 45s\n- Odd line\n";
+  const parts = readDayPage(page);
+  expect(parts.apps).toEqual([
+    { name: "Google Chrome", time: "1h 41m", seconds: 6060, youtubeSeconds: 1320 },
+    { name: "Code", time: "2h 05m", seconds: 7500, youtubeSeconds: 0 },
+    { name: "Mail: Inbox", time: "12m", seconds: 720, youtubeSeconds: 0 },
+    { name: "Finder", time: "45s", seconds: 45, youtubeSeconds: 0 },
+    { name: "Odd line", time: "", seconds: 0, youtubeSeconds: 0 },
+  ]);
+  expect(parts.goal).toEqual({ minutes: 240, focusMinutes: 163 });
+  expect(readDayPage("---\nfocus_minutes: 250\n---\n\n## Apps\n- Code: 2h05\n").goal).toBeNull();
 });

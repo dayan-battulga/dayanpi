@@ -2454,12 +2454,106 @@ button.todo-pill:active,
   font-size: 13px;
 }
 
+/* DayPopup's goal box: the ring, then how far the day got. */
+.day-goal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--sunken);
+}
+
+.day-goal-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.day-goal-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Studied with: a chip per person, their initial ringed in their lamp color ([data-lamp]). */
+.day-mates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.day-mates li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px 0 4px;
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 14px;
+}
+
+.day-mate-face {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px var(--focus-lamp, var(--work));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* The Apps card's rows and bars, a size down. popLayout takes a leaving row out of the flow, against this box. */
 .day-apps {
+  position: relative;
+}
+
+.day-apps li {
+  padding: 8px 0;
+}
+
+.day-apps .app-line {
   font-size: 15px;
 }
 
-.day-dot {
+.day-apps .app-track {
+  height: 4px;
+  margin-top: 7px;
+}
+
+.day-more {
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--muted);
+  font: 500 14px var(--font-ui);
+  cursor: pointer;
+}
+
+/* The daily goal's ring (shared/GoalRing): on the Desk's stats line, your seat's chip and the day popup. */
+.goal-ring {
+  flex: none;
+  transform: rotate(-90deg);
+}
+
+.goal-ring-track {
+  stroke: var(--line-strong);
+}
+
+.goal-ring-fill {
+  stroke: var(--work);
+}
+
+/* The reset makes every svg a block; this one sits in the line of text. */
+.focus-stats .goal-ring {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: -3px;
 }
 
 /* ---------- the room (components/room): Room.dc.html's layout with SeatsInfo.dc.html's seats ---------- */
@@ -2591,6 +2685,22 @@ button.todo-pill:active,
   color: var(--muted);
   font-size: 12px;
   line-height: 30px;
+}
+
+/* Your own seat with a daily goal (RoomV2): the ring first, in your lamp's color. */
+.seat-chip-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 6px;
+}
+
+.seat .goal-ring-fill {
+  stroke: var(--focus-lamp, var(--work));
+}
+
+.seat:has(.seat-picture-frame) .goal-ring-track {
+  stroke: rgb(255 255 255 / 22%);
 }
 
 .seat-foot {
@@ -3699,13 +3809,6 @@ button.todo-pill:active,
   color: var(--muted);
   font-size: 15px;
   text-align: center;
-}
-
-/* The group calendar: the others' focused time that day, quietly, under the day's page. */
-.day-others {
-  margin-top: 18px;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 /* Who's here as the sidebar (SideRail.dc.html), from 1280 px: a panel on the window's right edge, its full height,

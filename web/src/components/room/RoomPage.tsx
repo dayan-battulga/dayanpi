@@ -61,6 +61,7 @@ export function RoomPage() {
               onPeek={() => setPeeking(seat.username)}
               onHide={() => void hiding.hide(seat)}
               camera={seat.username === user?.username && showsCamera ? camera : undefined}
+              goal={seat.username === user?.username && focus?.goal_minutes != null ? { seconds: focus.today.working_seconds, minutes: focus.goal_minutes } : undefined}
             />
           ))}
           {alone ? <AloneSeat owner={owner} /> : Array.from({ length: open }, (_, index) => <EmptySeat key={index} owner={owner} />)}

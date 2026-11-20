@@ -126,10 +126,10 @@ def test_here_is_the_site_open_or_tracking_in_the_last_two_minutes(seen_at, chec
 
 def test_the_gate_never_makes_a_part_whose_switches_are_off():
     made = []
-    parts = {"apps": lambda: made.append("apps"), "sites": lambda: made.append("sites"), "day_focus": lambda: made.append("day")}
+    parts = {"apps": lambda: made.append("apps"), "sites": lambda: made.append("sites"), "studied_with": lambda: made.append("day")}
     shared = share_parts(share(apps=True, focus=True), parts)
     assert (set(shared), made) == ({"apps"}, ["apps"])
-    assert set(share_parts(share(focus=True, history=True), parts)) == {"day_focus"}, "the group line needs focus and history"
+    assert set(share_parts(share(focus=True, history=True), parts)) == {"studied_with"}, "studied with needs focus and history"
     with pytest.raises(KeyError):
         share_parts(share(), {"something_new": lambda: 1})
     assert set(NEEDS["sites"]) == {"apps", "sites"}

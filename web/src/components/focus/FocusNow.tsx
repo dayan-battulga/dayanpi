@@ -2,9 +2,11 @@ import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
 import { AnimatePresence, m } from "motion/react";
 import { Timeline } from "@/components/focus/Timeline";
 import { MacLine } from "@/components/mac/MacLine";
+import { GoalRing } from "@/components/shared/GoalRing";
 import { CameraControl } from "@/components/track/CameraControl";
 import type { Camera } from "@/hooks/useCamera";
 import type { MacTracking } from "@/hooks/useMacTracking";
+import { formatCompactMinutes } from "@/lib/calendar";
 import { formatClock, formatDuration } from "@/lib/format";
 import { SPRINGS } from "@/lib/motion";
 import { STATE_COPY, describeProblems, isCameraMissing } from "@/lib/timeline";
@@ -54,15 +56,17 @@ function DurationFlow({ seconds }: { seconds: number }) {
 }
 
 // "3h 12m focused · 24m on your phone · 2 pickups": numbers in ink, words muted, and one group, since a snapshot changes
-// them together. Screen readers get it as plain text.
-function StatsLine({ today }: { today: FocusStatus["today"] }) {
+// them together. With a daily goal it starts with its ring and "3h 12m of 4h". Screen readers get it as plain text.
+function StatsLine({ today, goalMinutes }: { today: FocusStatus["today"]; goalMinutes: number | null }) {
   const pickups = today.pickups === 1 ? "pickup" : "pickups";
+  const goal = goalMinutes == null ? null : formatCompactMinutes(goalMinutes);
   return (
     <p id="focus-stats" className="focus-stats">
-      <span className="sr-only">{`${formatDuration(today.working_seconds)} focused, ${formatDuration(today.phone_seconds)} on your phone, ${today.pickups} ${pickups}`}</span>
+      <span className="sr-only">{`${formatDuration(today.working_seconds)} focused${goal == null ? "" : ` of your ${goal} goal`}, ${formatDuration(today.phone_seconds)} on your phone, ${today.pickups} ${pickups}`}</span>
       <span aria-hidden="true">
         <NumberFlowGroup>
-          <DurationFlow seconds={today.working_seconds} /> focused · <DurationFlow seconds={today.phone_seconds} /> on your phone ·{" "}
+          {goalMinutes != null && <GoalRing seconds={today.working_seconds} goalMinutes={goalMinutes} size="small" />}
+          <DurationFlow seconds={today.working_seconds} /> {goal == null ? "focused" : `of ${goal}`} · <DurationFlow seconds={today.phone_seconds} /> on your phone ·{" "}
           <span className="focus-stat">
             <NumberFlow value={today.pickups} />
           </span>{" "}
@@ -106,7 +110,7 @@ export function FocusNow({ focus, known, loaded, now, midnight, receivedAt, macT
       </div>
       <Timeline known={known} loaded={loaded} now={now} midnight={midnight} />
       <div className="focus-row">
-        {focus != null && <StatsLine today={focus.today} />}
+        {focus != null && <StatsLine today={focus.today} goalMinutes={focus.goal_minutes ?? null} />}
         <MacLine focus={focus} macTracking={macTracking} />
       </div>
       {missesCamera && (

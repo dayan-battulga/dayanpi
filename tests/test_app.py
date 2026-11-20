@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 from collections import defaultdict
+from datetime import datetime
 from contextlib import ExitStack, contextmanager
 from urllib.parse import quote
 
@@ -888,7 +889,7 @@ def test_day_routes_serve_past_pages_and_build_today_live():
     assert listed["month"] == month and listed["today"] == today
     assert listed["days"][past] == {"focus_minutes": 95}
     assert listed["days"][today]["focus_minutes"] == 10, "today comes live from the log"
-    assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n", "others": []}
+    assert page == {"day": past, "today": False, "markdown": "---\nfocus_minutes: 95\n---\n\n# A past day\n", "studied_with": []}
     assert live["today"] is True and "- Focus: 10m" in live["markdown"]
     assert not (days_dir / f"{today}.md").exists(), "today's page is never saved"
     assert missing.status_code == 404
@@ -1408,6 +1409,7 @@ ACCESS = {
     ("POST", "/api/voice"): ("/api/voice", {"bedtime": "25:00"}, 401, 422, 422),
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
+    ("POST", "/api/goal"): ("/api/goal", {"minutes": 45}, 401, 422, 422),
     ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
     ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
@@ -2355,21 +2357,49 @@ def test_a_hidden_seat_stays_hidden_through_a_restart_and_comes_back_once_theyre
     assert let_in(stranger(), owner).get("/api/people/sam").status_code == 200, "their desk opens all along"
 
 
-def test_the_day_page_has_the_others_who_share_focus_and_history():
-    owner, sam, al = find_owner(), add_member("sam"), add_member("al")
-    now = time.time()
-    day = f"{format_day(now)[:7]}-01" if format_day(now)[8:] != "01" else f"{format_day(now)[:7]}-02"
-    for user, minutes in ((owner, 30), (sam, 108), (al, 125)):
-        desk = desk_of(user)
-        desk.days_dir.mkdir(parents=True)
-        (desk.days_dir / f"{day}.md").write_text(f"---\nfocus_minutes: {minutes}\n---\n")
-    desk_of(al).sharing.update({"history": False})
-    mine = let_in(stranger(), owner).get(f"/api/days/{day}").json()
-    sams = let_in(stranger(), sam).get(f"/api/days/{day}").json()
-    assert mine["others"] == [{"name": "Sam", "focus_minutes": 108}], "Al keeps history private"
-    assert sams["others"] == [{"name": "tester", "focus_minutes": 30}]
+def write_focus(desk, day, *spans):
+    """Working from start to end (hours as floats) that day, away in between, in the desk's own log."""
+    start = datetime.strptime(day, "%Y-%m-%d").timestamp()
+    for begin, end in spans:
+        desk.log.write({"ts": start + begin * 3600, "day": day, "event": "state", "state": "working"})
+        desk.log.write({"ts": start + end * 3600, "day": day, "event": "state", "state": "away"})
+
+
+def test_the_day_page_has_who_you_studied_with_from_both_logs():
+    owner, sam, al, jo = find_owner(), add_member("sam"), add_member("al"), add_member("jo")
+    day = "2026-11-02"
+    for user in (owner, sam, al, jo):
+        desk_of(user).days_dir.mkdir(parents=True)
+        (desk_of(user).days_dir / f"{day}.md").write_text("---\nfocus_minutes: 1\n---\n")
+    write_focus(desk_of(owner), day, (9, 11), (13, 14))
+    write_focus(desk_of(sam), day, (10, 13.5))  # 1 h with my morning, 30 min with my afternoon
+    write_focus(desk_of(al), day, (10.95, 12))  # 3 minutes together: under the floor
+    write_focus(desk_of(jo), day, (9, 10))
+    desk_of(sam).sharing.update({"lamp": "pink"})
+    mine = let_in(stranger(), owner).get(f"/api/days/{day}").json()["studied_with"]
+    sams = let_in(stranger(), sam).get(f"/api/days/{day}").json()["studied_with"]
+    assert mine == [{"username": "sam", "name": "Sam", "lamp": "pink", "minutes": 90}, {"username": "jo", "name": "Jo", "lamp": "teal", "minutes": 60}]
+    assert [person["username"] for person in sams] == [owner.username, "al"], "most minutes first"
+    desk_of(jo).sharing.update({"history": False})
     desk_of(sam).sharing.update({"focus": False})
-    assert let_in(stranger(), owner).get(f"/api/days/{day}").json()["others"] == []
+    assert let_in(stranger(), owner).get(f"/api/days/{day}").json()["studied_with"] == [], "only people sharing focus and history"
+
+
+def test_the_daily_goal_starts_off_is_your_own_and_only_you_see_it(monkeypatch):
+    owner, sam = find_owner(), add_member("sam")
+    me, member = let_in(stranger(), owner), let_in(stranger(), sam)
+    assert me.get("/api/focus").json()["goal_minutes"] is None, "off by default"
+    picked = member.post("/api/goal", json={"minutes": 270})
+    assert (picked.status_code, picked.json()) == (200, {"minutes": 270})
+    assert json.loads((desk_of(sam).folder / "goal.json").read_text()) == {"minutes": 270}
+    assert (member.get("/api/focus").json()["goal_minutes"], me.get("/api/focus").json()["goal_minutes"]) == (270, None)
+    for wrong in ({"minutes": 30}, {"minutes": 750}, {"minutes": 75}, {"minutes": 240.0}, {"minutes": "240"}, {"minutes": True}, {}, {"minutes": 240, "x": 1}):
+        assert member.post("/api/goal", json=wrong).status_code == 422, wrong
+    assert member.post("/api/goal", json={"minutes": None}).json() == {"minutes": None}
+    member.post("/api/goal", json={"minutes": 240})
+    assert "goal" not in json.dumps(make_room(monkeypatch, time.time())), "the room never gets anyone's goal"
+    today = format_day(time.time())
+    assert "goal_minutes: 240\n" in member.get(f"/api/days/{today}").json()["markdown"], "today's page has it live"
 
 
 # ----- the seats' small pictures (study room step 7) -----

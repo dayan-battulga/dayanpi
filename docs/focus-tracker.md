@@ -279,7 +279,7 @@ Settings → **Sharing**. Status is always on. **Focus time**, **To-do list** an
 
 The Pi decides, not the page. Each desk keeps its switches in `data/users/<name>/sharing.json` (`dayanpi/focus/sharing.py`), and `share_parts()` in there is the one gate everything about another person goes through: every part (a seat's to-do, their desk's apps, the day dialog's group line...) is listed in `NEEDS` with the switches it needs, and a part whose switches aren't all on is never even made. A new part that isn't in `NEEDS` is an error, so nothing new slips out without saying what it needs. Once a second the Pi builds every seat with it (`app.build_room`) and puts that in every stream event as `"room"`; `POST /api/sharing` answers with your seat built the same way, which is what the preview shows. Their desk (`GET /api/people/<username>`) and the group line on `GET /api/days/<day>` go through it too. No route hands out anyone else's whole desk.
 
-## Seeing the others, nudges and the group calendar (study room step 6, part 2)
+## Seeing the others, nudges and studied with (study room step 6, part 2)
 
 ### Who's here, on every page
 
@@ -331,9 +331,9 @@ With all four of you on the Room, each picture fetched once a second:
 
 Funnel's limits aren't published. If pictures start lagging over Funnel, 480×270 would roughly halve all of that (`PICTURE_WIDTH`/`PICTURE_HEIGHT` in `focus/pictures.py` and `web/src/lib/track.ts`).
 
-### The group calendar
+### Studied with
 
-A day's page in the calendar gets a quiet line at the bottom with how long everyone else focused that day ("Also focused: Sam 1h 48m · Alex 2h 5m"), only from people who share both focus time and history, and only those who focused at all.
+A day's popup has a **Studied with** row: a chip per person (their initial ringed in their lamp color, their name, and the minutes you were both focused at the same time that day). `app.list_studied_with` replays both desks' focus logs for that day (`days.count_overlap_seconds`: one walk through both lists of working segments) and only keeps overlaps of `STUDIED_WITH_MIN_S` (5 minutes) or more. It goes through `share_parts` with its own `studied_with` part, which needs focus time and history, so someone who keeps either private never shows up and their log isn't even read. Their name and lamp go through the gate too. Nobody to list, no row. It replaced the old "Also focused" line, which had everyone's total.
 
 ## With both cameras
 
@@ -409,11 +409,11 @@ curl -s -b ~/.dayanpi-cookies "localhost:8000/api/apps?range=week" | python3 -m 
 
 Every finished day gets its own page, on every desk: `data/users/<username>/days/YYYY-MM-DD.md` on the Pi. It's plain markdown, so you can open it in anything, and the names match Obsidian's daily notes, so you can point a vault at the folder. Each page has:
 
-- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos. Obsidian shows these as properties, and the calendar reads them back.
-- **Totals:** the same numbers, readable.
+- **The numbers up top, as frontmatter:** focus, phone and away minutes, pickups, best streak and how many to-dos, plus `goal_minutes` on days you had a [daily goal](MANUAL.md#a-daily-focus-goal). Obsidian shows these as properties, and the calendar reads them back.
+- **Totals:** the same numbers, readable, with a "Goal: 4h" line after Focus when you had a goal. The goal is the one you had when the page was written, which is just after that midnight.
 - Pages written back when there were work blocks still have a **Focus blocks** section and a `blocks` number. Pages are never rewritten, so they just stay that way.
 - **To-dos done:** what you checked off that day and how much time each one collected. Something you checked and then unchecked doesn't count.
-- **Apps:** the top 10 Mac apps by time, from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site), and in Totals, **YouTube**: the time youtube.com (or m.youtube.com, music.youtube.com) was the tab in front, in any browser. No other site is counted. Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked or asleep, and Mac tracking isn't switched off (if it was, the Apps section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. YouTube minutes are in the frontmatter too (`youtube_minutes`). Days from before apps were logged just say "None".
+- **Apps:** the top 10 Mac apps by time (a browser's YouTube part after it, like "Google Chrome: 1h41 (YouTube 22m)"), from the [Mac helper](#steps-2-to-4-the-tracker-runs-inside-the-site), and in Totals, **YouTube**: the time youtube.com (or m.youtube.com, music.youtube.com) was the tab in front, in any browser. No other site is counted. Only time at the desk counts: you're working or on your phone, not away, the Mac isn't locked or asleep, and Mac tracking isn't switched off (if it was, the Apps section starts with how long it was paused). It's counted from the 30-second sample lines, so it's accurate to about half a minute. YouTube minutes are in the frontmatter too (`youtube_minutes`). Days from before apps were logged just say "None".
 
 It's all built from that day's focus log (the to-dos come from its `todo` lines), with the same math the restart and the stats tool use.
 
@@ -421,9 +421,9 @@ It's all built from that day's focus log (the to-dos come from its `todo` lines)
 
 **The calendar** sits under the to-do list and Apps, with the month's name and its total focus on top ("November · 41h 42m focused"). Each day shows its focus time and gets a darker green the more you focused (any focus, then 1 h, 2 h and 4 h and up). Today's number comes straight from the live stream, and today has an outline. The arrows move between months. New pages show up within 5 minutes, so yesterday appears a few minutes after midnight.
 
-Click a day and its page opens in a popup: the totals (focused, phone, away), the to-dos you finished that day with their time, and the apps. Esc, the ×, or a click outside closes it. Today works too, built live, and it refreshes every minute while it's open.
+Click a day and its page opens in a popup (DayPopup.dc.html): the totals (focused, phone, away), the goal box if you had a goal that day, who you [studied with](#studied-with), the to-dos you finished that day with their time, and the apps. Apps are one row each with the time on the right and a thin bar for their share of the top app (a browser's YouTube part first, in red, on pages that have it). The top 5 show and the rest fold into "+N more", which opens them in place (Show less folds them back). Anything under a minute is left out. Older pages without the goal or the YouTube part still open fine. Esc, the ×, or a click outside closes it. Today works too, built live, and it refreshes every minute while it's open.
 
-The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown", "others"}` (others is the group line's names and minutes). The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from your own desk's `days/`. A day with no page is a 404.
+The routes, behind the login: `GET /api/days?month=YYYY-MM` gives each day's numbers for a month (today's live), and `GET /api/days/YYYY-MM-DD` gives one day's page as `{"day", "today", "markdown", "studied_with"}` (see [Studied with](#studied-with)). The name has to be exactly digits and dashes in that shape (anything else is a 422), so it can only ever read a file from your own desk's `days/`. A day with no page is a 404.
 
 ```bash
 ls data/users/$ME/days/

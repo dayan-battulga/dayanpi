@@ -143,3 +143,20 @@ it("says it's just you when nobody else has joined", async () => {
   expect(screen.getByText("focused today")).toBeInTheDocument();
   expect(screen.queryByRole("article", { name: "Open seat" })).toBeNull();
 });
+
+it("puts your goal's ring on your own seat's chip, and only yours", async () => {
+  openRoom(OWNER, [ME, SAM], "/", { goal_minutes: 240, today: { working_seconds: 9600, phone_seconds: 0, pickups: 0, longest_streak_seconds: 0, first_seen: null } });
+  const mine = await screen.findByRole("article", { name: "Dayan, you" });
+  expect(mine.querySelector(".seat-chip")).toHaveTextContent(/^2h 40m of 4h$/);
+  expect(mine.querySelector(".seat-chip .goal-ring")).not.toBeNull();
+  const sam = screen.getByRole("article", { name: "Sam, on the phone" });
+  expect(sam.querySelector(".seat-chip")).toHaveTextContent(/^1h 48m today$/);
+  expect(sam.querySelector(".goal-ring")).toBeNull();
+});
+
+it("keeps your seat's plain total with no goal", async () => {
+  openRoom(OWNER, [ME], "/", { goal_minutes: null });
+  const mine = await screen.findByRole("article", { name: "Dayan, you" });
+  expect(mine.querySelector(".seat-chip")).toHaveTextContent(/^3h 12m today$/);
+  expect(mine.querySelector(".goal-ring")).toBeNull();
+});

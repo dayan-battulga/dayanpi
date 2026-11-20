@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wordmark · lamp d</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes breathe { 0%, 100% { opacity: 0.14; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="min-height: 1000px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --lamp: {{s.color}};">
+  <main style="max-width: 1180px; margin: 0 auto; padding: 56px 32px 80px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px;">
+      <h1 style="margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -0.045em; line-height: 1;">Wordmark</h1>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+        <div role="group" aria-label="Your state" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+          <sc-for list="{{states}}" as="c" hint-placeholder-count="4">
+            <button type="button" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="{{c.style}}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: {{c.color}};"></span>{{c.label}}</button>
+          </sc-for>
+        </div>
+        <button type="button" onClick="{{toggleTheme}}" style="min-height: 48px; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); font: 500 13px Geist, sans-serif; cursor: pointer;">{{themeLabel}}</button>
+      </div>
+    </div>
+
+    <section aria-label="Options" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 40px;">
+      <sc-for list="{{options}}" as="o" hint-placeholder-count="4">
+        <article style="display: flex; flex-direction: column; gap: 18px; padding: 20px; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: {{o.delay}};">
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{o.letter}}</span>
+            <h2 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">{{o.name}}</h2>
+          </div>
+
+          <!-- In the top bar, at its real size (20 px). -->
+          <div style="display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 20px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line);">
+            <span style="display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 600; letter-spacing: -0.04em;">
+              <sc-if value="{{o.isIcon}}" hint-placeholder-val="{{false}}">
+                <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true" style="flex: none; display: block;"><rect width="32" height="32" rx="8" fill="#16161a"></rect><circle cx="14.6" cy="20" r="8.6" fill="var(--lamp)" opacity="0.16"></circle><rect x="19.6" y="5.5" width="3.8" height="21" rx="1.9" fill="#ededef"></rect><circle cx="14.6" cy="20.6" r="5.9" fill="var(--lamp)"></circle></svg>
+              </sc-if>
+              <span style="white-space: nowrap;"><sc-if value="{{o.isLetter}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 55 73" aria-hidden="true" style="display: inline-block; width: 0.55em; height: 0.73em; margin-right: 0.06em; vertical-align: baseline; overflow: visible;"><sc-if value="{{o.glow}}" hint-placeholder-val="{{false}}"><circle cx="26" cy="47" r="36" fill="var(--lamp)" opacity="0.2" style="animation: breathe 3.2s ease-in-out infinite;"></circle></sc-if><circle cx="26" cy="47" r="26" fill="var(--lamp)"></circle><rect x="41" y="0" width="14" height="73" rx="7" fill="currentColor"></rect></svg></sc-if><sc-if value="{{o.plainD}}" hint-placeholder-val="{{false}}">d</sc-if>ayanpi</span>
+            </span>
+            <span aria-hidden="true" style="display: flex; gap: 8px;"><span style="width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line);"></span><span style="width: 36px; height: 36px; border-radius: 999px; background: var(--ink);"></span></span>
+          </div>
+
+          <!-- Big, to see the shape. -->
+          <div style="display: grid; place-items: center; height: 170px; border-radius: 16px; background: var(--sunken);">
+            <span style="display: inline-flex; align-items: center; gap: 22px; font-size: 76px; font-weight: 600; letter-spacing: -0.05em; line-height: 1;">
+              <sc-if value="{{o.isIcon}}" hint-placeholder-val="{{false}}">
+                <svg width="88" height="88" viewBox="0 0 32 32" aria-hidden="true" style="flex: none; display: block;"><rect width="32" height="32" rx="8" fill="#16161a"></rect><circle cx="14.6" cy="20" r="8.6" fill="var(--lamp)" opacity="0.16"></circle><rect x="19.6" y="5.5" width="3.8" height="21" rx="1.9" fill="#ededef"></rect><circle cx="14.6" cy="20.6" r="5.9" fill="var(--lamp)"></circle></svg>
+              </sc-if>
+              <span style="white-space: nowrap;"><sc-if value="{{o.isLetter}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 55 73" aria-hidden="true" style="display: inline-block; width: 0.55em; height: 0.73em; margin-right: 0.06em; vertical-align: baseline; overflow: visible;"><sc-if value="{{o.glow}}" hint-placeholder-val="{{false}}"><circle cx="26" cy="47" r="36" fill="var(--lamp)" opacity="0.2" style="animation: breathe 3.2s ease-in-out infinite;"></circle></sc-if><circle cx="26" cy="47" r="26" fill="var(--lamp)"></circle><rect x="41" y="0" width="14" height="73" rx="7" fill="currentColor"></rect></svg></sc-if><sc-if value="{{o.plainD}}" hint-placeholder-val="{{false}}">d</sc-if>ayanpi</span>
+            </span>
+          </div>
+          <p style="margin: 0; font-size: 13px; color: var(--muted);">{{o.note}}</p>
+        </article>
+      </sc-for>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"state":{"editor":"enum","options":["focused","phone","away","off"],"default":"focused","section":"Preview"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', ink: '#ededef', muted: '#8e8e96' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', ink: '#111113', muted: '#696970' }
+    };
+    const st = this.state || {};
+    const themeName = st.theme || this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    const lamps = {
+      focused: { label: 'Focused', color: '#34d3b9' },
+      phone: { label: 'On your phone', color: '#ff8a4c' },
+      away: { label: 'Away', color: '#a99bff' },
+      off: { label: 'Signed out', color: '#8e8e96' }
+    };
+    const stateName = st.state || this.props.state || 'focused';
+    const s = lamps[stateName] || lamps.focused;
+    const states = Object.keys(lamps).map((key) => ({
+      label: lamps[key].label,
+      color: lamps[key].color,
+      pressed: key === stateName ? 'true' : 'false',
+      pick: () => this.setState({ state: key }),
+      style: 'display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; font: 500 13px Geist, sans-serif; cursor: pointer; '
+        + (key === stateName ? 'background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);' : 'background: transparent; color: var(--muted);')
+    }));
+    const options = [
+      { letter: 'Now', name: 'Plain', note: 'Today’s wordmark, for comparison.', plainD: true },
+      { letter: 'A', name: 'Lamp d', note: 'The d’s round part is your lamp, in your state’s color. Same shape as the tab icon.', isLetter: true },
+      { letter: 'B', name: 'Lamp d, glowing', note: 'Same, with the lamp’s soft glow breathing slowly, like the desk sign.', isLetter: true, glow: true },
+      { letter: 'C', name: 'Icon + wordmark', note: 'The tab icon itself in front of the plain wordmark.', isIcon: true, plainD: true }
+    ].map((o, i) => Object.assign({ isLetter: false, isIcon: false, plainD: false, glow: false, delay: (i * 0.07) + 's' }, o));
+    return {
+      t: t,
+      s: s,
+      states: states,
+      options: options,
+      themeLabel: themeName === 'dark' ? 'Light theme' : 'Dark theme',
+      toggleTheme: () => this.setState({ theme: themeName === 'dark' ? 'light' : 'dark' })
+    };
+  }
+}
+</script>
+</body>
+</html>

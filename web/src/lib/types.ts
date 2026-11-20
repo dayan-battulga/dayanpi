@@ -91,6 +91,7 @@ export interface FocusStatus {
   bedtime?: string; // "HH:MM", the desk's own (Settings → Voice and bedtime)
   voice_output?: "pi" | "computer"; // where the peace sign speaks
   sharing?: Sharing; // what the room sees of this desk (Settings → Share with the room)
+  goal_minutes?: number | null; // your daily focus goal (Settings → Profile), null when off; never anyone else's
 }
 
 // Settings → Share with the room. Status (the state and its timer) always shows, so it isn't a switch.
@@ -208,7 +209,15 @@ export interface DayPageReply {
   day: string;
   today: boolean;
   markdown: string;
-  others?: { name: string; focus_minutes: number }[]; // everyone else who shares focus time and history
+  studied_with?: StudiedWith[]; // most minutes first
+}
+
+// Someone you were focused at the same time as for 5+ minutes that day, if they share focus time and history.
+export interface StudiedWith {
+  username: string;
+  name: string;
+  lamp: LampColor;
+  minutes: number; // the overlap, not their total
 }
 
 export type AppsRange = "today" | "week";

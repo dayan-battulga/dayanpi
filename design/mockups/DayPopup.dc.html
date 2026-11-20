@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day popup · apps, goal, studied with</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; min-height: 1060px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --ink2: {{t.ink2}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --hot: {{t.hot}};">
+  <!-- The calendar behind, dimmed. -->
+  <div aria-hidden="true" style="max-width: 1180px; margin: 0 auto; padding: 80px 32px; opacity: 0.35;">
+    <p style="margin: 0; font-size: 15px; font-weight: 600;">November <span style="font-weight: 400; color: var(--muted);">41h 42m focused</span></p>
+    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 20px;">
+      <sc-for list="{{cal}}" as="c" hint-placeholder-count="21"><div style="{{c}}"></div></sc-for>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: {{t.scrim}};"></div>
+
+  <section role="dialog" aria-label="Sunday, November 15" style="position: absolute; top: 56px; left: 50%; width: 560px; margin-left: -280px; box-sizing: border-box; padding: 28px 30px 30px; border-radius: 28px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 40px 80px -30px rgba(0, 0, 0, 0.5); animation: pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.03em;">Sunday, November 15</h2>
+      <span aria-hidden="true" style="display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; color: var(--muted); font-size: 20px;">×</span>
+    </div>
+    <p style="margin: 10px 0 0; font-size: 15px; color: var(--muted);"><span style="color: var(--ink);">4h 10m</span> focused · <span style="color: var(--ink);">22m</span> phone · <span style="color: var(--ink);">1h 05m</span> away</p>
+
+    <!-- Goal: a small ring, only if you set one. -->
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 12px 14px; border-radius: 16px; background: var(--sunken);">
+      <svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true" style="flex: none; transform: rotate(-90deg);">
+        <circle cx="18" cy="18" r="15" fill="none" stroke="var(--line2)" stroke-width="3.5"></circle>
+        <circle cx="18" cy="18" r="15" fill="none" stroke="var(--work)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="{{goal.dash}}"></circle>
+      </svg>
+      <div style="flex: 1; min-width: 0;">
+        <p style="margin: 0; font-size: 14px; font-weight: 600;">{{goal.title}}</p>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">{{goal.sub}}</p>
+      </div>
+    </div>
+
+    <h3 style="margin: 24px 0 8px; font-size: 13px; font-weight: 600; color: var(--muted);">Studied with</h3>
+    <ul style="list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0;">
+      <sc-for list="{{mates}}" as="m" hint-placeholder-count="2">
+        <li style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 4px; border-radius: 999px; background: var(--sunken); font-size: 14px;">
+          <span aria-hidden="true" style="display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--surface); box-shadow: 0 0 0 1.5px {{m.color}}; font-size: 12px; font-weight: 600;">{{m.initial}}</span>
+          {{m.name}} <span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{m.time}}</span>
+        </li>
+      </sc-for>
+    </ul>
+
+    <h3 style="margin: 24px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted);">Done</h3>
+    <ul style="list-style: none; margin: 0; padding: 0;">
+      <sc-for list="{{done}}" as="d" hint-placeholder-count="3">
+        <li style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px;"><span>{{d.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{d.time}}</span></li>
+      </sc-for>
+    </ul>
+
+    <h3 style="margin: 24px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted);">Apps</h3>
+    <ul style="list-style: none; margin: 0; padding: 0;">
+      <sc-for list="{{apps}}" as="a" hint-placeholder-count="5">
+        <li style="padding: 8px 0;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 15px;"><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{a.name}}</span><span style="flex: none; font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--muted);">{{a.time}}</span></div>
+          <div style="position: relative; height: 4px; margin-top: 7px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 6%, transparent);">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{a.w}}; border-radius: 999px; background: var(--ink2); transform-origin: left; animation: grow 0.6s ease both;"></span>
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{a.hotW}}; border-radius: 999px 0 0 999px; background: var(--hot); transform-origin: left; animation: grow 0.6s ease both;"></span>
+          </div>
+        </li>
+      </sc-for>
+    </ul>
+    <button type="button" onClick="{{toggleMore}}" style="margin-top: 6px; min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--muted); font: 500 14px Geist, sans-serif; cursor: pointer;">{{moreLabel}}</button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"goal":{"editor":"enum","options":["reached","partway","none"],"default":"reached","section":"Preview"},"apps":{"editor":"enum","options":["top 5","all"],"default":"top 5","section":"Preview"},"$preview":{"width":1440,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', ink2: '#c4c4ca', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', hot: '#ff6b5b', scrim: 'rgba(0, 0, 0, 0.55)' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', ink2: '#3a3a40', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', hot: '#d93a2b', scrim: 'rgba(17, 17, 19, 0.28)' }
+    };
+    const st = this.state || {};
+    const themeName = this.props.theme || 'dark';
+    const t = themes[themeName] || themes.dark;
+    const goalName = this.props.goal || 'reached';
+    const circ = 2 * Math.PI * 15;
+    const goals = {
+      reached: { frac: 1, title: 'Goal reached', sub: '4h 10m of 4h' },
+      partway: { frac: 0.68, title: '2h 43m of 4h', sub: '1h 17m to go' },
+      none: { frac: 0, title: 'No goal set', sub: 'Set one in Settings → Profile' }
+    };
+    const g = goals[goalName] || goals.reached;
+    const goal = { title: g.title, sub: g.sub, dash: (g.frac * circ).toFixed(1) + ' ' + circ.toFixed(1) };
+    const all = [
+      { name: 'Google Chrome', min: 101, hot: 22 }, { name: 'Claude', min: 53 }, { name: 'Cursor', min: 51 }, { name: 'Docker', min: 8 },
+      { name: 'Finder', min: 4 }, { name: 'Postman', min: 3 }, { name: 'Messages', min: 2 }, { name: 'Activity Monitor', min: 1 }, { name: 'Calendar', min: 1 }, { name: 'ChatGPT', min: 1 }
+    ];
+    const fmt = (m) => (m >= 60 ? Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm' : m + 'm');
+    const expanded = st.expanded !== undefined ? st.expanded : this.props.apps === 'all';
+    const shown = expanded ? all : all.slice(0, 5);
+    const apps = shown.map((a) => ({ name: a.name, time: fmt(a.min), w: (a.min / 101 * 100).toFixed(1) + '%', hotW: ((a.hot || 0) / 101 * 100).toFixed(1) + '%' }));
+    const cal = [];
+    for (let i = 0; i < 21; i++) cal.push('height: 64px; border-radius: 12px; background: ' + (i % 5 === 1 || i % 7 === 3 ? 'color-mix(in srgb, var(--work) 40%, var(--sunken))' : 'var(--sunken)') + ';');
+    return {
+      t: t,
+      cal: cal,
+      goal: goal,
+      mates: [
+        { name: 'Sam', initial: 'S', time: '2h 10m', color: 'var(--work)' },
+        { name: 'Alex', initial: 'A', time: '45m', color: 'var(--away)' }
+      ],
+      done: [{ name: 'Problem set 3', time: '1h 12m' }, { name: 'Lab report outline', time: '38m' }, { name: 'Quiz review', time: '24m' }],
+      apps: apps,
+      moreLabel: expanded ? 'Show less' : '+' + (all.length - 5) + ' more',
+      toggleMore: () => this.setState({ expanded: !expanded })
+    };
+  }
+}
+</script>
+</body>
+</html>

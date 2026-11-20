@@ -212,3 +212,15 @@ it("says a camera that was turned off is off, with Turn on camera", async () => 
   expect(within(line).getByRole("button", { name: "Turn on camera" })).toBeInTheDocument();
   expect(screen.queryByText(/paused on the tracker page/)).toBeNull();
 });
+
+it("starts the stats line with the goal's ring and how far along you are, and leaves both out with no goal", () => {
+  openDesk({ goal_minutes: 240 });
+  expect(readStats()).toBe("1h 05m focused of your 4h goal, 5m on your phone, 3 pickups");
+  expect(document.querySelector("#focus-stats")).toHaveTextContent(/05m of 4h · .*on your phone/);
+  const ring = document.querySelector("#focus-stats .goal-ring-fill");
+  expect(ring?.getAttribute("stroke-dasharray")).toBe(`${((3900 / 14400) * 2 * Math.PI * 14).toFixed(1)} ${(2 * Math.PI * 14).toFixed(1)}`);
+
+  sendFocus({ goal_minutes: null });
+  expect(readStats()).toBe("1h 05m focused, 5m on your phone, 3 pickups");
+  expect(document.querySelector("#focus-stats .goal-ring")).toBeNull();
+});

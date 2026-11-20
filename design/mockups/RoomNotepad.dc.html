@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room · your notepad</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes blink { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="min-height: 1000px; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --high: {{t.high}}; --med: {{t.med}}; --low: {{t.low}};">
+  <header style="max-width: 1376px; margin: 0 auto; box-sizing: border-box; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between;">
+    <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em; white-space: nowrap;"><svg viewBox="0 0 55 73" aria-hidden="true" style="display: inline-block; width: 0.55em; height: 0.73em; margin-right: 0.06em; vertical-align: baseline; overflow: visible;"><circle cx="26" cy="47" r="26" fill="#34d3b9"></circle><rect x="41" y="0" width="14" height="73" rx="7" fill="currentColor"></rect></svg>ayanpi</span>
+    <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+      <button type="button" onClick="{{showRoom}}" style="{{tabRoom}}">Room</button>
+      <span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500;">Desk</span>
+      <span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500;">Pi</span>
+    </nav>
+    <span aria-hidden="true" style="display: flex; gap: 10px;"><span style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line);"></span><span style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-weight: 600;">D</span></span>
+  </header>
+
+  <sc-if value="{{isRoom}}" hint-placeholder-val="{{true}}">
+    <main style="max-width: 1376px; margin: 0 auto; box-sizing: border-box; padding: 24px 32px 64px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start;">
+      <div>
+        <h1 style="margin: 0; font-size: 96px; font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">7h 05m</h1>
+        <p style="margin: 14px 0 0; font-size: 15px; color: var(--muted);">3 here · focused together today</p>
+        <section aria-label="Seats" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 32px;">
+          <sc-for list="{{seats}}" as="s" hint-placeholder-count="4">
+            <article aria-label="{{s.name}}" style="position: relative; height: 250px; overflow: hidden; border-radius: 26px; background: {{s.bg}}; box-shadow: 0 0 0 1px var(--line);">
+              <sc-if value="{{s.video}}" hint-placeholder-val="{{true}}">
+                <svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;"><circle cx="200" cy="104" r="38" fill="#4a505c"></circle><path d="M112 250 C120 186 156 160 200 160 C244 160 280 186 288 250 Z" fill="#363b46"></path></svg>
+                <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);"></span>
+              </sc-if>
+              <sc-if value="{{s.noVideo}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; top: 40%; display: grid; place-items: center; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 26px; font-weight: 600;">{{s.initial}}</span></sc-if>
+              <span style="position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; min-height: 28px; padding: 0 11px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #ffffff; font-size: 12px; backdrop-filter: blur(8px);">{{s.today}}</span>
+              <div style="position: absolute; left: 20px; right: 20px; bottom: 18px; color: {{s.ink}};">
+                <div style="display: flex; align-items: center; justify-content: space-between;"><p style="margin: 0; font-size: 16px; font-weight: 600;">{{s.name}}</p><span style="display: inline-flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 15px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{s.color}};"></span>{{s.timer}}</span></div>
+                <p style="margin: 3px 0 0; font-size: 13px; opacity: 0.86;">{{s.task}}</p>
+              </div>
+            </article>
+          </sc-for>
+        </section>
+      </div>
+
+      <!-- Your notepad: only you see it. -->
+      <aside aria-labelledby="pad-title" style="position: sticky; top: 24px; box-sizing: border-box; padding: 22px 22px 18px; border-radius: 24px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <h2 id="pad-title" style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Notepad</h2>
+          <span style="font-size: 12px; color: var(--muted);">Only you see this</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 12px; color: var(--muted);">{{showing}} · <button type="button" onClick="{{showSettings}}" style="padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;">change</button></p>
+
+        <!-- What you're working on, always first. -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--work) 10%, transparent);">
+          <span style="flex: none; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line2);"></span>
+          <span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600;">Problem set 3</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--work);"><span style="width: 6px; height: 6px; border-radius: 999px; background: currentColor; animation: blink 1.6s ease-in-out infinite;"></span>Working</span>
+        </div>
+
+        <ul style="list-style: none; margin: 6px 0 0; padding: 0;">
+          <sc-for list="{{pad}}" as="p" hint-placeholder-count="3">
+            <li style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-bottom: 1px solid var(--line);">
+              <span style="flex: none; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line2);"></span>
+              <span style="flex: 1; min-width: 0; font-size: 14px;">{{p.name}}</span>
+              <span title="{{p.level}} priority" style="flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted);"><span style="width: 7px; height: 7px; border-radius: 999px; background: {{p.color}};"></span>{{p.short}}</span>
+            </li>
+          </sc-for>
+        </ul>
+        <sc-if value="{{hasHidden}}" hint-placeholder-val="{{true}}"><p style="margin: 10px 12px 0; font-size: 12px; color: var(--muted);">{{hiddenNote}}</p></sc-if>
+
+        <!-- Add, with the priority right there. -->
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px 6px 6px 14px; border-radius: 14px; background: var(--sunken);">
+          <span style="flex: 1; font-size: 14px; color: var(--muted);">Add a to-do</span>
+          <span role="group" aria-label="Priority" style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg);">
+            <span style="display: grid; place-items: center; min-width: 30px; height: 28px; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); font-size: 11px; font-weight: 600; color: var(--high);">H</span>
+            <span style="display: grid; place-items: center; min-width: 30px; height: 28px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--muted);">M</span>
+            <span style="display: grid; place-items: center; min-width: 30px; height: 28px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--muted);">L</span>
+          </span>
+        </div>
+      </aside>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{isSettings}}" hint-placeholder-val="{{false}}">
+    <main style="max-width: 1180px; margin: 0 auto; box-sizing: border-box; padding: 40px 32px 64px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px;">
+      <nav aria-label="Settings" style="display: flex; flex-direction: column; gap: 2px;">
+        <sc-for list="{{sections}}" as="x" hint-placeholder-count="6"><span style="{{x.style}}">{{x.name}}</span></sc-for>
+      </nav>
+      <section aria-labelledby="todos-title" style="max-width: 620px; animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;">
+        <h2 id="todos-title" style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.03em;">To-dos</h2>
+        <p style="margin: 22px 0 6px; font-size: 13px; color: var(--muted);">Show in the Room’s notepad</p>
+        <sc-for list="{{levels}}" as="l" hint-placeholder-count="4">
+          <button type="button" onClick="{{l.toggle}}" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 56px; padding: 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 15px Geist, sans-serif; text-align: left; cursor: pointer;">
+            <span style="display: inline-flex; align-items: center; gap: 10px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{l.color}};"></span>{{l.label}}</span>
+            <span aria-hidden="true" style="{{l.track}}"><span style="{{l.thumb}}"></span></span>
+          </button>
+        </sc-for>
+        <p style="margin: 12px 0 0; font-size: 13px; color: var(--muted);">What you’re working on always shows first. Your Desk always shows every to-do.</p>
+
+        <p style="margin: 28px 0 0; font-size: 13px; color: var(--muted);">Everything shows unless you turn a priority off. New to-dos start with no priority; change one any time from the small priority menu on the to-do, here or on your Desk. A to-do you add from the notepad stays on it until you give it a priority.</p>
+      </section>
+    </main>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"view":{"editor":"enum","options":["settings","room"],"default":"settings","section":"Preview"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', high: '#ff6b6b', med: '#f2c94c', low: '#8e8e96' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', high: '#c7362f', med: '#9a6b00', low: '#8a8a92' }
+    };
+    const st = this.state || {};
+    const t = themes[this.props.theme || 'dark'] || themes.dark;
+    const view = st.view || this.props.view || 'room';
+    const shown = st.shown || { high: true, medium: true, low: true, none: true };
+    const all = [
+      { name: 'CS 571 project demo', level: 'high' },
+      { name: 'Email TA about lab grade', level: 'high' },
+      { name: 'Lab report outline', level: 'medium' },
+      { name: 'Quiz review', level: 'medium' },
+      { name: 'Buy Mom’s bday gift', level: 'low' },
+      { name: 'Silk Roads book', level: 'low' }
+    ];
+    const colors = { high: 'var(--high)', medium: 'var(--med)', low: 'var(--low)', none: 'transparent; box-shadow: inset 0 0 0 1.5px var(--line2)' };
+    const shorts = { high: 'High', medium: 'Med', low: 'Low', none: '' };
+    const pad = all.filter((p) => shown[p.level]).map((p) => ({ name: p.name, level: p.level, color: colors[p.level], short: shorts[p.level] }));
+    const hidden = all.length - pad.length;
+    const names = ['high', 'medium', 'low'].filter((k) => shown[k]).map((k) => ({ high: 'High', medium: 'medium', low: 'low' }[k]));
+    const showing = (names.length === 0 ? 'Only what you’re working on' : names.join(' and ').replace(/^./, (c) => c.toUpperCase()) + ' priority') ;
+    const toggle = (key) => () => this.setState({ shown: Object.assign({}, shown, { [key]: !shown[key] }) });
+    const sw = (on) => ({
+      track: 'position: relative; flex: none; width: 44px; height: 26px; border-radius: 999px; background: ' + (on ? 'var(--work)' : 'var(--line2)') + ';',
+      thumb: 'position: absolute; top: 3px; left: ' + (on ? '21px' : '3px') + '; width: 20px; height: 20px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);'
+    });
+    const levels = [
+      { key: 'high', label: 'High priority' },
+      { key: 'medium', label: 'Medium priority' },
+      { key: 'low', label: 'Low priority' },
+      { key: 'none', label: 'No priority' }
+    ].map((l) => Object.assign({ color: colors[l.key], toggle: toggle(l.key) }, l, sw(shown[l.key])));
+    const tab = (on) => 'display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border: 0; border-radius: 999px; font: 500 13px Geist, sans-serif; cursor: pointer; ' + (on ? 'background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);' : 'background: transparent; color: var(--muted);');
+    const video = 'radial-gradient(480px 260px at 70% 28%, rgba(159, 183, 255, 0.2), transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    const seats = [
+      { name: 'You', initial: 'D', today: '2h 40m today', timer: '42:18', task: 'Problem set 3', color: '#34d3b9', video: true },
+      { name: 'Sam', initial: 'S', today: '2h 48m today', timer: '24:10', task: 'Read chapter 7', color: '#34d3b9', video: true },
+      { name: 'Alex', initial: 'A', today: '1h 37m today', timer: '06:05', task: 'Flashcards, unit 4 · paused', color: '#ff8a4c', video: true },
+      { name: 'Jordan', initial: 'J', today: '45m today', timer: '12:40', task: 'Away', color: '#a99bff', video: false }
+    ].map((s) => Object.assign({}, s, { noVideo: !s.video, bg: s.video ? video : 'var(--surface)', ink: s.video ? '#ffffff' : 'var(--ink)' }));
+    const sections = ['Profile', 'To-dos', 'Sharing', 'Camera', 'Voice and bedtime', 'Mac helper'].map((n) => ({
+      name: n,
+      style: 'display: flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 12px; font-size: 14px; ' + (n === 'To-dos' ? 'background: var(--sunken); color: var(--ink); font-weight: 500;' : 'color: var(--muted);')
+    }));
+    return {
+      t: t,
+      isRoom: view === 'room',
+      isSettings: view === 'settings',
+      tabRoom: tab(view === 'room'),
+      tabSettings: tab(view === 'settings'),
+      showRoom: () => this.setState({ view: 'room' }),
+      showSettings: () => this.setState({ view: 'settings' }),
+      seats: seats,
+      pad: pad,
+      showing: showing,
+      hasHidden: hidden > 0,
+      hiddenNote: hidden + ' more on your Desk',
+      levels: levels,
+      sections: sections
+    };
+  }
+}
+</script>
+</body>
+</html>

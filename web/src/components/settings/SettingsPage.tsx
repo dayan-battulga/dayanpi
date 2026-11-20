@@ -50,7 +50,7 @@ export function SettingsPage() {
             </button>
           </nav>
           <div key={section} className="settings-section rise">
-            {section === "profile" && <ProfileSection user={user} onSaved={setUser} />}
+            {section === "profile" && <ProfileSection user={user} goalMinutes={snapshot?.focus?.goal_minutes} onSaved={setUser} />}
             {section === "sharing" && <SharingSection focus={snapshot?.focus} room={snapshot?.room} username={user.username} now={now} receivedAt={receivedAt} />}
             {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} camera={camera} onOpenSharing={() => setSection("sharing")} />}
             {section === "voice" && <VoiceSection focus={snapshot?.focus} owner={owner} now={now} />}

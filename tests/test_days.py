@@ -3,7 +3,9 @@ from datetime import datetime
 import pytest
 
 from dayanpi.focus.days import (
+    GoalSetting,
     count_app_seconds,
+    count_overlap_seconds,
     build_day_page,
     find_finished_todos,
     find_seconds_until_midnight,
@@ -176,7 +178,7 @@ def test_time_per_app_and_on_youtube_only_counts_time_at_the_desk():
     lines += [sample(13, minute, 0, "working", "Locked") for minute in range(30)]  # screen locked
     lines += [sample(14, minute, 0, "working", None) for minute in range(30)]  # Mac not reporting
     page = build_day_page(lines, DAY)
-    assert "## Apps\n- Cursor: 10m\n- Google Chrome: 7m\n- Arc: 1m\n" in page
+    assert "## Apps\n- Cursor: 10m\n- Google Chrome: 7m (YouTube 4m)\n- Arc: 1m (YouTube 1m)\n" in page, "a browser's YouTube part"
     assert "- YouTube: 5m\n" in page, "4 min in Chrome and 1 in Arc; github.com doesn't count"
     assert "youtube_minutes: 5\n" in page
     assert "github.com" not in page, "other sites aren't on the page"
@@ -252,3 +254,45 @@ def test_the_shared_counter_skips_away_unknown_locked_and_paused_time():
 def test_the_shared_counter_reads_old_logs_without_sites_or_apps():
     old = [{"ts": at(9), "day": DAY, "event": "sample", "state": "working", "app": "Arc"}, {"ts": at(9, 1), "day": DAY, "event": "sample", "state": "working"}]
     assert count(old) == {"Arc": (30, 0, False)}
+
+
+def test_a_goal_goes_on_the_page_so_the_day_keeps_it():
+    page = build_day_page(SAMPLE_DAY, DAY, goal_minutes=270)
+    assert "todos_done: 2\nyoutube_minutes: 0\ngoal_minutes: 270\n---" in page
+    assert "- Focus: 2h20\n- Goal: 4h30\n- Phone: 10m\n" in page
+    assert "- Goal: 4h\n" in build_day_page(SAMPLE_DAY, DAY, goal_minutes=240)
+    assert "oal" not in build_day_page(SAMPLE_DAY, DAY), "no goal, no line"
+
+
+def test_written_pages_get_the_desks_goal(tmp_path):
+    log = FocusLog(tmp_path / "focus_log")
+    for event in SAMPLE_DAY:
+        log.write(event)
+    write_missing_pages(log, tmp_path / "days", at(12, 0, day=15), goal_minutes=60)
+    assert "- Goal: 1h\n" in (tmp_path / "days" / f"{DAY}.md").read_text()
+
+
+def test_the_goal_is_off_or_whole_and_half_hours_from_one_to_twelve(tmp_path):
+    goal = GoalSetting(tmp_path / "goal.json")
+    assert goal.read() == {"minutes": None}
+    accepted = [minutes for minutes in (None, 30, 60, 90, 75, 720, 750, 240.0, True, "240") if goal.accepts("minutes", minutes)]
+    assert accepted == [None, 60, 90, 720]
+
+
+def working(*spans: tuple[float, float]) -> list[dict]:
+    """Working from start to end (hours), away in between."""
+    lines = []
+    for start, end in spans:
+        lines += [line(int(start), round(start % 1 * 60), "state", state="working"), line(int(end), round(end % 1 * 60), "state", state="away")]
+    return lines
+
+
+def test_studied_with_is_the_time_both_were_focused_at_once():
+    mine = working((9, 11), (13, 14))
+    assert count_overlap_seconds(mine, working((10, 13.5)), DAY) == 90 * 60, "1 h of my morning, 30 min of my afternoon"
+    assert count_overlap_seconds(mine, working((11, 13)), DAY) == 0, "touching isn't together"
+    assert count_overlap_seconds(mine, working((8, 15)), DAY) == 3 * 3600, "never more than my own"
+    assert count_overlap_seconds(mine, working((9.5, 9.75), (10, 10.5), (13.25, 13.5)), DAY) == 60 * 60
+    assert count_overlap_seconds(mine, [], DAY) == 0
+    phone = [line(10, 0, "state", state="phone"), line(12, 0, "state", state="away")]
+    assert count_overlap_seconds(mine, phone, DAY) == 0, "only focused time counts"

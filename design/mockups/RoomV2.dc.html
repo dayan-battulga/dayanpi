@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room · notepad panel and talking</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&amp;family=Geist+Mono:wght@400..600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+@keyframes bar { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 50% { opacity: 0.35; } }
+@keyframes live { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--work) 40%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</helmet>
+<div style="position: relative; display: flex; min-height: 1040px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; line-height: 1.4; -webkit-font-smoothing: antialiased; --bg: {{t.bg}}; --surface: {{t.surface}}; --sunken: {{t.sunken}}; --line: {{t.line}}; --line2: {{t.line2}}; --ink: {{t.ink}}; --muted: {{t.muted}}; --work: {{t.work}}; --phone: {{t.phone}}; --away: {{t.away}}; --high: {{t.high}}; --med: {{t.med}}; --low: {{t.low}};">
+
+  <!-- The page: top bar, total, talk control, and the four seats in the middle. -->
+  <div style="flex: 1; min-width: 0;">
+    <header style="max-width: 1100px; margin: 0 auto; box-sizing: border-box; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em; white-space: nowrap;"><svg viewBox="0 0 55 73" aria-hidden="true" style="display: inline-block; width: 0.55em; height: 0.73em; margin-right: 0.06em; vertical-align: baseline; overflow: visible;"><circle cx="26" cy="47" r="26" fill="#34d3b9"></circle><rect x="41" y="0" width="14" height="73" rx="7" fill="currentColor"></rect></svg>ayanpi</span>
+      <nav aria-label="Pages" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line);">
+        <span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);">Room</span>
+        <span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500;">Desk</span>
+        <span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 18px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500;">Pi</span>
+      </nav>
+      <span aria-hidden="true" style="display: flex; gap: 10px;"><span style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line);"></span><span style="display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--ink); color: var(--bg); font-weight: 600;">D</span></span>
+    </header>
+
+    <main style="max-width: 1000px; margin: 0 auto; box-sizing: border-box; padding: 20px 32px 64px;">
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px;">
+        <div>
+          <h1 style="margin: 0; font-size: 96px; font-weight: 600; letter-spacing: -0.055em; line-height: 0.95;">7h 05m</h1>
+          <p style="margin: 14px 0 0; font-size: 15px; color: var(--muted);">3 here · focused together today</p>
+        </div>
+
+        <!-- The talk toggle: click to turn your mic on for everyone, click again to stop. One person: their seat. -->
+        <div style="position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+          <div style="{{talkWrap}}">
+            <button type="button" onClick="{{toggleTalk}}" style="{{talkMain}}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path><sc-if value="{{micOff}}" hint-placeholder-val="{{true}}"><path d="M3 3l18 18"></path></sc-if></svg>
+              <sc-if value="{{micOn}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 2.5px; height: 14px;"><sc-for list="{{bars}}" as="b" hint-placeholder-count="5"><span style="width: 2.5px; height: 14px; border-radius: 2px; background: currentColor; transform-origin: center; animation: bar 0.9s ease-in-out infinite; animation-delay: {{b}};"></span></sc-for></span></sc-if>
+              {{talkLabel}}
+            </button>
+          </div>
+          <span style="font-size: 12px; color: var(--muted);">{{talkHint}}</span>
+
+        </div>
+      </div>
+
+      <section aria-label="Seats" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 32px;">
+        <sc-for list="{{seats}}" as="s" hint-placeholder-count="4">
+          <article aria-label="{{s.name}}" onClick="{{s.open}}" style="{{s.style}}">
+            <sc-if value="{{s.video}}" hint-placeholder-val="{{true}}">
+              <svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%;"><circle cx="200" cy="104" r="38" fill="#4a505c"></circle><path d="M112 250 C120 186 156 160 200 160 C244 160 280 186 288 250 Z" fill="#363b46"></path></svg>
+              <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);"></span>
+            </sc-if>
+            <sc-if value="{{s.noVideo}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; top: 40%; display: grid; place-items: center; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 26px; font-weight: 600;">{{s.initial}}</span></sc-if>
+
+            <span style="position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px 0 {{s.chipPad}}; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #ffffff; font-size: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);">
+              <sc-if value="{{s.goal}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 36 36" aria-hidden="true" style="transform: rotate(-90deg);"><circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255, 255, 255, 0.22)" stroke-width="5"></circle><circle cx="18" cy="18" r="14" fill="none" stroke="#34d3b9" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ring}}"></circle></svg></sc-if>
+              {{s.today}}
+            </span>
+
+            <!-- Talk chip: who's talking to whom. -->
+            <sc-if value="{{s.talking}}" hint-placeholder-val="{{false}}">
+              <span style="position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px; border-radius: 999px; background: color-mix(in srgb, var(--work) 90%, transparent); color: #06231f; font-size: 12px; font-weight: 600;">
+                <span style="display: inline-flex; align-items: center; gap: 2px; height: 11px;"><sc-for list="{{bars}}" as="b" hint-placeholder-count="5"><span style="width: 2px; height: 11px; border-radius: 2px; background: currentColor; transform-origin: center; animation: bar 0.9s ease-in-out infinite; animation-delay: {{b}};"></span></sc-for></span>
+                {{s.talkWord}}
+              </span>
+            </sc-if>
+            <!-- On hover: a small mic to talk to just this person. -->
+            <sc-if value="{{s.hoverMic}}" hint-placeholder-val="{{false}}">
+              <span style="position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.45); color: #ffffff; font-size: 12px; font-weight: 500; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>Talk to {{s.name}}</span>
+            </sc-if>
+
+            <div style="position: absolute; left: 20px; right: 20px; bottom: 18px; color: {{s.ink}};">
+              <div style="display: flex; align-items: center; justify-content: space-between;"><p style="margin: 0; font-size: 16px; font-weight: 600;">{{s.name}}</p><span style="display: inline-flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 15px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{s.color}};"></span>{{s.timer}}</span></div>
+              <p style="margin: 3px 0 0; font-size: 13px; opacity: 0.86;">{{s.task}}</p>
+            </div>
+          </article>
+        </sc-for>
+      </section>
+    </main>
+  </div>
+
+  <!-- The notepad: a panel on the window's right edge, like the Desk's room sidebar. -->
+  <sc-if value="{{padOpen}}" hint-placeholder-val="{{true}}">
+    <aside aria-labelledby="pad-title" style="flex: none; width: 340px; box-sizing: border-box; min-height: 1040px; padding: 22px 24px; border-left: 1px solid var(--line); background: var(--bg); animation: slide 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px;">
+        <h2 id="pad-title" style="margin: 0; font-size: 15px; font-weight: 600;">Notepad</h2>
+        <button type="button" aria-label="Fold the notepad" onClick="{{togglePad}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path><path d="m8 9 3 3-3 3"></path></svg></button>
+      </div>
+      <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted);">All to-dos · only you see this · <span style="text-decoration: underline; text-underline-offset: 3px;">change</span></p>
+
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--work) 10%, transparent);">
+        <span style="flex: none; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line2);"></span>
+        <span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600;">Problem set 3</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--work);"><span style="width: 6px; height: 6px; border-radius: 999px; background: currentColor; animation: blink 1.6s ease-in-out infinite;"></span>Working</span>
+      </div>
+      <ul style="list-style: none; margin: 6px 0 0; padding: 0;">
+        <sc-for list="{{pad}}" as="p" hint-placeholder-count="3">
+          <li style="position: relative; display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line);">
+            <span style="flex: none; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line2);"></span>
+            <span style="flex: 1; min-width: 0; font-size: 14px;">{{p.name}}</span>
+            <button type="button" aria-haspopup="menu" aria-label="Priority: {{p.label}}" onClick="{{p.toggleMenu}}" style="{{p.chip}}"><span style="width: 7px; height: 7px; border-radius: 999px; background: {{p.color}};"></span>{{p.short}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+            <sc-if value="{{p.menuOpen}}" hint-placeholder-val="{{false}}">
+              <div role="menu" style="position: absolute; top: 40px; right: 0; z-index: 2; width: 168px; padding: 5px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line2), 0 18px 40px -16px rgba(0, 0, 0, 0.6); animation: pop 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;">
+                <sc-for list="{{p.options}}" as="o" hint-placeholder-count="4">
+                  <button type="button" role="menuitemradio" aria-checked="{{o.checked}}" onClick="{{o.pick}}" style="{{o.style}}"><span style="display: inline-flex; align-items: center; gap: 9px;"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{o.color}};"></span>{{o.label}}</span><span style="font-size: 12px; color: var(--work);">{{o.mark}}</span></button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </li>
+        </sc-for>
+      </ul>
+      <div style="display: flex; align-items: center; min-height: 46px; margin-top: 16px; padding: 0 14px; border-radius: 14px; background: var(--sunken);">
+        <span style="flex: 1; font-size: 14px; color: var(--muted);">Add a to-do</span>
+        <span style="font-size: 12px; color: var(--muted);">↵</span>
+      </div>
+      <p style="margin: 8px 2px 0; font-size: 12px; color: var(--muted);">New to-dos start with no priority. Pick one from its menu.</p>
+    </aside>
+  </sc-if>
+  <sc-if value="{{padFolded}}" hint-placeholder-val="{{false}}">
+    <aside aria-label="Notepad" style="flex: none; width: 76px; box-sizing: border-box; min-height: 1040px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 0; border-left: 1px solid var(--line);">
+      <button type="button" aria-label="Open the notepad" onClick="{{togglePad}}" style="display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path><path d="m10 15-3-3 3-3"></path></svg></button>
+      <button type="button" aria-label="Open the notepad: 7 to-dos" onClick="{{togglePad}}" style="position: relative; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 14px; background: var(--sunken); color: var(--ink); cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><path d="m3 6 1 1 2-2"></path><path d="m3 12 1 1 2-2"></path><path d="m3 18 1 1 2-2"></path></svg><span style="position: absolute; top: -4px; right: -4px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 999px; background: var(--work); color: #06231f; font-size: 11px; font-weight: 700;">7</span></button>
+    </aside>
+  </sc-if>
+
+  <!-- Quick peek: Talk to Sam is a toggle too. -->
+  <sc-if value="{{peek}}" hint-placeholder-val="{{false}}">
+    <div aria-hidden="true" onClick="{{closePeek}}" style="position: absolute; inset: 0; z-index: 4; background: {{t.scrim}};"></div>
+    <section role="dialog" aria-label="Sam" style="position: absolute; z-index: 5; top: 150px; left: 50%; width: 560px; margin-left: -450px; box-sizing: border-box; padding: 26px 28px 28px; border-radius: 28px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 40px 80px -30px rgba(0, 0, 0, 0.5); animation: pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span aria-hidden="true" style="display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; background: var(--sunken); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--work); font-weight: 600;">S</span>
+        <div style="flex: 1;">
+          <p style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Sam</p>
+          <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">Focused · <span style="font-family: 'Geist Mono', monospace;">24:10</span> · 2h 48m today</p>
+        </div>
+        <span aria-hidden="true" style="color: var(--muted); font-size: 20px;">×</span>
+      </div>
+      <div aria-hidden="true" style="position: relative; height: 8px; margin-top: 22px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent);">
+        <span style="position: absolute; top: 0; bottom: 0; left: 18%; width: 20%; border-radius: 999px 0 0 999px; background: var(--work);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 38%; width: 2%; background: var(--phone);"></span>
+        <span style="position: absolute; top: 0; bottom: 0; left: 40%; width: 14%; border-radius: 0 999px 999px 0; background: var(--work);"></span>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 15px;">Read chapter 7</p>
+      <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">2 of 5 to-dos done · Chrome, docs.google.com</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px;">
+        <button type="button" onClick="{{togglePeekTalk}}" style="{{peekTalk}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>{{peekTalkLabel}}</button>
+        <span style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 18px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line2); font-size: 14px;">Nudge</span>
+        <span style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 6px; margin-left: auto; font-size: 14px; color: var(--muted);">Open Sam’s desk →</span>
+      </div>
+    </section>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Preview"},"moment":{"editor":"enum","options":["room","talking to everyone","talking to Sam only","Sam to you","quick peek"],"default":"room","section":"Preview"},"notepad":{"editor":"enum","options":["open","priority menu","folded"],"default":"open","section":"Preview"},"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0a0a0c', surface: '#131316', sunken: '#1a1a1e', line: 'rgba(255, 255, 255, 0.07)', line2: 'rgba(255, 255, 255, 0.16)', ink: '#ededef', muted: '#8e8e96', work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff', high: '#ff6b6b', med: '#f2c94c', low: '#8e8e96', scrim: 'rgba(0, 0, 0, 0.55)' },
+      light: { bg: '#f6f6f4', surface: '#ffffff', sunken: '#efefec', line: 'rgba(17, 17, 19, 0.08)', line2: 'rgba(17, 17, 19, 0.18)', ink: '#111113', muted: '#696970', work: '#0e6e63', phone: '#c2410c', away: '#6d5bd0', high: '#c7362f', med: '#9a6b00', low: '#8a8a92', scrim: 'rgba(17, 17, 19, 0.28)' }
+    };
+    const st = this.state || {};
+    const t = themes[this.props.theme || 'dark'] || themes.dark;
+    const moment = st.moment || this.props.moment || 'room';
+    const padOpen = st.padOpen !== undefined ? st.padOpen : this.props.notepad !== 'folded';
+    // Talking: off, to everyone, or to one person.
+    const talkTo = moment === 'talking to everyone' ? 'everyone' : (moment === 'talking to Sam only' ? 'Sam' : (st.talkTo || 'off'));
+    const micOn = talkTo !== 'off';
+    const lamp = { work: '#34d3b9', phone: '#ff8a4c', away: '#a99bff' };
+    const video = (glow) => 'radial-gradient(480px 260px at 70% 28%, ' + glow + ', transparent 70%), linear-gradient(180deg, #23262d, #121317)';
+    const raw = [
+      { name: 'You', initial: 'D', key: 'work', today: '2h 40m of 4h', timer: '42:18', task: 'Problem set 3', glow: 'rgba(159, 183, 255, 0.2)', video: true, goal: true },
+      { name: 'Sam', initial: 'S', key: 'work', today: '2h 48m today', timer: '24:10', task: 'Read chapter 7', glow: 'rgba(52, 211, 185, 0.16)', video: true },
+      { name: 'Alex', initial: 'A', key: 'phone', today: '1h 37m today', timer: '06:05', task: 'Flashcards, unit 4 · paused', glow: 'rgba(255, 200, 160, 0.16)', video: true },
+      { name: 'Jordan', initial: 'J', key: 'away', today: '45m today', timer: '12:40', task: 'Away', video: false }
+    ];
+    const seats = raw.map((s) => {
+      let talking = false; let talkWord = ''; let ringColor = '';
+      if (s.name === 'You' && micOn) { talking = true; talkWord = talkTo === 'everyone' ? 'To everyone' : 'To Sam only'; ringColor = lamp.work; }
+      if (s.name === 'Sam' && talkTo === 'Sam') { ringColor = 'color-mix(in srgb, #34d3b9 55%, transparent)'; }
+      if (s.name === 'Sam' && moment === 'Sam to you') { talking = true; talkWord = 'To you'; ringColor = lamp.work; }
+      const hoverMic = s.name === 'Sam' && moment === 'room';
+      const style = 'position: relative; height: 250px; overflow: hidden; border-radius: 26px; cursor: pointer; background: ' + (s.video ? video(s.glow) : 'var(--surface)') + '; box-shadow: 0 0 0 1px var(--line)' + (ringColor ? ', 0 0 0 3px ' + ringColor : '') + ';';
+      return Object.assign({ goal: false }, s, {
+        color: lamp[s.key], style: style, talking: talking, talkWord: talkWord, hoverMic: hoverMic,
+        noVideo: !s.video, ink: s.video ? '#ffffff' : 'var(--ink)', chipPad: s.goal ? '5px' : '11px',
+        open: s.name === 'Sam' ? () => this.setState({ moment: 'quick peek' }) : () => {}
+      });
+    });
+    const on = 'background: var(--work); color: #06231f;';
+    const off = 'background: var(--sunken); color: var(--ink);';
+    const talkWrap = 'display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; ' + (micOn ? 'animation: live 1.8s ease-in-out infinite;' : 'box-shadow: inset 0 0 0 1px var(--line2);');
+    const talkMain = 'display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 22px 0 20px; border: 0; font: 600 15px Geist, sans-serif; cursor: pointer; ' + (micOn ? on : off);
+    const label = talkTo === 'everyone' ? 'Mic on · everyone' : (talkTo === 'Sam' ? 'Mic on · Sam only' : 'Talk to everyone');
+    const circ = 2 * Math.PI * 14;
+    const peekOn = st.peekTalk === true;
+    const levels = [
+      { key: 'high', label: 'High', color: 'var(--high)' },
+      { key: 'medium', label: 'Medium', color: 'var(--med)' },
+      { key: 'low', label: 'Low', color: 'var(--low)' },
+      { key: 'none', label: 'No priority', color: 'transparent' }
+    ];
+    const prio = Object.assign({ demo: 'high', email: 'high', lab: 'medium', quiz: 'medium', gift: 'low', read: 'none' }, st.prio || {});
+    const menuFor = st.menu !== undefined ? st.menu : (this.props.notepad === 'priority menu' ? 'read' : null);
+    const items = [
+      { id: 'demo', name: 'CS 571 project demo' },
+      { id: 'email', name: 'Email TA about lab grade' },
+      { id: 'lab', name: 'Lab report outline' },
+      { id: 'quiz', name: 'Quiz review' },
+      { id: 'gift', name: 'Buy Mom’s bday gift' },
+      { id: 'read', name: 'Read chapter 8' }
+    ];
+    const pad = items.map((it) => {
+      const lv = levels.find((l) => l.key === prio[it.id]);
+      const neutral = lv.key === 'none';
+      return {
+        name: it.name,
+        label: lv.label,
+        short: neutral ? 'Priority' : lv.label,
+        color: neutral ? 'transparent' : lv.color,
+        chip: 'flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 8px 0 9px; border: 0; border-radius: 999px; font: 500 12px Geist, sans-serif; cursor: pointer; ' + (neutral ? 'background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line2);' : 'background: var(--sunken); color: var(--ink);') + (neutral ? ' padding-left: 9px;' : ''),
+        menuOpen: menuFor === it.id,
+        toggleMenu: () => this.setState({ menu: menuFor === it.id ? null : it.id }),
+        options: levels.map((l) => ({
+          label: l.label,
+          color: l.key === 'none' ? 'transparent' : l.color,
+          checked: l.key === prio[it.id] ? 'true' : 'false',
+          mark: l.key === prio[it.id] ? '✓' : '',
+          pick: () => this.setState({ prio: Object.assign({}, prio, { [it.id]: l.key }), menu: null }),
+          style: 'display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 38px; padding: 0 10px; border: 0; border-radius: 10px; font: 14px Geist, sans-serif; text-align: left; cursor: pointer; color: var(--ink); background: ' + (l.key === prio[it.id] ? 'var(--sunken)' : 'transparent') + ';' + (l.key === 'none' ? ' color: var(--muted);' : '')
+        }))
+      };
+    });
+    return {
+      t: t,
+      seats: seats,
+      pad: pad,
+      padOpen: padOpen,
+      padFolded: !padOpen,
+      togglePad: () => this.setState({ padOpen: !padOpen }),
+      micOn: micOn,
+      micOff: !micOn,
+      talkWrap: talkWrap,
+      talkMain: talkMain,
+      talkLabel: label,
+      talkHint: micOn ? 'Click to stop · Esc works too' : 'For one person, use their seat',
+      toggleTalk: () => this.setState(micOn ? { talkTo: 'off', moment: 'room' } : { talkTo: 'everyone', moment: 'talking to everyone' }),
+      bars: ['0s', '0.15s', '0.3s', '0.1s', '0.25s'],
+      ring: (0.67 * circ).toFixed(1) + ' ' + circ.toFixed(1),
+      peek: moment === 'quick peek',
+      closePeek: () => this.setState({ moment: 'room' }),
+      peekTalk: 'display: inline-flex; align-items: center; gap: 9px; min-height: 46px; padding: 0 20px; border: 0; border-radius: 999px; font: 600 14px Geist, sans-serif; cursor: pointer; ' + (peekOn ? 'background: var(--work); color: #06231f;' : 'background: var(--ink); color: var(--bg);'),
+      peekTalkLabel: peekOn ? 'Mic on · Sam only (stop)' : 'Talk to Sam',
+      togglePeekTalk: () => this.setState({ peekTalk: !peekOn })
+    };
+  }
+}
+</script>
+</body>
+</html>

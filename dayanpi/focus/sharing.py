@@ -7,7 +7,7 @@ sites and video start off, and sites only count while apps is on. A missing key 
 can't be read means all the defaults, with one warning.
 
 share_parts() is the only thing that decides what of a desk leaves the Pi for anyone else: every part of a seat,
-their desk page and the group calendar is named in NEEDS with the switches it needs, and a part whose switches
+their desk page and the day page's Studied with is named in NEEDS with the switches it needs, and a part whose switches
 aren't all on is never even made, let alone sent. Your own desk (the stream's "focus" and the desk routes) always
 shows you everything.
 """
@@ -58,8 +58,8 @@ NEEDS = {
     "history": ("history",),
     "history_today": ("focus", "history"),  # today's live minutes inside history: focus time, so it needs focus too
     "video": ("video",),
-    # The group line in the day page dialog.
-    "day_focus": ("focus", "history"),
+    # The day page's Studied with: the minutes you were both focused that day.
+    "studied_with": ("focus", "history"),
 }
 
 

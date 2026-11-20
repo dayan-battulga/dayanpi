@@ -18,7 +18,7 @@ function readSavedRange(): AppsRange {
   return range;
 }
 
-function toPercent(part: number, whole: number): string {
+export function toPercent(part: number, whole: number): string {
   const percent = `${whole > 0 ? (part / whole) * 100 : 0}%`;
   return percent;
 }

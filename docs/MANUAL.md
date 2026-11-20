@@ -52,12 +52,13 @@ Always use the **`main`** branch on both machines.
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`; at most 100, open and done together, 409 past that) |
 | `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
-| `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `others`: everyone who shares focus time and history, with their minutes that day |
+| `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `studied_with`: everyone you were focused at the same time as for 5+ minutes that day, if they share focus time and history (`{"username", "name", "lamp", "minutes"}`, most minutes first) |
 | `/api/track/reading` | The browser camera's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a 640×360 base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
 | `/api/track/pause` | The camera's Turn off (POST `{}`): your desk says paused until the next reading |
 | `/api/track/source` | Settings → Camera: POST `{"source": "pi"}` (owner only) or `{"source": "browser"}`, and/or `{"picture": "pi"}` / `{"picture": "browser"}` for where your room picture comes from, and `{"pi_camera": "front"}` / `{"pi_camera": "side"}` for which Pi camera (both owner only). Answers `{"source", "picture", "pi_camera"}` |
 | `/api/track/picture` | Owner only: your seat's picture on its own, from a browser camera that only sends the picture (POST `{"picture": <640×360 base64 JPEG or null>}`, about one a second; 409 unless Room picture from is this browser). Answers `{"state", "send_picture"}` |
 | `/api/models/<name>` | The tracker's models (signed in, the four files in `models/` only) |
+| `/api/goal` | Settings → Profile's daily focus goal: POST `{"minutes": 240}` (60 to 720, in 30s) or `{"minutes": null}` for off. Answers `{"minutes"}` |
 | `/api/voice` | Settings → Voice and bedtime: POST `{"bedtime": "23:30"}` and/or `{"output": "computer"}` (`"pi"` is owner only) |
 | `/api/voice/test` | Test the voice (POST `{}`): a short line wherever your peace sign speaks. Once every 10 s per desk (429 with `Retry-After` sooner) |
 | `/api/voice/clip` | Your own latest peace-sign clip as a WAV, once (gone after it's fetched or a minute), for This computer |
@@ -343,9 +344,25 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 - **Lamp color** picks the color your lamp shows while you're focused, out of six (Teal, the default, Green, Sky, Yellow, Pink and White), for everyone: your seat, the sidebar and bottom bar, the peek, your desk, the desk sign, plus your own wordmark and tab icon. On the phone stays orange and away stays violet for everyone, and the color goes out even with everything else switched off.
 - **Nudges** starts on: others can nudge you once you've been on your phone 5 minutes (at most once every 10). Off, nobody gets the button. A nudge speaks where your peace sign does (the Pi's speaker for you, their own computer for everyone else), so it needs the Pi's voice on like the peace sign ([voice.md](voice.md)); with it off they still get the toast.
 
-Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as the group line in their calendar's day pages.
+Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as **Studied with** in their calendar's day pages.
 
 The preview next to the switches is your seat exactly as the others get it. The switches live in each person's folder as `data/users/<name>/sharing.json`, so a restart keeps them. More in [focus-tracker.md](focus-tracker.md#the-room-and-sharing-study-room-step-6-part-1).
+
+### A daily focus goal
+
+Anyone can set one in Settings → **Profile** → **Daily focus goal**: Off (where it starts), or 1h to 12h in half hours, saved with the Save button. It's kept in your folder as `data/users/<name>/goal.json`.
+
+With a goal set, three spots change, and only for you:
+
+- The Desk's stats line starts with a small ring and "3h 12m of 4h".
+- Your own seat's chip in the room shows the ring and "2h 40m of 4h". Everyone else still sees "2h 48m today" on it, since the goal never leaves the Pi for anyone but you.
+- A day's popup in the calendar gets a box with the ring and "Goal reached", or "2h 43m of 4h" and "1h 17m to go".
+
+With it off, all three look like they always did. Each day's page gets a "Goal: 4h" line (and `goal_minutes` up top), so past days keep the goal they had. Pages are written just after midnight with the goal you have then; if the Pi was off over midnight, the late page takes whatever goal you have when it's written.
+
+### Studied with
+
+A day's popup shows who you studied with: a chip per person with their initial ringed in their lamp color, their name, and how long you were both focused **at the same time** that day (the overlap, not their total). The Pi works it out from both people's focus logs. It only lists people who share both focus time and history, and only overlaps of 5 minutes or more. Nobody, no row.
 
 ### Using the API from a terminal
 

@@ -82,7 +82,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge|POST /api/room/(hide|show)"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge|POST /api/room/(hide|show)|POST /api/goal"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -269,6 +269,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         "bedtime": format_bedtime(find_bedtime(desk)),
         "voice_output": find_voice_output(desk),
         "sharing": desk.sharing.read(),
+        "goal_minutes": desk.goal.read()["minutes"],  # your own; never in a seat, so nobody else sees it
         # Why the Pi's voice can't run is about the Pi, so it's mine to see.
         "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem if desk is owner_desk else None},
     }
@@ -525,7 +526,7 @@ def write_day_pages(now: float) -> None:
     """Every desk's missing day pages. One desk's trouble doesn't stop the others'."""
     for desk in desks.list():
         try:
-            written = days.write_missing_pages(desk.log, desk.days_dir, now)
+            written = days.write_missing_pages(desk.log, desk.days_dir, now, desk.goal.read()["minutes"])
             if written:
                 logger.info("day pages written for %s: %s", desk.username, ", ".join(written))
         except Exception:
@@ -839,7 +840,7 @@ class TodoChange(BaseModel):
 
 def build_today_page(desk: Desk, now: float) -> str:
     today = format_day(now)
-    page = days.build_day_page(desk.log.read_day(today), today)
+    page = days.build_day_page(desk.log.read_day(today), today, desk.goal.read()["minutes"])
     return page
 
 
@@ -875,30 +876,24 @@ def day_page(request: Request, day: Annotated[str, PathParam(pattern=days.DAY_PA
         page = path.read_text(encoding="utf-8")
     else:
         raise HTTPException(status_code=404, detail="no page for that day")
-    return {"day": day, "today": day == today, "markdown": page, "others": list_others_focus(desk.username, day, now)}
+    return {"day": day, "today": day == today, "markdown": page, "studied_with": list_studied_with(desk, day, now)}
 
 
-def read_day_focus_minutes(desk: Desk, day: str, now: float) -> int:
-    """One desk's focused minutes on a day: today's live, a past day's from its page (0 without one)."""
-    path = desk.days_dir / f"{day}.md"
-    if day == format_day(now):
-        minutes = days.count_minutes(desk.tracker.status(now)["today"]["working_seconds"])
-    else:
-        minutes = days.read_page_totals(path.read_text(encoding="utf-8")).get("focus_minutes", 0) if path.is_file() else 0
-    return minutes
-
-
-def list_others_focus(username: str, day: str, now: float) -> list[dict]:
-    """The group calendar's line: everyone else's focused minutes that day, only from people who share focus time and
-    history (sharing.share_parts), and only those who focused at all."""
-    others = []
+def list_studied_with(mine: Desk, day: str, now: float) -> list[dict]:
+    """The day page's Studied with: everyone you were focused at the same time as for STUDIED_WITH_MIN_S or more that
+    day, most first, worked out from both focus logs. Only people who share focus time and history (sharing.share_parts)."""
+    my_lines = mine.log.read_day(day)
+    found = []
     for user in auth_routes.accounts.list_users():
-        if user.username != username:
+        if user.username != mine.username:
             desk = desks.open(user.username, now)
-            shared = share_parts(desk.sharing.read(), {"day_focus": lambda: read_day_focus_minutes(desk, day, now)})
-            if shared.get("day_focus"):
-                others.append({"name": user.display_name, "focus_minutes": shared["day_focus"]})
-    return others
+            sharing = desk.sharing.read()
+            overlap = share_parts(sharing, {"studied_with": lambda: days.count_overlap_seconds(my_lines, desk.log.read_day(day), day)}).get("studied_with", 0.0)
+            if overlap >= days.STUDIED_WITH_MIN_S:
+                seat = share_parts(sharing, {"username": lambda: user.username, "name": lambda: user.display_name, "lamp": lambda: sharing["lamp"]})
+                found.append(seat | {"minutes": days.count_minutes(overlap)})
+    studied_with = sorted(found, key=lambda person: -person["minutes"])
+    return studied_with
 
 
 @app.get("/api/todos")
@@ -1199,6 +1194,20 @@ def hide_seat(request: Request, asked: PersonRequest):
 def show_seat(request: Request, asked: PersonRequest):
     """The toast's Undo."""
     return set_seat_hidden(request, asked, False)
+
+
+class GoalChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    minutes: Annotated[int, Field(strict=True, ge=days.GOAL_MIN_MINUTES, le=days.GOAL_MAX_MINUTES, multiple_of=days.GOAL_STEP_MINUTES)] | None
+
+
+@app.post("/api/goal")
+def set_goal(request: Request, change: GoalChange):
+    """Settings → Profile's Daily focus goal, for your own desk: null is off."""
+    goal = find_desk(request).goal
+    goal.update({"minutes": change.minutes})
+    return goal.read()
 
 
 class VoiceChange(BaseModel):

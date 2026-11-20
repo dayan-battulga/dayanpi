@@ -95,7 +95,8 @@
         "video": false,
         "nudges": true,
         "lamp": "teal"
-      }
+      },
+      "goal_minutes": 240
     },
     "room": {
       "seats": [

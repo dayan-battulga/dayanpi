@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { NudgeButton } from "@/components/room/NudgeButton";
 import { SeatPicture } from "@/components/room/SeatPicture";
+import { GoalRing, formatGoalProgress } from "@/components/shared/GoalRing";
 import { CameraControl } from "@/components/track/CameraControl";
 import type { Camera } from "@/hooks/useCamera";
 import type { Nudger } from "@/hooks/useNudge";
@@ -23,6 +24,7 @@ interface SeatCardProps {
   onPeek: () => void; // someone else's seat opens the quick peek
   onHide: () => void; // someone else's offline seat's ×
   camera?: Camera; // your own seat, while your desk is on this browser's camera
+  goal?: { seconds: number; minutes: number }; // your own seat, with your daily goal: only you ever see it
 }
 
 // Your own camera, live on your seat while it's on: straight from the camera, so nothing extra goes to the Pi. It sits
@@ -44,7 +46,7 @@ function LiveVideo({ stream }: { stream: MediaStream }) {
 // One person's seat (SeatsInfo.dc.html): the lamp in their state color, their once-a-second picture (or their initial
 // when there's none), today's total, their name and timer, the current to-do and app, and the to-dos-done bar. Each
 // detail only if they share it.
-export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera }: SeatCardProps) {
+export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, onHide, camera, goal }: SeatCardProps) {
   const line = describeSeatLine(seat);
   const done = findDoneShare(seat);
   const seconds = seat.seconds_in_state == null ? null : seat.seconds_in_state + elapsed;
@@ -76,11 +78,18 @@ export function SeatCard({ seat, mine, username, elapsed, now, nudger, onPeek, o
           <CameraControl camera={camera} place="seat" />
         </div>
       )}
-      {seat.focus_seconds != null && (
-        <span className="seat-chip">
-          {formatDuration(seat.focus_seconds)}
-          <span className="seat-chip-today"> today</span>
+      {goal != null ? (
+        <span className="seat-chip seat-chip-goal">
+          <GoalRing seconds={goal.seconds} goalMinutes={goal.minutes} size="small" />
+          {formatGoalProgress(goal.seconds, goal.minutes)}
         </span>
+      ) : (
+        seat.focus_seconds != null && (
+          <span className="seat-chip">
+            {formatDuration(seat.focus_seconds)}
+            <span className="seat-chip-today"> today</span>
+          </span>
+        )
       )}
       <div className="seat-foot">
         <div className="seat-row">

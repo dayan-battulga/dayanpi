@@ -412,3 +412,34 @@ it("shares with the room what the switches say, and previews your seat as the ro
   expect(section.getByRole("switch", { name: "Apps" })).toHaveAttribute("aria-checked", "true");
   await waitFor(() => expect(pieces()).toBe("3h 12m todayfinish the reportCode"));
 });
+
+it("picks a daily focus goal in Profile, off until you pick one, saved with the rest", async () => {
+  const sent = serveSettings(MEMBER, [], { "POST /api/goal": answer({ minutes: 270 }) });
+  const user = renderSettings();
+  const profile = within(await screen.findByRole("region", { name: "Profile" }));
+  const goal = profile.getByLabelText("Daily focus goal");
+  expect(goal).toHaveValue(""); // Off while the stream hasn't come, and nothing gets saved over it
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ goal_minutes: null })));
+  const choices = within(goal).getAllByRole("option").map((option) => option.textContent);
+  expect(choices).toEqual(["Off", "1h", "1h 30m", "2h", "2h 30m", "3h", "3h 30m", "4h", "4h 30m", "5h", "5h 30m", "6h", "6h 30m", "7h", "7h 30m", "8h", "8h 30m", "9h", "9h 30m", "10h", "10h 30m", "11h", "11h 30m", "12h"]);
+
+  await user.click(profile.getByRole("button", { name: "Save" }));
+  expect(sent.some((request) => request.path === "/api/goal")).toBe(false); // nothing picked, nothing sent
+
+  await user.selectOptions(goal, "4h 30m");
+  await user.click(profile.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/goal").map((request) => request.body)).toEqual([{ minutes: 270 }]));
+  expect(await profile.findByText("Saved.")).toBeInTheDocument();
+});
+
+it("shows the goal you have, and turns it off", async () => {
+  const sent = serveSettings(MEMBER, [], { "POST /api/goal": answer({ minutes: null }) });
+  const user = renderSettings();
+  const profile = within(await screen.findByRole("region", { name: "Profile" }));
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus({ goal_minutes: 240 })));
+  const goal = profile.getByLabelText("Daily focus goal");
+  await waitFor(() => expect(goal).toHaveValue("240"));
+  await user.selectOptions(goal, "Off");
+  await user.click(profile.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/goal").map((request) => request.body)).toEqual([{ minutes: null }]));
+});
