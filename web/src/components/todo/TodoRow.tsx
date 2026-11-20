@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { m } from "motion/react";
 import { useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { PriorityChip } from "@/components/todo/PriorityChip";
 import { formatDuration } from "@/lib/format";
 import { SPRINGS } from "@/lib/motion";
 import { TODO_TEXT_MAX, type TodoChange } from "@/lib/todos";
@@ -22,8 +23,8 @@ interface TodoRowProps {
   ref?: Ref<HTMLLIElement>; // AnimatePresence's popLayout measures the row through it
 }
 
-// One to-do, like Desk's: the checkbox, the text (click it to edit), its time, and Start, or Working/Paused on the
-// current one. layoutId lets a checked row slide down into Done and back up.
+// One to-do, like Desk's: the checkbox, the text (click it to edit), an open one's priority chip, its time, and Start,
+// or Working/Paused on the current one. layoutId lets a checked row slide down into Done and back up.
 export function TodoRow({ item, done, current, focused, isNew, onChange, onDelete, ref }: TodoRowProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const finished = useRef(false);
@@ -88,6 +89,7 @@ export function TodoRow({ item, done, current, focused, isNew, onChange, onDelet
     >
       <input type="checkbox" className="todo-check" checked={done} onChange={() => onChange({ done: !done })} aria-label={`${done ? "Not done" : "Done"}: ${item.text}`} />
       {text}
+      {!done && <PriorityChip priority={item.priority ?? "none"} text={item.text} onPick={(priority) => onChange({ priority })} />}
       <span className="todo-time">{item.seconds > 0 ? formatDuration(item.seconds) : "—"}</span>
       {!done && current && (
         <button type="button" className="todo-pill" data-working={focused || undefined} aria-pressed="true" aria-label={`Stop working on ${item.text}`} onClick={() => onChange({ current: false })}>

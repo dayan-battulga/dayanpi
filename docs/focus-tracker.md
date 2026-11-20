@@ -368,7 +368,8 @@ curl -s -b ~/.dayanpi-cookies localhost:8000/api/focus | python3 -c "import json
 
 One running to-do list on the left of your desk page, under the totals, with Apps on its right (on a phone, Apps goes under it). It carries over from day to day.
 
-- **Each row** has a checkbox, the text, the time it's collected (a dash before it has any), and a button on the right.
+- **Each row** has a checkbox, the text, its priority chip (open rows), the time it's collected (a dash before it has any), and a button on the right.
+- **Priorities.** Every to-do is High, Medium, Low or none. New ones start as none, and so did everything saved before priorities came in. The chip shows a colored dot and "High ▾" (red, yellow or gray), or an outlined "Priority ▾" with none; click it (or Tab to it and press Enter) for a small menu with the four and a check on the current one. On a phone the chip is just its dot, since the row has its time and button too. Priorities are only for you: your desk page for the others (`/people/<you>`) and the room never get them.
 - **Start** makes that item the one you're on: its row gets a light tint, its time turns the state's color, and the button turns into **Working** (green, with a blinking dot) while you're focused, or **Paused** while you're on your phone or away. Click Working or Paused to stop it, so nothing's current. Only one item is current at a time, and it only collects time while you're **focused**, so phone and away time never count.
 - **Next to the title:** how many are open (the number rolls when it changes), or "Start one to collect its time" when nothing's current.
 - **Check it off** and it slides down into **Done**, ticked and crossed out, and the rows under it close up. Uncheck it and it slides back. Checking off the current item stops its clock.
@@ -383,13 +384,23 @@ One running to-do list on the left of your desk page, under the totals, with App
 - **Where it lives.** `data/users/<username>/todos.json` on the Pi: everyone has their own list. Every change saves right away, written to a temp file and swapped in, so a power cut can't leave half a file. Collected time saves every 30 s, so a crash loses at most that much. If the file ever can't be read, the app moves it to `todos.json.broken` and starts empty instead of saving over it.
 - **The log.** Each add, check, uncheck and change of current item writes a `todo` line to the focus log (`"action"`: `added`, `done`, `undone` or `current`) with the item's `id`, `text` and `seconds` so far. Edits and deletes aren't logged. The restart and the stats tool skip these lines.
 
-The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done` and `current` to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the page keeps up.
+The routes, all behind the login: `GET /api/todos` for the list, `POST /api/todos` with `{"text": ...}` to add, `PATCH /api/todos/<id>` with any of `text`, `done`, `current` and `priority` (`"high"`, `"medium"`, `"low"` or `"none"`, anything else is a 422) to change one, and `DELETE /api/todos/<id>`. Every stats snapshot carries the list too, as `focus.todos`, which is how the page keeps up.
 
 ```bash
 curl -s -b ~/.dayanpi-cookies localhost:8000/api/todos | python3 -m json.tool
 cat data/users/$ME/todos.json
 grep '"todo"' data/users/$ME/focus_log/$(date +%F).jsonl
 ```
+
+### The Room's notepad
+
+Your to-dos come with you to the Room as a notepad (RoomV2.dc.html). Only you ever see it; nobody's seat changes.
+
+- **From 1280 px wide** it's pinned to the window's right edge at full height, the same panel as the room sidebar on the Desk (`shared/EdgePanel`, dashboard.css's `.rail`), and the top bar, the total and the four seats (a 2 by 2 grid there) center in the space to its left. The button at its top folds it to a 76 px strip with a to-do button and how many it lists; the fold is remembered in this browser (`dayanpi.notepad`), like the sidebar's.
+- **Below 1280 px** a **Notepad** button next to the room's total opens the same notepad as a sheet: from the right on a laptop, from the bottom on a phone.
+- **What's on it:** what you're working on first, tinted, with Working while you're focused (Paused otherwise); then your other open to-dos, High first, then Medium, Low and none, each with its chip. Check one off and it goes to Done on your Desk. **Add a to-do** at the bottom adds one with no priority when you press Enter.
+- **Which priorities show** is Settings → **To-dos**: a switch each for High, Medium, Low and No priority, all on to start, kept in `data/users/<name>/notepad.json`. The notepad's header says which show ("All to-dos", "High and medium priority"...) with a **change** link there. What you're working on always shows, and a to-do you add from the notepad stays on it for that visit even if none is switched off, until you give it a priority. The Desk always shows every to-do.
+- `POST /api/notepad` with any of `{"high", "medium", "low", "none"}` as true/false changes the switches; every stream event carries yours as `focus.notepad`.
 
 ## Apps
 

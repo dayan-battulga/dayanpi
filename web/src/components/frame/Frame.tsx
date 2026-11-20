@@ -4,6 +4,7 @@ import { Outlet, useLocation, useOutletContext } from "react-router";
 import { PeacePill } from "@/components/frame/PeacePill";
 import { Dock } from "@/components/header/Dock";
 import { Header } from "@/components/header/Header";
+import { NotepadPanel } from "@/components/room/Notepad";
 import { RoomBar, RoomRail } from "@/components/room/WhoIsHere";
 import { findCameraMode } from "@/components/track/cameraTracker";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,8 +26,8 @@ import type { Connection, Snapshot, User } from "@/lib/types";
 
 // The pages that show who's here, in the sidebar or the bottom bar. The room and their desks show it themselves.
 const PAGES_WITH_ROOM = new Set(["/me", "/pi", "/settings"]);
-// The sidebar's width open and folded: dashboard.css's .rail and .rail-collapsed.
-const RAIL_PX = { open: 360, collapsed: 76 };
+// The sidebar's width open and folded, and the Room's notepad open: dashboard.css's .rail, .rail-collapsed and .rail-notepad.
+const RAIL_PX = { open: 360, collapsed: 76, notepad: 340 };
 
 const CommandPalette = lazy(() => import("@/components/palette/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
@@ -58,6 +59,7 @@ export function Frame() {
   const wide = useMediaQuery(WIDE_QUERY);
   const reduced = useReducedMotionConfig();
   const [collapsed, setCollapsed] = useState(() => readStored("rail", "open") === "collapsed");
+  const [notepadFolded, setNotepadFolded] = useState(() => readStored("notepad", "open") === "collapsed");
   const { pathname } = useLocation();
   // A snapshot can land between two ticks of the clock; never show time running backwards.
   const now = Math.max(clock, receivedAt);
@@ -84,12 +86,18 @@ export function Frame() {
   // The sidebar holds its place once anyone else has an account, so the page doesn't jump as people come and go; the
   // bottom bar floats, so it only comes when someone's here.
   const withRoom = PAGES_WITH_ROOM.has(pathname);
-  const rail = withRoom && wide && seats.length > 1 ? (collapsed ? "collapsed" : "open") : undefined;
+  // The Room has your notepad in the same place instead, from the same width.
+  const notepad = pathname === "/" && wide ? (notepadFolded ? "collapsed" : "open") : undefined;
+  const rail = notepad ?? (withRoom && wide && seats.length > 1 ? (collapsed ? "collapsed" : "open") : undefined);
   const bar = withRoom && !wide && !phone && others.length > 0;
-  const railWidth = rail == null ? 0 : RAIL_PX[rail];
+  const railWidth = rail == null ? 0 : notepad === "open" ? RAIL_PX.notepad : RAIL_PX[rail];
   const collapseRail = (folded: boolean) => {
     setCollapsed(folded);
     writeStored("rail", folded ? "collapsed" : "open");
+  };
+  const foldNotepad = (folded: boolean) => {
+    setNotepadFolded(folded);
+    writeStored("notepad", folded ? "collapsed" : "open");
   };
   // Before the new page is drawn, so it starts at its top instead of wherever the last one was scrolled to.
   useLayoutEffect(() => {
@@ -130,7 +138,11 @@ export function Frame() {
       </div>
       {wide && (
         <div className="rail-slot">
-          {rail != null && <RoomRail others={others} elapsed={elapsed} together={room.focusSeconds} collapsed={rail === "collapsed"} onCollapse={collapseRail} />}
+          {notepad != null ? (
+            <NotepadPanel focus={snapshot?.focus} now={now} collapsed={notepad === "collapsed"} onCollapse={foldNotepad} />
+          ) : (
+            rail != null && <RoomRail others={others} elapsed={elapsed} together={room.focusSeconds} collapsed={rail === "collapsed"} onCollapse={collapseRail} />
+          )}
         </div>
       )}
       {bar && <RoomBar others={others} elapsed={elapsed} />}

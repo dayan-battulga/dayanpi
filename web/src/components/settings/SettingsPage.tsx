@@ -6,12 +6,14 @@ import { MacHelperSection } from "@/components/settings/MacHelperSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { RoomSection } from "@/components/settings/RoomSection";
 import { SharingSection } from "@/components/settings/SharingSection";
+import { TodosSection } from "@/components/settings/TodosSection";
 import { VoiceSection } from "@/components/settings/VoiceSection";
 import { signOut } from "@/lib/account";
 
 // The mockup's sections, in its order.
 const SECTIONS = [
   { id: "profile", name: "Profile", ownerOnly: false },
+  { id: "todos", name: "To-dos", ownerOnly: false },
   { id: "sharing", name: "Sharing", ownerOnly: false },
   { id: "camera", name: "Camera", ownerOnly: false },
   { id: "voice", name: "Voice and bedtime", ownerOnly: false },
@@ -51,6 +53,7 @@ export function SettingsPage() {
           </nav>
           <div key={section} className="settings-section rise">
             {section === "profile" && <ProfileSection user={user} goalMinutes={snapshot?.focus?.goal_minutes} onSaved={setUser} />}
+            {section === "todos" && <TodosSection focus={snapshot?.focus} now={now} />}
             {section === "sharing" && <SharingSection focus={snapshot?.focus} room={snapshot?.room} username={user.username} now={now} receivedAt={receivedAt} />}
             {section === "camera" && <CameraSection focus={snapshot?.focus} owner={owner} now={now} camera={camera} onOpenSharing={() => setSection("sharing")} />}
             {section === "voice" && <VoiceSection focus={snapshot?.focus} owner={owner} now={now} />}

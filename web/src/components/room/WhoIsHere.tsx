@@ -1,5 +1,5 @@
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Link } from "react-router";
+import { EdgePanel } from "@/components/shared/EdgePanel";
 import { formatClock, formatDuration } from "@/lib/format";
 import { describeSeatLine, describeSeatState, describeTaskMeta, readInitial } from "@/lib/room";
 import type { Seat } from "@/lib/types";
@@ -33,27 +33,22 @@ interface RoomRailProps extends WhoIsHereProps {
 // Who's here, as the sidebar on Desk, Pi and Settings from 1280 px up (SideRail.dc.html). It folds to a column of faces
 // and remembers that. Each person opens their desk.
 export function RoomRail({ others, elapsed, together, collapsed, onCollapse }: RoomRailProps) {
-  const rail = collapsed ? (
-    <aside className="rail rail-collapsed" aria-label="The room">
-      <button type="button" className="rail-toggle" aria-label="Show the room panel" onClick={() => onCollapse(false)}>
-        <PanelRightOpen size={18} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-      {others.map((seat) => (
-        <Link key={seat.username} className="rail-face" data-state={seat.state} data-lamp={seat.lamp} to={deskPath(seat)} title={[seat.name, seat.todos?.current].filter(Boolean).join(" · ")} aria-label={`Open ${seat.name}’s desk`}>
-          {readInitial(seat.name)}
-        </Link>
-      ))}
-    </aside>
-  ) : (
-    <aside className="rail" aria-labelledby="rail-title">
-      <div className="rail-head">
-        <h2 id="rail-title" className="rail-title">
-          In the room
-        </h2>
-        <button type="button" className="rail-toggle" aria-label="Hide the room panel" onClick={() => onCollapse(true)}>
-          <PanelRightClose size={18} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-      </div>
+  const faces = others.map((seat) => (
+    <Link key={seat.username} className="rail-face" data-state={seat.state} data-lamp={seat.lamp} to={deskPath(seat)} title={[seat.name, seat.todos?.current].filter(Boolean).join(" · ")} aria-label={`Open ${seat.name}’s desk`}>
+      {readInitial(seat.name)}
+    </Link>
+  ));
+  return (
+    <EdgePanel
+      title="In the room"
+      titleId="rail-title"
+      stripLabel="The room"
+      foldLabel="Hide the room panel"
+      openLabel="Show the room panel"
+      collapsed={collapsed}
+      onCollapse={onCollapse}
+      strip={faces}
+    >
       {others.length > 0 ? (
         <ul className="rail-people">
           {others.map((seat) => {
@@ -92,9 +87,8 @@ export function RoomRail({ others, elapsed, together, collapsed, onCollapse }: R
         <span>{formatDuration(together)} together today</span>
         <span>Open the room →</span>
       </Link>
-    </aside>
+    </EdgePanel>
   );
-  return rail;
 }
 
 // Who's here, as a frosted bar along the bottom between a phone's width and the sidebar's (BottomBar.dc.html).

@@ -58,19 +58,22 @@
             "id": "t1",
             "text": "Problem set 3",
             "seconds": 2280,
-            "done_at": null
+            "done_at": null,
+            "priority": "none"
           },
           {
             "id": "t2",
             "text": "Lab report outline",
             "seconds": 720,
-            "done_at": null
+            "done_at": null,
+            "priority": "none"
           },
           {
             "id": "t3",
             "text": "Read chapter 7",
             "seconds": 0,
-            "done_at": null
+            "done_at": null,
+            "priority": "none"
           }
         ],
         "done": [
@@ -78,7 +81,8 @@
             "id": "t4",
             "text": "Review lecture 18 notes",
             "seconds": 1500,
-            "done_at": 1794868800
+            "done_at": 1794868800,
+            "priority": "none"
           }
         ]
       },

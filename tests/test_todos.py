@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from dayanpi.focus.todos import SAVE_EVERY_S, TODOS_MAX, TodoList, TodoListFull
+from dayanpi.focus.todos import SAVE_EVERY_S, TODOS_MAX, NotepadSetting, TodoList, TodoListFull, hide_priorities
 from dayanpi.focus.tracker import MAX_STEP_S, FocusLog
 
 NOON = datetime(2026, 11, 15, 12, 0).timestamp()
@@ -168,3 +168,34 @@ def test_a_full_list_takes_no_more_until_some_are_gone(tmp_path):
     assert "one too many" not in json.dumps(todos.snapshot(NOON)), "done ones count too"
     todos.delete(first, NOON)
     assert todos.add("room again", NOON)["text"] == "room again"
+
+
+def test_priorities_start_as_none_change_and_survive_a_restart(tmp_path):
+    todos = make_list(tmp_path)
+    demo = todos.add("project demo", NOON)
+    assert demo["priority"] == "none"
+    assert todos.change(demo["id"], NOON + 1, priority="high")
+    assert todos.snapshot(NOON + 2)["open"][0]["priority"] == "high"
+    assert make_list(tmp_path).snapshot(NOON + 3)["open"][0]["priority"] == "high"
+
+
+def test_to_dos_saved_before_priorities_load_as_none(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps({"current": "a", "items": [{"id": "a", "text": "old one", "created_at": NOON, "done_at": None, "seconds": 60.0}]}))
+    listed = make_list(tmp_path).snapshot(NOON + 1)
+    assert (listed["current"], listed["open"][0]["priority"]) == ("a", "none")
+
+
+def test_someone_elses_view_of_a_list_has_no_priorities(tmp_path):
+    todos = make_list(tmp_path)
+    todos.change(todos.add("demo", NOON)["id"], NOON, priority="high")
+    todos.change(todos.add("lab", NOON)["id"], NOON, done=True)
+    hidden = hide_priorities(todos.snapshot(NOON + 1))
+    assert all("priority" not in item for item in hidden["open"] + hidden["done"])
+    assert [item["text"] for item in hidden["open"] + hidden["done"]] == ["demo", "lab"]
+
+
+def test_the_notepad_shows_every_priority_until_one_is_switched_off(tmp_path):
+    notepad = NotepadSetting(tmp_path / "notepad.json")
+    assert notepad.read() == {"high": True, "medium": True, "low": True, "none": True}
+    notepad.update({"low": False, "none": "no", "urgent": False})
+    assert NotepadSetting(tmp_path / "notepad.json").read() == {"high": True, "medium": True, "low": False, "none": True}

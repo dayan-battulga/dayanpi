@@ -37,6 +37,8 @@ function serveTodos(initial: Todos) {
         todos.current = body.done && todos.current === id ? null : todos.current;
       } else if (item != null && body.current !== undefined) {
         todos.current = body.current ? item.id : null;
+      } else if (item != null && body.priority !== undefined) {
+        item.priority = body.priority;
       } else if (item != null) {
         item.text = body.text;
       }
@@ -80,8 +82,8 @@ afterEach(() => {
 
 it("shows each row's time, a dash before it has any, and the current row tinted", () => {
   renderList();
-  expect(openRows()[0]).toHaveTextContent("finish the report12m");
-  expect(openRows()[1]).toHaveTextContent("reply to emails—");
+  expect(openRows()[0]).toHaveTextContent("finish the reportPriority12m");
+  expect(openRows()[1]).toHaveTextContent("reply to emailsPriority—");
   expect(openRows()[0]).toHaveAttribute("data-current");
   expect(openRows()[1]).not.toHaveAttribute("data-current");
 });
@@ -132,7 +134,7 @@ it("moves a checked row down into Done right away, and unchecking moves it back"
   holdTodos();
   const user = renderList();
   await user.click(screen.getByRole("checkbox", { name: "Done: finish the report" }));
-  expect(openRows().map((row) => row.textContent)).toEqual(["reply to emails—Start"]);
+  expect(openRows().map((row) => row.textContent)).toEqual(["reply to emailsPriority—Start"]);
   expect(doneRows()).toHaveLength(1);
   expect(doneRows()[0]).toHaveTextContent("finish the report12m");
   expect(doneRows()[0]).toHaveAttribute("data-done");
@@ -260,4 +262,31 @@ it("says All done without the confetti with reduced motion", async () => {
   await userEvent.setup().click(screen.getByRole("checkbox", { name: "Done: finish the report" }));
   expect(screen.getByText("All done. Nice.")).toBeInTheDocument();
   expect(confetti()).toBe(0);
+});
+
+it("gives each open row a priority chip whose menu has the four, the current one checked", async () => {
+  const user = renderList({ todos: { ...TODOS, open: [TODOS.open[0], { ...TODOS.open[1], priority: "medium" }] } });
+  const none = screen.getByRole("button", { name: "Priority of finish the report: No priority" });
+  expect(none).toHaveTextContent("Priority");
+  expect(none).toHaveAttribute("data-priority", "none");
+  expect(screen.getByRole("button", { name: "Priority of reply to emails: Medium" })).toHaveTextContent("Medium");
+
+  await user.click(none);
+  const items = screen.getAllByRole("menuitemradio");
+  expect(items.map((item) => item.textContent)).toEqual(["High", "Medium", "Low", "No priority✓"]);
+  expect(items.map((item) => item.getAttribute("aria-checked"))).toEqual(["false", "false", "false", "true"]);
+  await user.click(items[0]);
+  expect(screen.getByRole("button", { name: "Priority of finish the report: High" })).toHaveTextContent("High"); // at once
+  await waitFor(() => expect(sent.filter((request) => request.method === "PATCH").map((request) => [request.url, request.body])).toEqual([["/api/todos/a1", { priority: "high" }]]));
+});
+
+it("works from the keyboard, and done rows have no chip", async () => {
+  const user = renderList({ todos: { ...TODOS, done: [{ id: "d9", text: "old news", seconds: 60, done_at: 1, priority: "high" }] } });
+  expect(within(doneRows()[0]).queryByRole("button", { name: /^Priority/ })).toBeNull();
+  screen.getByRole("button", { name: "Priority of reply to emails: No priority" }).focus();
+  await user.keyboard("{Enter}");
+  expect(await screen.findByRole("menu")).toBeInTheDocument();
+  await user.keyboard("{ArrowDown}{ArrowDown}{Enter}"); // High has the focus first, so two down is Low
+  await waitFor(() => expect(sent.find((request) => request.method === "PATCH")?.body).toEqual({ priority: "low" }));
+  expect(screen.queryByRole("menu")).toBeNull();
 });

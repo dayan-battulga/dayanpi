@@ -4,7 +4,8 @@ Each desk has one, in its folder's todos.json (focus/desks.py). Every save write
 file and swaps it in with os.replace, so a power cut leaves the old list or the new one,
 never half of one. The current item collects the seconds spent working.
 Checked items stay in Done until local midnight, then leave the list; their "done" lines
-in the focus log are what's left of them.
+in the focus log are what's left of them. Each item has a priority (high, medium, low or none, which new items and
+items saved before priorities start with), and the desk's notepad.json says which of them the Room's notepad shows.
 """
 
 import json
@@ -16,7 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from dayanpi.focus.tracker import MAX_STEP_S, FocusLog, format_day
-from dayanpi.utils.files import write_atomically
+from dayanpi.utils.files import JsonSetting, write_atomically
 
 TODO_FILE = "todos.json"
 TEXT_MAX = 200
@@ -24,6 +25,8 @@ TEXT_MAX = 200
 # would slow the whole room down; nobody does a hundred things in a day.
 TODOS_MAX = 100
 SAVE_EVERY_S = 30.0  # collected time saves this often, like the log's samples; edits save right away
+PRIORITIES = ("high", "medium", "low", "none")
+NOTEPAD_FILE = "notepad.json"  # {"high": true, ...}: which priorities the Room's notepad shows, all of them until changed
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +42,28 @@ class TodoItem:
     created_at: float
     done_at: float | None = None
     seconds: float = 0.0
+    priority: str = "none"  # one of PRIORITIES
 
 
 def describe_item(item: TodoItem) -> dict:
-    described = {"id": item.id, "text": item.text, "seconds": round(item.seconds), "done_at": item.done_at}
+    described = {"id": item.id, "text": item.text, "seconds": round(item.seconds), "done_at": item.done_at, "priority": item.priority}
     return described
+
+
+def hide_priorities(snapshot: dict) -> dict:
+    """A list for someone else's desk page: priorities are only for its owner's Desk and notepad."""
+    hidden = {**snapshot, **{part: [{key: value for key, value in item.items() if key != "priority"} for item in snapshot[part]] for part in ("open", "done")}}
+    return hidden
+
+
+class NotepadSetting(JsonSetting):
+    """read() is {priority: shown} for each of PRIORITIES; update(changes) changes the ones given."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, dict.fromkeys(PRIORITIES, True))
+
+    def accepts(self, key: str, value: object) -> bool:
+        return isinstance(value, bool)
 
 
 class TodoList:
@@ -74,13 +94,18 @@ class TodoList:
             added = describe_item(item)
         return added
 
-    def change(self, item_id: str, now: float, text: str | None = None, done: bool | None = None, current: bool | None = None) -> bool:
-        """Edits, checks or unchecks an item, or makes it (or stops it being) the current one. False if there's no such item."""
+    def change(
+        self, item_id: str, now: float, text: str | None = None, done: bool | None = None, current: bool | None = None, priority: str | None = None
+    ) -> bool:
+        """Edits, checks or unchecks an item, changes its priority (one of PRIORITIES, checked by the caller), or makes it
+        (or stops it being) the current one. False if there's no such item."""
         with self._lock:
             item = self._find(item_id)
             if item is not None:
                 if text is not None:
                     item.text = text
+                if priority is not None:
+                    item.priority = priority
                 if done is not None and done != (item.done_at is not None):
                     self._set_done_locked(item, done, now)
                 if current and item.done_at is None:

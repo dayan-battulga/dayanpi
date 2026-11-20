@@ -35,7 +35,7 @@ from dayanpi.focus.pictures import PICTURE_MAX_BASE64, read_browser_picture, shr
 from dayanpi.focus.sharing import AT_DESK_STATES, LAMP_COLORS, NUDGE_EVERY_S, build_seat, can_nudge, find_fresh_picture, is_here, share_parts
 from dayanpi.focus.tracker import FocusUpdate, find_data_dir, format_day
 from dayanpi.focus.coach import BEDTIME_PATTERN, DEFAULT_BEDTIME, CoachWriter, TodoCoach, format_bedtime, parse_bedtime
-from dayanpi.focus.todos import TEXT_MAX, TODOS_MAX, TodoListFull
+from dayanpi.focus.todos import PRIORITIES, TEXT_MAX, TODOS_MAX, TodoListFull, hide_priorities
 from dayanpi.focus.worker import FocusWorker
 from dayanpi.hardware.llm import OllamaClient, read_llm_model
 from dayanpi.hardware.voice import ClipShelf, VoiceAnnouncer
@@ -82,7 +82,7 @@ JOIN_LINK = re.compile(r"(/|%2F)join(/|%2F)[^?&\s]*", re.IGNORECASE)
 MEMBER_WRITES = re.compile(
     r"PATCH /api/me|POST /api/me/password|POST /api/tokens|DELETE /api/tokens/[0-9]+"
     r"|POST /api/todos|(PATCH|DELETE) /api/todos/[^/]+|POST /api/mac/app|POST /api/mac/tracking"
-    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge|POST /api/room/(hide|show)|POST /api/goal"
+    r"|POST /api/track/(reading|pause|source)|POST /api/voice(/test)?|POST /api/sharing|POST /api/nudge|POST /api/room/(hide|show)|POST /api/goal|POST /api/notepad"
 )
 OWNER_READS = {"/api/stats", "/api/invites", "/api/accounts"}
 INDEX_PAGE = STATIC_DIR / "index.html"
@@ -270,6 +270,7 @@ def build_desk_status(desk: Desk, now: float) -> dict:
         "voice_output": find_voice_output(desk),
         "sharing": desk.sharing.read(),
         "goal_minutes": desk.goal.read()["minutes"],  # your own; never in a seat, so nobody else sees it
+        "notepad": desk.notepad.read(),  # which priorities your Room notepad shows; yours alone too
         # Why the Pi's voice can't run is about the Pi, so it's mine to see.
         "voice": {"enabled": voice.enabled, "backend": voice.backend, "problem": voice.problem if desk is owner_desk else None},
     }
@@ -346,7 +347,7 @@ def build_their_desk(user: User, now: float) -> dict:
         {
             "here_since": lambda: focus["today"]["first_seen"] if is_here(desk.seen_at, focus, now) else None,
             "today": lambda: {key: focus["today"][key] for key in ("working_seconds", "phone_seconds", "pickups")} | {"segments": desk.tracker.segments()},
-            "todo_list": lambda: focus["todos"],
+            "todo_list": lambda: hide_priorities(focus["todos"]),
             "apps": lambda: [{"app": row["app"], "total_seconds": row["total_seconds"]} for row in chart()],
             "app_youtube": lambda: {row["app"]: row["youtube_seconds"] for row in chart() if row.get("youtube_seconds")},
             "sites": lambda: days.build_sites_chart(desk.log, now),
@@ -836,6 +837,7 @@ class TodoChange(BaseModel):
     text: TodoText | None = None
     done: bool | None = None
     current: bool | None = None
+    priority: Literal[PRIORITIES] | None = None
 
 
 def build_today_page(desk: Desk, now: float) -> str:
@@ -916,7 +918,7 @@ def add_todo(request: Request, new: TodoNew):
 def change_todo(request: Request, item_id: str, change: TodoChange):
     todos = find_desk(request).todos
     now = time.time()
-    if not todos.change(item_id, now, text=change.text, done=change.done, current=change.current):
+    if not todos.change(item_id, now, text=change.text, done=change.done, current=change.current, priority=change.priority):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such to-do")
     return {"status": "ok", "todos": todos.snapshot(now)}
 
@@ -1194,6 +1196,23 @@ def hide_seat(request: Request, asked: PersonRequest):
 def show_seat(request: Request, asked: PersonRequest):
     """The toast's Undo."""
     return set_seat_hidden(request, asked, False)
+
+
+class NotepadChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high: StrictBool | None = None
+    medium: StrictBool | None = None
+    low: StrictBool | None = None
+    none: StrictBool | None = None
+
+
+@app.post("/api/notepad")
+def set_notepad(request: Request, change: NotepadChange):
+    """Settings → To-dos: which priorities the Room's notepad shows, for your own desk."""
+    notepad = find_desk(request).notepad
+    notepad.update(change.model_dump(exclude_none=True))
+    return notepad.read()
 
 
 class GoalChange(BaseModel):

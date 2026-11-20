@@ -29,11 +29,14 @@ export interface Overlay {
   boxes: OverlayBox[];
 }
 
+export type Priority = "high" | "medium" | "low" | "none";
+
 export interface TodoItem {
   id: string;
   text: string;
   seconds: number;
   done_at: number | null;
+  priority?: Priority; // your own list only (never someone else's); missing means none
 }
 
 export interface Todos {
@@ -92,6 +95,7 @@ export interface FocusStatus {
   voice_output?: "pi" | "computer"; // where the peace sign speaks
   sharing?: Sharing; // what the room sees of this desk (Settings → Share with the room)
   goal_minutes?: number | null; // your daily focus goal (Settings → Profile), null when off; never anyone else's
+  notepad?: Record<Priority, boolean>; // which priorities the Room's notepad shows (Settings → To-dos)
 }
 
 // Settings → Share with the room. Status (the state and its timer) always shows, so it isn't a switch.

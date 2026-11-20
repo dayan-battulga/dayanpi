@@ -2,7 +2,7 @@
 per account.
 
 A desk lives in data/users/<username>/ (DAYANPI_DATA_DIR overrides data/), with focus_log/, todos.json,
-days/, mac_tracking.json, camera_source.json, voice.json, sharing.json, seat.json and goal.json in it. Usernames can't change, so neither does the folder.
+days/, mac_tracking.json, camera_source.json, voice.json, sharing.json, seat.json, goal.json and notepad.json in it. Usernames can't change, so neither does the folder.
 A removed account's folder moves to data/users/removed/<username>-<date>/ and stays there until someone
 deletes it by hand, so whoever picks that username next starts empty. The classes in tracker.py, todos.py,
 mac_tracking.py, camera_source.py, voice_setting.py and sharing.py don't know about desks; they just get their paths from here.
@@ -20,7 +20,7 @@ from dayanpi.focus.coach import TodoCoach
 from dayanpi.focus.days import DAYS_DIR_NAME, GOAL_FILE, GoalSetting
 from dayanpi.focus.mac_tracking import MAC_TRACKING_FILE, MacTrackingSetting
 from dayanpi.focus.sharing import SEAT_FILE, SHARING_FILE, SeatSetting, SharingSetting
-from dayanpi.focus.todos import TODO_FILE, TodoList
+from dayanpi.focus.todos import NOTEPAD_FILE, TODO_FILE, NotepadSetting, TodoList
 from dayanpi.focus.tracker import FOCUS_LOG_DIR_NAME, FocusLog, FocusTracker, format_day
 from dayanpi.focus.voice_setting import VOICE_FILE, VoiceSetting
 
@@ -48,6 +48,7 @@ class Desk:
     sharing: SharingSetting  # what the room sees (focus/sharing.py)
     seat: SeatSetting  # whether someone hid this seat from the room while it was offline (focus/sharing.py)
     goal: GoalSetting  # the daily focus goal, Settings → Profile (focus/days.py)
+    notepad: NotepadSetting  # which priorities the Room's notepad shows, Settings → To-dos (focus/todos.py)
     seen_at: float | None = None  # the last second this person's site had the stream open; memory only
     last_nudged: dict | None = None  # {"by", "at"}: the last nudge this person got, for its ripples and the 10 min wait; memory only
     voice_tested_at: float | None = None  # the last Test the voice, for its 10 s wait; memory only
@@ -71,6 +72,7 @@ def open_desk(folder: Path, username: str, now: float) -> Desk:
     desk = Desk(
         username, folder, log, tracker, todos, mac_tracking, CameraSourceSetting(folder / CAMERA_SOURCE_FILE), BrowserCamera(tracker), VoiceSetting(folder / VOICE_FILE),
         SharingSetting(folder / SHARING_FILE), SeatSetting(folder / SEAT_FILE), GoalSetting(folder / GOAL_FILE),
+        NotepadSetting(folder / NOTEPAD_FILE),
     )
     return desk
 

@@ -50,7 +50,8 @@ Always use the **`main`** branch on both machines.
 | `/api/mac/app` | The Mac helper reports the front app, and the site for a browser (POST `{"app": ..., "site": ...}`; site optional, a plain host name). While Mac tracking is off it's dropped, still a 200, with `"enabled": false` |
 | `/api/mac/tracking` | The dashboard's Mac tracking switch: GET `{"enabled": ...}`, or POST `{"enabled": true}` / `false` to flip it |
 | `/api/todos` | The to-do list (GET), or add one (POST `{"text": ...}`; at most 100, open and done together, 409 past that) |
-| `/api/todos/<id>` | Edit, check, uncheck or make current (PATCH with any of `text`, `done`, `current`), or delete (DELETE) |
+| `/api/todos/<id>` | Edit, check, uncheck, make current or change its priority (PATCH with any of `text`, `done`, `current`, `priority`: `"high"`, `"medium"`, `"low"` or `"none"`), or delete (DELETE) |
+| `/api/notepad` | Settings → To-dos: which priorities the Room's notepad shows. POST any of `{"high", "medium", "low", "none"}` as true/false; answers with all four |
 | `/api/days?month=YYYY-MM` | Each day's numbers for the calendar, one month at a time (today's live) |
 | `/api/days/YYYY-MM-DD` | One day's page from your desk's `days/` as markdown (today's built live; 404 when there's no page), plus `studied_with`: everyone you were focused at the same time as for 5+ minutes that day, if they share focus time and history (`{"username", "name", "lamp", "minutes"}`, most minutes first) |
 | `/api/track/reading` | The browser camera's numbers for one check (POST `{"person", "phone", "sign", "elapsed_ms"}`, plus `"picture"` (a 640×360 base64 JPEG) when the last answer said `send_picture`; about one a second, 429 faster; 409 when your desk is on the Pi's cameras) |
@@ -347,6 +348,14 @@ Everyone picks what the room sees of them in Settings → **Sharing**, and the P
 Everyone else sees what you share on your seat, in the sidebar or bottom bar on their Desk, Pi and Settings pages, in the quick peek when they tap your seat, and on your desk at `/people/<your username>`. History shows on that desk and, with focus time, as **Studied with** in their calendar's day pages.
 
 The preview next to the switches is your seat exactly as the others get it. The switches live in each person's folder as `data/users/<name>/sharing.json`, so a restart keeps them. More in [focus-tracker.md](focus-tracker.md#the-room-and-sharing-study-room-step-6-part-1).
+
+### Your notepad and priorities
+
+Every to-do has a priority now: High, Medium, Low or none. New ones start with none (and so does everything from before). Click the small chip on a to-do, on the Desk or the notepad, to pick one from its menu.
+
+The Room has your to-dos as a **notepad** that only you see. On a big screen (1280 px and up) it sits on the right edge and folds to a thin strip with a count; it remembers which. On a laptop or phone, the **Notepad** button by the room's total opens it as a sheet. What you're working on is always first, then the rest from High to none. Check things off there, change priorities, or add one with Enter.
+
+Settings → **To-dos** has a switch per priority for what the notepad shows (all on to start, kept in `data/users/<name>/notepad.json`). What you're working on always shows, something you just added on the notepad stays there until you give it a priority, and the Desk always shows everything. More in [focus-tracker.md](focus-tracker.md#the-rooms-notepad).
 
 ### A daily focus goal
 

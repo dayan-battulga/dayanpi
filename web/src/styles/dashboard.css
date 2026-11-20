@@ -16,6 +16,10 @@
   --work: #0e6e63;
   --phone: #c2410c;
   --away: #6d5bd0;
+  /* A to-do's priority (RoomV2's chips): high, medium, low. */
+  --high: #c7362f;
+  --med: #9a6b00;
+  --low: #8a8a92;
   /* The lamp colors anyone can pick for "focused" (Settings → Sharing, focus/sharing.py's LAMP_COLORS): readable on
      --bg and --surface, never near --phone or --away. Teal is --work; white is plain ink in this theme. */
   --lamp-teal: var(--work);
@@ -45,6 +49,9 @@
   --work: #34d3b9;
   --phone: #ff8a4c;
   --away: #a99bff;
+  --high: #ff6b6b;
+  --med: #f2c94c;
+  --low: #8e8e96;
   /* The lamp colors' dark shades, which the tab icons (web/public/assets/icon-working-<name>.svg) are drawn in. */
   --lamp-teal: var(--work);
   --lamp-green: #7dd65a;
@@ -2601,7 +2608,13 @@ button.todo-pill:active,
   --lamp: var(--away);
 }
 
+/* The total on the left, and on the right the Notepad button below 1280 px. */
 .room-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
   margin-top: 64px;
 }
 
@@ -4054,6 +4067,386 @@ button.todo-pill:active,
   font-weight: 600;
 }
 
+/* ---------- to-do priorities and the Room's notepad (RoomV2.dc.html, RoomNotepad.dc.html) ---------- */
+
+[data-priority="high"] {
+  --priority: var(--high);
+}
+
+[data-priority="medium"] {
+  --priority: var(--med);
+}
+
+[data-priority="low"] {
+  --priority: var(--low);
+}
+
+[data-priority="none"] {
+  --priority: transparent;
+}
+
+.priority-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--priority);
+}
+
+/* A to-do's chip: the dot and its priority, or an outlined "Priority" with none. Drawn 30 px tall like the mockup,
+   with a hit area that reaches 44 px. */
+.priority-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 8px 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--ink);
+  font: 500 12px var(--font-ui);
+  cursor: pointer;
+}
+
+.priority-chip::before {
+  content: "";
+  position: absolute;
+  inset: -7px -2px;
+}
+
+.priority-chip[data-priority="none"] {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.priority-chip .priority-dot {
+  width: 7px;
+  height: 7px;
+}
+
+/* A phone's Desk row has its time, Start and × too, so the chip is just its dot there (none's outlined) and the row's
+   gaps tighten; the chip still says its priority to screen readers. */
+@media (max-width: 639px) {
+  .todo-row {
+    gap: 8px;
+  }
+
+  .todo-row .priority-chip {
+    padding: 0 8px;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .todo-row .priority-chip :is(.priority-chip-label, svg) {
+    display: none;
+  }
+
+  .todo-row .priority-chip[data-priority="none"] .priority-dot {
+    box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  }
+}
+
+.priority-menu {
+  z-index: 60;
+  width: 168px;
+  padding: 5px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 18px 40px -16px rgb(0 0 0 / 60%);
+  animation: menu-pop 0.2s var(--ease) both;
+}
+
+.priority-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  outline-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.priority-item[data-state="checked"] {
+  background: var(--sunken);
+}
+
+.priority-item[data-highlighted] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.priority-item[data-priority="none"] {
+  color: var(--muted);
+}
+
+.priority-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.priority-check {
+  color: var(--work);
+  font-size: 12px;
+}
+
+/* Settings → To-dos: a switch per priority, each with its dot (none's outlined). */
+.todo-levels {
+  max-width: 620px;
+}
+
+.todo-levels-label {
+  margin: 22px 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.todo-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.todo-level[data-priority="none"] .priority-dot {
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+
+.todo-levels-note,
+.todo-levels-more {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.todo-levels-more {
+  margin-top: 28px;
+}
+
+/* The notepad: the room sidebar's panel (.rail), a little narrower. */
+.rail-notepad:not(.rail-collapsed) {
+  width: 340px;
+  padding: 22px 24px 40px;
+}
+
+.notepad-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notepad-change {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notepad-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--work) 10%, transparent);
+}
+
+.notepad-current .notepad-text {
+  font-weight: 600;
+}
+
+.notepad-working {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.notepad-current[data-working] .notepad-working {
+  color: var(--work);
+}
+
+.notepad-current[data-working] .notepad-working::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+/* RoomV2's outlined box: a checked one leaves the notepad for Done on the Desk, so it's never drawn checked. */
+:is(.notepad-current, .notepad-row) .todo-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  appearance: none;
+}
+
+.notepad-list {
+  position: relative;
+  margin-top: 6px;
+}
+
+.notepad-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 47px; /* the mockup's 46 px plus its line */
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notepad-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.notepad-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  margin-top: 16px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--sunken);
+}
+
+.notepad-add-input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 14px var(--font-ui);
+  outline: none;
+}
+
+.notepad-add-input::placeholder {
+  color: var(--muted);
+}
+
+.notepad-add:focus-within {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.notepad-enter {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notepad-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Folded: the to-do button under the open one, with how many the notepad lists. */
+.notepad-strip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--sunken);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.notepad-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--work);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Below 1280 px: the same notepad as a sheet over the scrim, from the right edge, or from the bottom on a phone. */
+.notepad-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  width: min(340px, 100%);
+  overflow-y: auto;
+  padding: 22px 24px 40px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 40px 100px -30px rgb(0 0 0 / 60%);
+}
+
+@media (max-width: 639px) {
+  .notepad-sheet {
+    top: auto;
+    left: 0;
+    width: 100%;
+    max-height: 85dvh;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+/* Next to the notepad the room is RoomV2's: centered in the column to its left, the four seats a 2 by 2 grid. */
+.frame[data-rail] .room {
+  max-width: 936px;
+  margin-inline: auto;
+}
+
+.frame[data-rail] .room-head {
+  margin-top: 20px;
+}
+
+.frame[data-rail] .room-total {
+  font-size: 96px;
+}
+
+.frame[data-rail] .room-caption {
+  margin-top: 14px;
+  font-size: 15px;
+}
+
+.frame[data-rail] .seats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.frame[data-rail] .seat {
+  height: 250px;
+  border-radius: 26px;
+}
+
 /* Who's here as a frosted bar along the bottom (BottomBar.dc.html), between a phone's width and the sidebar's. */
 .frame[data-bar] .shell {
   padding-bottom: 160px;
@@ -4717,6 +5110,13 @@ button.todo-pill:active,
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
   }
 }
 

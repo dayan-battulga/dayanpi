@@ -61,7 +61,7 @@ it("starts on Profile, and the list picks a section, marked, rising in fresh", a
   serveSettings(OWNER);
   const user = renderSettings();
   expect(await screen.findByRole("region", { name: "Profile" })).toBeInTheDocument();
-  expect(sectionNames()).toEqual(["Profile", "Sharing", "Camera", "Voice and bedtime", "Mac helper", "Room and invites"]);
+  expect(sectionNames()).toEqual(["Profile", "To-dos", "Sharing", "Camera", "Voice and bedtime", "Mac helper", "Room and invites"]);
   expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByLabelText("Name")).toHaveValue("Dayan");
   const before = document.querySelector(".settings-section");
@@ -89,7 +89,7 @@ it("shows a member only their own things, and never asks for the owner's lists",
   const sent = serveSettings(MEMBER);
   const user = renderSettings();
   await screen.findByRole("region", { name: "Profile" });
-  expect(sectionNames()).toEqual(["Profile", "Sharing", "Camera", "Voice and bedtime", "Mac helper"]);
+  expect(sectionNames()).toEqual(["Profile", "To-dos", "Sharing", "Camera", "Voice and bedtime", "Mac helper"]);
   const mac = await openSection(user, "Mac helper");
   expect(await mac.findByText("MacBook")).toBeInTheDocument();
   expect(mac.getByRole("switch", { name: "Track apps and sites" })).toBeInTheDocument(); // their own desk's
@@ -442,4 +442,22 @@ it("shows the goal you have, and turns it off", async () => {
   await user.selectOptions(goal, "Off");
   await user.click(profile.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(sent.filter((request) => request.path === "/api/goal").map((request) => request.body)).toEqual([{ minutes: null }]));
+});
+
+it("picks which priorities the Room's notepad shows in To-dos, all four on to start", async () => {
+  const sent = serveSettings(MEMBER, [], { "POST /api/notepad": answer({ high: true, medium: true, low: false, none: true }) });
+  const user = renderSettings();
+  FakeEventSource.latest?.send(makeSnapshot(makeFocus()));
+  const todos = await openSection(user, "To-dos");
+  const switches = todos.getAllByRole("switch");
+  expect(switches.map((entry) => [entry.getAttribute("aria-label"), entry.getAttribute("aria-checked")])).toEqual([
+    ["High priority", "true"],
+    ["Medium priority", "true"],
+    ["Low priority", "true"],
+    ["No priority", "true"],
+  ]);
+  await user.click(todos.getByRole("switch", { name: "Low priority" }));
+  expect(todos.getByRole("switch", { name: "Low priority" })).toHaveAttribute("aria-checked", "false"); // at once
+  await waitFor(() => expect(sent.filter((request) => request.path === "/api/notepad").map((request) => request.body)).toEqual([{ low: false }]));
+  expect(todos.getByText("What you’re working on always shows first. Your Desk always shows every to-do.")).toBeInTheDocument();
 });

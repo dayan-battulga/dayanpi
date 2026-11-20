@@ -1410,6 +1410,7 @@ ACCESS = {
     ("POST", "/api/voice/test"): ("/api/voice/test", {}, 401, 200, 200),
     ("POST", "/api/sharing"): ("/api/sharing", {"focus": "maybe"}, 401, 422, 422),
     ("POST", "/api/goal"): ("/api/goal", {"minutes": 45}, 401, 422, 422),
+    ("POST", "/api/notepad"): ("/api/notepad", {"high": "yes"}, 401, 422, 422),
     ("GET", "/api/people/{username}"): (f"/api/people/{AUTH[0]}", None, 401, 200, 200),  # the owner's desk, only what it shares
     ("GET", "/api/people/{username}/picture"): (f"/api/people/{AUTH[0]}/picture", None, 401, 404, 404),  # video starts off
     ("POST", "/api/nudge"): ("/api/nudge", {"username": ""}, 401, 422, 422),
@@ -2807,3 +2808,32 @@ def test_a_browser_picture_reaches_the_room_stream_end_to_end(real_server):
         [event] = read_events(response, 1)
     [seat] = [seat for seat in event["room"]["seats"] if seat["username"] == "sam"]
     assert seat["picture"] is not None, seat
+
+
+def test_a_to_dos_priority_is_one_of_four_and_only_its_owner_sees_it():
+    owner, sam = find_owner(), add_member("sam")
+    member = let_in(stranger(), sam)
+    item_id = member.post("/api/todos", json={"text": "project demo"}).json()["item"]["id"]
+    assert member.get("/api/todos").json()["open"][0]["priority"] == "none", "new ones start as none"
+    changed = member.patch(f"/api/todos/{item_id}", json={"priority": "high"})
+    assert changed.status_code == 200 and changed.json()["todos"]["open"][0]["priority"] == "high"
+    for wrong in ("urgent", "High", "", None, 1):
+        assert member.patch(f"/api/todos/{item_id}", json={"priority": wrong}).status_code in (200, 422), wrong
+        assert member.get("/api/todos").json()["open"][0]["priority"] == "high", wrong
+    assert member.patch(f"/api/todos/{item_id}", json={"priority": "urgent"}).status_code == 422
+    theirs = let_in(stranger(), owner).get("/api/people/sam").json()["todo_list"]
+    assert [item["text"] for item in theirs["open"]] == ["project demo"]
+    assert "priority" not in theirs["open"][0], "priorities stay on their own desk"
+
+
+def test_the_notepad_setting_is_your_own_and_starts_with_everything():
+    owner, sam = find_owner(), add_member("sam")
+    me, member = let_in(stranger(), owner), let_in(stranger(), sam)
+    assert me.get("/api/focus").json()["notepad"] == {"high": True, "medium": True, "low": True, "none": True}
+    picked = member.post("/api/notepad", json={"low": False, "none": False})
+    assert (picked.status_code, picked.json()) == (200, {"high": True, "medium": True, "low": False, "none": False})
+    assert json.loads((desk_of(sam).folder / "notepad.json").read_text()) == picked.json()
+    assert member.get("/api/focus").json()["notepad"]["low"] is False
+    assert me.get("/api/focus").json()["notepad"]["low"] is True
+    for wrong in ({"low": "no"}, {"low": 0}, {"urgent": True}):
+        assert member.post("/api/notepad", json=wrong).status_code == 422, wrong

@@ -6,7 +6,7 @@ const NO_TODOS: Todos = { current: null, open: [], done: [] };
 
 export interface TodoEditor {
   todos: Todos;
-  addTodo: (text: string) => Promise<boolean>; // false when the Pi didn't take it
+  addTodo: (text: string) => Promise<string | null>; // the new to-do's id, null when the Pi didn't take it
   changeTodo: (id: string, change: TodoChange) => void;
   deleteTodo: (id: string) => void;
 }
@@ -22,7 +22,12 @@ export function useTodos(streamed: Todos | undefined, now: number): TodoEditor {
   };
 
   // A new row only shows once the Pi has given it an id, so nothing swaps keys under the rise.
-  const addTodo = (text: string) => sendChange(null, "POST", "/api/todos", { text }, "Couldn't add that to-do");
+  const addTodo = async (text: string) => {
+    const before = new Set(todos.open.map((item) => item.id));
+    const replied = await send(null, () => sendTodo("POST", "/api/todos", { text }), "Couldn't add that to-do");
+    const added = replied?.open.find((item) => !before.has(item.id))?.id ?? null;
+    return added;
+  };
   const changeTodo = (id: string, change: TodoChange) => {
     void sendChange(applyTodoChange(todos, id, change, now), "PATCH", `/api/todos/${id}`, change, "Couldn't save that change");
   };

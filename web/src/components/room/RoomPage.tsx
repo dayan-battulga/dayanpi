@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useFrame } from "@/components/frame/Frame";
+import { NotepadSheet } from "@/components/room/Notepad";
 import { PeekDialog } from "@/components/room/PeekDialog";
 import { AloneSeat, EmptySeat, SeatCard } from "@/components/room/SeatCard";
 import { findCameraMode } from "@/components/track/cameraTracker";
+import { WIDE_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNudge } from "@/hooks/useNudge";
 import { useSeatHiding } from "@/hooks/useSeatHiding";
 import { ROOM_SIZE } from "@/lib/account";
@@ -32,6 +34,8 @@ export function RoomPage() {
   const elapsed = Math.max(0, now - receivedAt);
   const nudger = useNudge();
   const [peeking, setPeeking] = useState<string | null>(null);
+  // From 1280 px the frame pins your notepad to the right edge; below that it's a sheet behind a button.
+  const wide = useMediaQuery(WIDE_QUERY);
   // The peek follows the live seat, and closes if they leave the room.
   const peeked = seats.find((seat) => seat.username === peeking) ?? null;
 
@@ -39,14 +43,17 @@ export function RoomPage() {
     room != null && (
       <div className="room">
         <section className="room-head rise" aria-labelledby="room-total">
-          <h1 id="room-total" className="room-total">
-            {formatDuration(summary.focusSeconds)}
-          </h1>
-          <p className="room-caption">
-            {summary.caption}
-            {/* Only a desk on this browser's camera has a camera to keep on; on a phone it takes its own line. */}
-            {focus?.camera_source === "browser" && <span className="room-hint"> · keep your camera on to count your focus</span>}
-          </p>
+          <div>
+            <h1 id="room-total" className="room-total">
+              {formatDuration(summary.focusSeconds)}
+            </h1>
+            <p className="room-caption">
+              {summary.caption}
+              {/* Only a desk on this browser's camera has a camera to keep on; on a phone it takes its own line. */}
+              {focus?.camera_source === "browser" && <span className="room-hint"> · keep your camera on to count your focus</span>}
+            </p>
+          </div>
+          {!wide && <NotepadSheet focus={focus} now={now} />}
         </section>
         <section className="seats live" aria-label="Seats">
           {seats.map((seat) => (
